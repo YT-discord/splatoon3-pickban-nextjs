@@ -1,5 +1,6 @@
 import express, { Application } from 'express';
 import { sequelize } from './config/database';
+import { initializeDB } from './config/database';
 import weaponsRouter from './routes/weapons/routes';
 import { errorHandler } from './middlewares/errorHandler';
 import 'reflect-metadata';
@@ -17,6 +18,7 @@ app.use('/api/v1', weaponsRouter);
 app.use(errorHandler);
 
 // データベース接続
+initializeDB;
 sequelize.authenticate()
   .then(() => {
     console.log('Database connected');
