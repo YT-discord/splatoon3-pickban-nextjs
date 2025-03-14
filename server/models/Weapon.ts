@@ -13,53 +13,184 @@ import {
   tableName: 'weapons',
   timestamps: true,
 })
-export class Weapon extends Model {
+export class WeaponModel extends Model {
   @Column({
     type: DataType.INTEGER,
     primaryKey: true,
     autoIncrement: false,
   })
-  
+  declare id: number;
 
   @AllowNull(false)
   @Column({
     type: DataType.STRING(50),
   })
-  name!: string;
+  declare name: string;
 
   @AllowNull(true)
   @Default(null)
   @Column({
     type: DataType.STRING(36),
   })
-  selectedBy!: string | null;
+  declare selectedBy: string | null;
 
   @AllowNull(true)
   @Default(null)
   @Column({
     type: DataType.STRING(36),
   })
-  bannedBy!: string | null;
+  declare bannedBy: string | null;
 
   @CreatedAt
   @Column({
     type: DataType.DATE,
     defaultValue: DataType.NOW,
   })
+  declare createdAt: Date;
 
   @UpdatedAt
   @Column({
     type: DataType.DATE,
     defaultValue: DataType.NOW,
   })
+  declare updatedAt: Date;
 
   // 静的メソッドの実装
   static async initializeWeapons(): Promise<void> {
-    const weapons = Array.from({ length: 130 }, (_, i) => ({
-      id: i + 1,
-      name: `Weapon ${i + 1}`,
-    }));
+    // const weapons = [
+    //   { id: 1, name: 'Weapon 1' },
+    //   { id: 2, name: 'Weapon 2' },
+    //   { id: 3, name: 'Weapon 3' },
+    //   { id: 4, name: 'Weapon 4' },
+    //   { id: 5, name: 'Weapon 5' },
+    //   { id: 6, name: 'Weapon 6' },
+    //   { id: 7, name: 'Weapon 7' },
+    //   { id: 8, name: 'Weapon 8' },
+    //   { id: 9, name: 'Weapon 9' },
+    //   { id: 10, name: 'Weapon 10' },
+    //   { id: 11, name: 'Weapon 11' },
+    //   { id: 12, name: 'Weapon 12' },
+    //   { id: 13, name: 'Weapon 13' },
+    //   { id: 14, name: 'Weapon 14' },
+    //   { id: 15, name: 'Weapon 15' },
+    //   { id: 16, name: 'Weapon 16' },
+    //   { id: 17, name: 'Weapon 17' },
+    //   { id: 18, name: 'Weapon 18' },
+    //   { id: 19, name: 'Weapon 19' },
+    //   { id: 20, name: 'Weapon 20' },
+    //   { id: 21, name: 'Weapon 21' },
+    //   { id: 22, name: 'Weapon 22' },
+    //   { id: 23, name: 'Weapon 23' },
+    //   { id: 24, name: 'Weapon 24' },
+    //   { id: 25, name: 'Weapon 25' },
+    //   { id: 26, name: 'Weapon 26' },
+    //   { id: 27, name: 'Weapon 27' },
+    //   { id: 28, name: 'Weapon 28' },
+    //   { id: 29, name: 'Weapon 29' },
+    //   { id: 30, name: 'Weapon 30' },
+    //   { id: 31, name: 'Weapon 31' },
+    //   { id: 32, name: 'Weapon 32' },
+    //   { id: 33, name: 'Weapon 33' },
+    //   { id: 34, name: 'Weapon 34' },
+    //   { id: 35, name: 'Weapon 35' },
+    //   { id: 36, name: 'Weapon 36' },
+    //   { id: 37, name: 'Weapon 37' },
+    //   { id: 38, name: 'Weapon 38' },
+    //   { id: 39, name: 'Weapon 39' },
+    //   { id: 40, name: 'Weapon 40' },
+    //   { id: 41, name: 'Weapon 41' },
+    //   { id: 42, name: 'Weapon 42' },
+    //   { id: 43, name: 'Weapon 43' },
+    //   { id: 44, name: 'Weapon 44' },
+    //   { id: 45, name: 'Weapon 45' },
+    //   { id: 46, name: 'Weapon 46' },
+    //   { id: 47, name: 'Weapon 47' },
+    //   { id: 48, name: 'Weapon 48' },
+    //   { id: 49, name: 'Weapon 49' },
+    //   { id: 50, name: 'Weapon 50' },
+    //   { id: 51, name: 'Weapon 51' },
+    //   { id: 52, name: 'Weapon 52' },
+    //   { id: 53, name: 'Weapon 53' },
+    //   { id: 54, name: 'Weapon 54' },
+    //   { id: 55, name: 'Weapon 55' },
+    //   { id: 56, name: 'Weapon 56' },
+    //   { id: 57, name: 'Weapon 57' },
+    //   { id: 58, name: 'Weapon 58' },
+    //   { id: 59, name: 'Weapon 59' },
+    //   { id: 60, name: 'Weapon 60' },
+    //   { id: 61, name: 'Weapon 61' },
+    //   { id: 62, name: 'Weapon 62' },
+    //   { id: 63, name: 'Weapon 63' },
+    //   { id: 64, name: 'Weapon 64' },
+    //   { id: 65, name: 'Weapon 65' },
+    //   { id: 66, name: 'Weapon 66' },
+    //   { id: 67, name: 'Weapon 67' },
+    //   { id: 68, name: 'Weapon 68' },
+    //   { id: 69, name: 'Weapon 69' },
+    //   { id: 70, name: 'Weapon 70' },
+    //   { id: 71, name: 'Weapon 71' },
+    //   { id: 72, name: 'Weapon 72' },
+    //   { id: 73, name: 'Weapon 73' },
+    //   { id: 74, name: 'Weapon 74' },
+    //   { id: 75, name: 'Weapon 75' },
+    //   { id: 76, name: 'Weapon 76' },
+    //   { id: 77, name: 'Weapon 77' },
+    //   { id: 78, name: 'Weapon 78' },
+    //   { id: 79, name: 'Weapon 79' },
+    //   { id: 80, name: 'Weapon 80' },
+    //   { id: 81, name: 'Weapon 81' },
+    //   { id: 82, name: 'Weapon 82' },
+    //   { id: 83, name: 'Weapon 83' },
+    //   { id: 84, name: 'Weapon 84' },
+    //   { id: 85, name: 'Weapon 85' },
+    //   { id: 86, name: 'Weapon 86' },
+    //   { id: 87, name: 'Weapon 87' },
+    //   { id: 88, name: 'Weapon 88' },
+    //   { id: 89, name: 'Weapon 89' },
+    //   { id: 90, name: 'Weapon 90' },
+    //   { id: 91, name: 'Weapon 91' },
+    //   { id: 92, name: 'Weapon 92' },
+    //   { id: 93, name: 'Weapon 93' },
+    //   { id: 94, name: 'Weapon 94' },
+    //   { id: 95, name: 'Weapon 95' },
+    //   { id: 96, name: 'Weapon 96' },
+    //   { id: 97, name: 'Weapon 97' },
+    //   { id: 98, name: 'Weapon 98' },
+    //   { id: 99, name: 'Weapon 99' },
+    //   { id: 100, name: 'Weapon 100' },
+    //   { id: 101, name: 'Weapon 101' },
+    //   { id: 102, name: 'Weapon 102' },
+    //   { id: 103, name: 'Weapon 103' },
+    //   { id: 104, name: 'Weapon 104' },
+    //   { id: 105, name: 'Weapon 105' },
+    //   { id: 106, name: 'Weapon 106' },
+    //   { id: 107, name: 'Weapon 107' },
+    //   { id: 108, name: 'Weapon 108' },
+    //   { id: 109, name: 'Weapon 109' },
+    //   { id: 110, name: 'Weapon 110' },
+    //   { id: 111, name: 'Weapon 111' },
+    //   { id: 112, name: 'Weapon 112' },
+    //   { id: 113, name: 'Weapon 113' },
+    //   { id: 114, name: 'Weapon 114' },
+    //   { id: 115, name: 'Weapon 115' },
+    //   { id: 116, name: 'Weapon 116' },
+    //   { id: 117, name: 'Weapon 117' },
+    //   { id: 118, name: 'Weapon 118' },
+    //   { id: 119, name: 'Weapon 119' },
+    //   { id: 120, name: 'Weapon 120' },
+    //   { id: 121, name: 'Weapon 121' },
+    //   { id: 122, name: 'Weapon 122' },
+    //   { id: 123, name: 'Weapon 123' },
+    //   { id: 124, name: 'Weapon 124' },
+    //   { id: 125, name: 'Weapon 125' },
+    //   { id: 126, name: 'Weapon 126' },
+    //   { id: 127, name: 'Weapon 127' },
+    //   { id: 128, name: 'Weapon 128' },
+    //   { id: 129, name: 'Weapon 129' },
+    //   { id: 130, name: 'Weapon 130' }
+    // ];
+    // await this.bulkCreate(weapons);
     
-    await this.bulkCreate(weapons);
+    // await WeaponModel.bulkCreate(weapons);
   }
 }

@@ -1,10 +1,10 @@
 import { Request, Response } from 'express';
-import { Weapon } from '../../models/Weapon';
+import { WeaponModel } from '../../models/Weapon';
 import { ValidationError } from 'sequelize';
 
 export const getWeapons = async (req: Request, res: Response) => {
   try {
-    const weapons = await Weapon.findAll({
+    const weapons = await WeaponModel.findAll({
       attributes: ['id', 'name', 'selectedBy', 'createdAt'],
       order: [['id', 'ASC']]
     });
@@ -16,7 +16,7 @@ export const getWeapons = async (req: Request, res: Response) => {
 
 export const selectWeapon = async (req: Request, res: Response) => {
   try {
-    const weapon = await Weapon.findByPk(req.params.id);
+    const weapon = await WeaponModel.findByPk(req.params.id);
     
     if (!weapon) {
       return res.status(404).json({ error: '武器が見つかりません' });

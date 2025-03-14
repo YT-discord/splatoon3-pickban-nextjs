@@ -1,5 +1,5 @@
 import { body, param, validationResult } from 'express-validator';
-import { Weapon } from '../../models/Weapon';
+import { WeaponModel } from '../../models/Weapon';
 import { Request, Response, NextFunction } from 'express';
 
 export const validateSelection = [
@@ -7,7 +7,7 @@ export const validateSelection = [
     .isInt({ min: 1, max: 130 })
     .withMessage('有効な武器IDを指定してください')
     .custom(async (value) => {
-      const weapon = await Weapon.findByPk(value);
+      const weapon = await WeaponModel.findByPk(value);
       if (!weapon) throw new Error('存在しない武器IDです');
       return true;
     }),

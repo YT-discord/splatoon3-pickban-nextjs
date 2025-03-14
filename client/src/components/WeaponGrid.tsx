@@ -6,6 +6,7 @@ interface Weapon {
   id: number;
   name: string;
   selectedBy: string | null;
+  bannedBy: string | null;
 }
 
 const WeaponGrid = () => {
@@ -17,8 +18,12 @@ const WeaponGrid = () => {
   useEffect(() => {
     const fetchWeapons = async () => {
       try {
-        // const res = await fetch('/api/weapons');
-        const res = await fetch('http://localhost:3001/api/v1/weapons');
+        const res = await fetch('http://localhost:3001/api/v1/weapons',{
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include' // 必要に応じて追加
+      });
         if (!res.ok) throw new Error('データ取得に失敗しました');
         const data = await res.json();
         setWeapons(data);
@@ -43,7 +48,7 @@ const WeaponGrid = () => {
     setLoading(true);
     
     try {
-      const response = await fetch(`/api/select/${id}`, {
+      const response = await fetch(`http://localhost:3001/api/v1/weapons/${id}/select`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId }),
