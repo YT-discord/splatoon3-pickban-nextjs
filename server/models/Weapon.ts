@@ -30,14 +30,14 @@ export class WeaponModel extends Model {
   @AllowNull(true)
   @Default(null)
   @Column({
-    type: DataType.STRING(36),
+    type: DataType.STRING(5), // 'alpha' | 'bravo' | null を格納するため、最大5文字
   })
-  declare selectedBy: string | null;
+  declare selectedBy: 'alpha' | 'bravo' | null; // 変更: 型を string から 'alpha' | 'bravo' | null に変更
 
   @AllowNull(true)
   @Default(null)
   @Column({
-    type: DataType.STRING(36),
+    type: DataType.STRING(5), // 'alpha' | 'bravo' | null を格納するため、最大5文字
   })
   declare bannedBy: string | null;
 
@@ -54,4 +54,16 @@ export class WeaponModel extends Model {
     defaultValue: DataType.NOW,
   })
   declare updatedAt: Date;
+
+  @AllowNull(false)
+  @Column({
+    type: DataType.STRING(50),
+  })
+  declare imageUrl: string;
+
+  @AllowNull(false)
+  @Column({
+    type: DataType.STRING(10),
+  })
+  declare attribute: string;
 }

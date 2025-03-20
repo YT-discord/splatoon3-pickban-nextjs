@@ -12,14 +12,22 @@ export const validateSelection = [
       return true;
     }),
 
-  body('userId')
+    body('userId')
     .trim()
     .notEmpty()
     .withMessage('ユーザーIDは必須です')
-    .isLength({ max: 36 })
-    .withMessage('ユーザーIDは36文字以内で入力してください')
-    .matches(/^[a-zA-Z0-9_-]+$/)
-    .withMessage('使用できない文字が含まれています'),
+    .isLength({ max: 5 })
+    .withMessage('ユーザーIDは5文字以内で入力してください')
+    .matches(/^(alpha|bravo)$/)
+    .withMessage('alphaまたはbravoを指定してください'),
+
+  // userName のバリデーションを追加
+  body('userName')
+    .trim()
+    .notEmpty()
+    .withMessage('ユーザー名は必須です')
+    .isLength({ max: 20 }) // 最大文字数は適宜変更
+    .withMessage('ユーザー名は20文字以内で入力してください'),
 
   // 検証結果の処理
   (req: Request, res: Response, next: NextFunction) => {
