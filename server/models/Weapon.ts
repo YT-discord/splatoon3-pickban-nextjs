@@ -35,11 +35,11 @@ export class WeaponModel extends Model {
   declare selectedBy: 'alpha' | 'bravo' | null; // 変更: 型を string から 'alpha' | 'bravo' | null に変更
 
   @AllowNull(true)
-  @Default(null)
+  @Default([])
   @Column({
-    type: DataType.STRING(5), // 'alpha' | 'bravo' | null を格納するため、最大5文字
+    type: DataType.JSON, // 'alpha' | 'bravo' | null を格納するため、最大5文字
   })
-  declare bannedBy: string | null;
+  declare bannedBy: ('alpha' | 'bravo' | null)[];
 
   @CreatedAt
   @Column({
