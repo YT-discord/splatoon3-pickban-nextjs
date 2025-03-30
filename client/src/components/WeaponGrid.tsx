@@ -12,10 +12,26 @@ interface Weapon {
   imageUrl: string; // このプロパティはクライアント側で生成するので必須
 }
 
+// GameState インターフェース (修正: サーバーから送られてくる可能性のある状態を追加)
 interface GameState {
   phase: 'waiting' | 'ban' | 'pick';
   timeLeft: number;
   currentTurn: 'alpha' | 'bravo' | null;
+  // 追加: サーバーから送られてくる可能性のある banPhaseState と pickPhaseState
+  banPhaseState?: { // オプショナルにする (初期状態では送られない可能性も考慮)
+    bans: {
+      alpha: number;
+      bravo: number;
+    };
+    maxBansPerTeam: number;
+  };
+  pickPhaseState?: { // オプショナルにする
+    picks: {
+      alpha: number;
+      bravo: number;
+    };
+    maxPicksPerTeam: number;
+  };
 }
 
 const WeaponGrid = () => {
@@ -24,26 +40,30 @@ const WeaponGrid = () => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [selectedTeam, setSelectedTeam] = useState<'alpha' | 'bravo'>('alpha');
   const [userName, setUserName] = useState('');
+  // 修正: GameState の初期値も合わせる
   const [gameState, setGameState] = useState<GameState>({
     phase: 'waiting',
     timeLeft: 0,
     currentTurn: null,
+    // banPhaseState, pickPhaseState は初期は undefined でも良い
   });
   const [socket, setSocket] = useState<Socket | null>(null);
-  // 追加: このターンで自分が選択したかどうか
   const [hasSelectedThisTurn, setHasSelectedThisTurn] = useState(false);
 
   useEffect(() => {
     const newSocket = io('http://localhost:3001');
     setSocket(newSocket);
 
+    // 修正: initial state で ban/pick state も受け取るように
     newSocket.on('initial state', (initialState: GameState) => {
+      console.log('Received initial state:', initialState);
       setGameState(initialState);
     });
 
+    // 修正: phase change で ban/pick state も受け取るように
     newSocket.on('phase change', (newState: GameState) => {
+      console.log('Received phase change:', newState);
       setGameState(newState);
-      // ターンが切り替わったら選択フラグをリセット
       setHasSelectedThisTurn(false);
     });
 
@@ -61,15 +81,13 @@ const WeaponGrid = () => {
     });
 
     newSocket.on('update weapon', (updatedWeaponData: Omit<Weapon, 'imageUrl'>) => {
+      console.log('Received update weapon data (Step2 Check):', updatedWeaponData);
       setWeapons((prevWeapons) =>
         prevWeapons.map((w) =>
           w.id === updatedWeaponData.id
             ? {
-                ...w, // 既存のプロパティ (...w)
-                ...updatedWeaponData, // サーバーからの更新データ (...updatedWeaponData)
-                // imageUrl はサーバーから来ないので、ローカルで生成したものを維持するか、
-                // 必要であれば name から再生成する。今回は既存のものを維持する。
-                // imageUrl: `/images/${encodeURIComponent(updatedWeaponData.name)}.png` // 必要なら再生成
+                ...w, // 既存のプロパティ (imageUrlもそのまま)
+                ...updatedWeaponData, // サーバーからの更新データをマージ
               }
             : w
         )
@@ -78,9 +96,8 @@ const WeaponGrid = () => {
 
     return () => {
       newSocket.disconnect();
-      newSocket.off('update weapon'); // 追加
     };
-  }, [selectedTeam]); // 変更: selectedTeam も依存配列に追加
+  }, []);
 
   useEffect(() => {
     const fetchWeapons = async () => {
@@ -183,11 +200,16 @@ const WeaponGrid = () => {
     }
   };
 
-  // 選択・禁止された武器をチームごとにフィルタリング
+  // 選択・禁止された武器をチームごとにフィルタリング (修正)
   const alphaPicks = weapons.filter((w) => w.selectedBy === 'alpha');
   const bravoPicks = weapons.filter((w) => w.selectedBy === 'bravo');
-  const alphaBans = weapons.filter((w) => Array.isArray(w.bannedBy) && w.bannedBy.includes('alpha'));
-  const bravoBans = weapons.filter((w) => Array.isArray(w.bannedBy) && w.bannedBy.includes('bravo'));
+  // 変更: 禁止フェーズ中は自分の禁止のみ表示
+  const alphaBans = weapons.filter((w) =>
+      Array.isArray(w.bannedBy) && w.bannedBy.includes('alpha')
+  );
+  const bravoBans = weapons.filter((w) =>
+      Array.isArray(w.bannedBy) && w.bannedBy.includes('bravo')
+  );
 
   return (
     <div className="space-y-4">
@@ -247,7 +269,7 @@ const WeaponGrid = () => {
         </button>
       </div>
 
-      {/* 選択・禁止武器を表示するエリア */}
+      {/* 選択・禁止武器を表示するエリア (修正) */}
       <div className="flex space-x-4">
         <div className="w-1/2">
           <h3 className="text-lg font-semibold mb-2">アルファチーム</h3>
@@ -313,9 +335,11 @@ const WeaponGrid = () => {
         </div>
       </div>
 
+      {/* 武器一覧 (修正) */}
       <div className="overflow-x-auto">
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
           {weapons.map((weapon) => {
+            const isBannedByMe = weapon.bannedBy && weapon.bannedBy.includes(selectedTeam);
             // 選択可能かどうかのフラグ (変更なし)
             const canSelect =
               gameState.phase === 'pick' &&
@@ -324,10 +348,12 @@ const WeaponGrid = () => {
               !weapon.selectedBy;
 
             // 禁止可能かどうかのフラグ (変更なし)
+            const currentTeamBanCount = gameState.banPhaseState?.bans[selectedTeam] ?? 0; // null チェック追加
+            const maxBans = gameState.banPhaseState?.maxBansPerTeam ?? 3; // null チェック追加
             const canBan =
               gameState.phase === 'ban' &&
-              !(weapon.bannedBy && weapon.bannedBy.includes(selectedTeam));
-
+              currentTeamBanCount < maxBans && // gameState から取得した値で比較
+              !isBannedByMe;
 
             const isDisabled =
               gameState.phase === 'waiting' ||
@@ -335,17 +361,23 @@ const WeaponGrid = () => {
               (gameState.phase === 'ban' && !canBan) ||
               loading;
 
+            // 変更: isVisuallyDisabled の条件で bannedBy を正しくチェック
+            const isBannedByOther = weapon.bannedBy && weapon.bannedBy.length > 0 && !weapon.bannedBy.includes(selectedTeam);
+            const isVisuallyDisabled = isDisabled || weapon.selectedBy || isBannedByMe || (gameState.phase === 'pick' && isBannedByOther);
+            // const showAsBanned = weapon.selectedBy || isBannedByMe || (gameState.phase !== 'ban' && isBannedByOther); // デバッグ用：選択済み、自分が禁止、または禁止フェーズ終了後に相手が禁止
+
+
             return (
               <div
                 key={weapon.id}
                 className={`p-4 rounded-lg transition-colors cursor-pointer
-                  ${isDisabled || weapon.selectedBy || (weapon.bannedBy && weapon.bannedBy.length > 0)
+                  ${isVisuallyDisabled // 見た目上の無効化条件
                     ? 'bg-gray-200 opacity-50'
                     : 'bg-white hover:bg-blue-50 border border-gray-200'
                   }`}
                 onClick={() => handleSelect(weapon.id)}
                 style={{
-                  pointerEvents: isDisabled ? 'none' : 'auto',
+                  pointerEvents: isDisabled ? 'none' : 'auto', // クリック可否はisDisabledで判断
                 }}
               >
                 <Image
@@ -353,7 +385,13 @@ const WeaponGrid = () => {
                   alt={weapon.name}
                   width={100}
                   height={100}
+                  // 変更: 禁止フェーズ中に相手が禁止した武器にスタイルを適用（オプション）
+                  className={gameState.phase === 'ban' && isBannedByOther ? 'opacity-30' : ''}
                 />
+                 {/* デバッグ用: 誰が禁止したか表示 */}
+                 {/* {weapon.bannedBy && weapon.bannedBy.length > 0 && <div className="text-xs text-red-500">Banned by: {weapon.bannedBy.join(',')}</div>} */}
+                 {/* デバッグ用: 誰が選択したか表示 */}
+                 {/* {weapon.selectedBy && <div className="text-xs text-blue-500">Selected by: {weapon.selectedBy}</div>} */}
               </div>
             );
           })}

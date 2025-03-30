@@ -1,7 +1,8 @@
 import { Request, Response } from 'express';
 import { WeaponModel } from '../../models/Weapon';
 import { ValidationError } from 'sequelize';
-import { io, getGameState } from '../../app'; // 変更: socket.io インスタンスをインポート (app.ts から export する必要あり)
+import { io } from '../../app'; // socket.io インスタンス
+import { getGameState } from '../../app'; // ゲーム状態取得関数
 
 export const getWeapons = async (req: Request, res: Response) => {
   try {
@@ -59,47 +60,87 @@ export const selectWeapon = async (req: SelectWeaponRequest, res: Response) => {
 
     await weapon.update({ selectedBy: req.body.userId });
 
-    // 追加: weapon selected イベントを発行
-    io.emit('weapon selected', { team: req.body.userId });
+    const updatedWeapon = await WeaponModel.findByPk(req.params.id);
+    if (!updatedWeapon) {
+        throw new Error('Failed to retrieve weapon after update');
+    }
 
+    // イベント発行
+    io.emit('weapon selected', { team: req.body.userId });
+    // 修正: 再取得したデータから必要なものだけ送信
+    const weaponDataToSend = {
+        id: updatedWeapon.id,
+        name: updatedWeapon.name,
+        selectedBy: updatedWeapon.selectedBy,
+        bannedBy: updatedWeapon.bannedBy,
+    };
+    io.emit('update weapon', weaponDataToSend);
+
+    // レスポンスも再取得したデータ基準に
     res.json({
       success: true,
-      weapon: {
-        id: weapon.id,
-        name: weapon.name,
-        selectedBy: weapon.selectedBy,
-      },
+      weapon: weaponDataToSend, // 修正
     });
   } catch (error) {
     handleError(res, error, '武器の選択に失敗しました');
   }
 };
 
+// 武器禁止 (修正)
 export const banWeapon = async (req: SelectWeaponRequest, res: Response) => {
+  const { banPhaseState, currentPhase } = getGameState(); // ゲーム状態取得
+  const team = req.body.userId;
+
+  if (currentPhase !== 'ban') {
+    return res.status(400).json({ error: '禁止フェーズではありません' });
+  }
+
+  // 変更: banPhaseState へのアクセス方法を変更
+  if (banPhaseState.bans[team] >= banPhaseState.maxBansPerTeam) {
+    return res.status(400).json({ error: `禁止できる武器は${banPhaseState.maxBansPerTeam}つまでです` });
+  }
+
+
   try {
     const weapon = await WeaponModel.findByPk(req.params.id);
 
     if (!weapon) {
       return res.status(404).json({ error: '武器が見つかりません' });
     }
-    //bannedByがnullの場合は空の配列で初期化
-    if(weapon.bannedBy === null){
-      await weapon.update({bannedBy: []});
-    }
-    // すでに禁止しているチームが含まれていたらエラー
-    if (weapon.bannedBy.includes(req.body.userId)) {
+
+    // bannedBy が null または空配列の場合のみ処理を進める
+    const currentBans = weapon.bannedBy || []; // null の場合は空配列として扱う
+
+    // 既に自分が禁止していたらエラー (念のため)
+    if (currentBans.includes(team)) {
       return res.status(409).json({ error: '既に禁止しています' });
     }
-    //bannedByに追加
-    const updatedBannedBy = [...weapon.bannedBy, req.body.userId];
+
+    // 禁止リストに追加
+    const updatedBannedBy = [...currentBans, team];
     await weapon.update({ bannedBy: updatedBannedBy });
+
+    const updatedWeapon = await WeaponModel.findByPk(req.params.id);
+    if (!updatedWeapon) {
+        // 更新後に見つからないのは異常だが、念のためハンドル
+        throw new Error('Failed to retrieve weapon after update');
+    }
+
+    // イベント発行
+    io.emit('weapon banned', { team: req.body.userId });
+    // 修正: 再取得したデータから必要なものだけ送信
+    const weaponDataToSend = {
+        id: updatedWeapon.id,
+        name: updatedWeapon.name,
+        selectedBy: updatedWeapon.selectedBy,
+        bannedBy: updatedWeapon.bannedBy,
+    };
+    io.emit('update weapon', weaponDataToSend);
+
+    // レスポンスも再取得したデータ基準に (必須ではないが整合性のため)
     res.json({
       success: true,
-      weapon: {
-        id: weapon.id,
-        name: weapon.name,
-        bannedBy: weapon.bannedBy,
-      },
+      weapon: weaponDataToSend, // 修正
     });
   } catch (error) {
     handleError(res, error, '武器の禁止に失敗しました');
