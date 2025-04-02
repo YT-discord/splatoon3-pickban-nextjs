@@ -32,286 +32,558 @@ export const io = new Server(server, {
 });
 
 // --- ゲーム状態変数 ---
-let currentPhase: 'waiting' | 'ban' | 'pick' = 'waiting';
+let currentPhase: 'waiting' | 'ban' | 'pick' | 'pick_complete' = 'waiting'; // ★ 'pick_complete' を追加
 let timeLeft = 0;
 let currentTurn: 'alpha' | 'bravo' | null = null;
+let currentPickTurnNumber = 0;
+const totalPickTurns = 8;
 let timer: NodeJS.Timeout | null = null;
-const turnActionTaken = { // 選択フェーズ用
-  alpha: false,
-  bravo: false,
-};
-// 変更: banPhaseState の型定義を変更
+const turnActionTaken = { alpha: false, bravo: false };
+
 interface BanPhaseState {
-  bans: { // ネストしたオブジェクトに変更
-    alpha: number;
-    bravo: number;
-  };
+  bans: { alpha: number; bravo: number; };
   maxBansPerTeam: number;
 }
-const banPhaseState: BanPhaseState = {
-  bans: { // 初期値も変更
-    alpha: 0,
-    bravo: 0,
-  },
-  maxBansPerTeam: 3,
-};
+const banPhaseState: BanPhaseState = { bans: { alpha: 0, bravo: 0 }, maxBansPerTeam: 3 };
 
-// 変更: pickPhaseState も同様に型定義 (今後のために)
 interface PickPhaseState {
-  picks: { // ネストしたオブジェクトに変更
-    alpha: number;
-    bravo: number;
-  };
+  picks: { alpha: number; bravo: number; };
   maxPicksPerTeam: number;
 }
-const pickPhaseState: PickPhaseState = {
-  picks: { // 初期値も変更
-    alpha: 0,
-    bravo: 0,
-  },
-  maxPicksPerTeam: 4,
-};
+const pickPhaseState: PickPhaseState = { picks: { alpha: 0, bravo: 0 }, maxPicksPerTeam: 4 };
 // ---------------------
 
-// ゲーム状態を返す関数 (変更なし、型推論でOK)
+interface ConnectedUser { id: string; name?: string; team?: 'alpha' | 'bravo' | 'observer'; }
+const connectedUsers = new Map<string, ConnectedUser>();
+
 export const getGameState = () => ({
   currentPhase,
   currentTurn,
+  currentPickTurnNumber,
+  timeLeft,
   turnActionTaken,
   banPhaseState,
   pickPhaseState,
 });
 
-// タイマーを開始/停止する関数
 const startTimer = (duration: number, onTick: () => void, onEnd: () => void) => {
+  const tickInterval = 1000;
+  const useFastTimer = process.env.FAST_TIMER === 'true';
+  const actualDuration = useFastTimer ? Math.ceil(duration / 5) : duration;
+  const actualTickInterval = useFastTimer ? Math.ceil(tickInterval / 5) : tickInterval;
+
   if (timer) {
     console.log('[Timer] Clearing existing timer:', timer);
     clearInterval(timer);
   }
-  timeLeft = duration;
-  console.log(`[Timer] Starting timer for ${duration} seconds.`);
-  onTick(); // 最初の時間を送信
+  timeLeft = actualDuration;
+  console.log(`[Timer] Starting timer for ${actualDuration} seconds (Interval: ${actualTickInterval}ms). Phase: ${currentPhase}, Turn: ${currentPickTurnNumber || 'N/A'}, Player: ${currentTurn || 'N/A'}`);
+  onTick(); // 開始時に残り時間を送信
   timer = setInterval(() => {
-    timeLeft--;
+    timeLeft = Math.max(0, timeLeft - 1);
     onTick();
     if (timeLeft <= 0) {
       console.log('[Timer] Timer ended.');
       clearInterval(timer!);
       timer = null;
-      onEnd(); // 時間切れ処理を実行
+      onEnd();
     }
-  }, 1000);
+  }, actualTickInterval);
 };
 
 const selectRandomWeapon = async (team: 'alpha' | 'bravo') => {
+  console.log(`[Random Select] Attempting random select for team ${team}...`);
   try {
-    // まず、選択されておらず、かつ自分が禁止していない武器候補を取得
-    const allAvailableCandidates = await WeaponModel.findAll({
+    // 1. まず選択されていない武器候補をDBから取得
+    console.log('[Random Select] Finding candidates (selectedBy is null)...');
+    const candidates = await WeaponModel.findAll({
       where: {
         selectedBy: null,
-        // bannedBy が空配列、または null である武器のみ
-        [Op.or]: [
-          { bannedBy: { [Op.is]: null } },
-          { bannedBy: { [Op.eq]: '[]' } } // SQLite では JSON 配列を文字列として比較する必要があるかも
-          // 注意: bannedBy が JSON 型の場合、DB によってクエリが異なる可能性があります。
-          // PostgreSQL などでは `bannedBy: { [Op.eq]: [] }` が使えるかもしれません。
-          // SQLiteの場合、JSON関数を使う方が確実かもしれません: `where: sequelize.literal('json_array_length(bannedBy) = 0')`
-        ]
       },
     });
+    console.log(`[Random Select] Found ${candidates.length} candidates not selected.`);
 
-    // 取得した候補の中から、指定されたチームが禁止していない武器をフィルタリング
-    const trulyAvailableWeapons = allAvailableCandidates.filter(weapon =>
-        !(weapon.bannedBy && weapon.bannedBy.includes(team)) // 自分が禁止していないものだけ
-    );
+    if (candidates.length === 0) {
+      console.log(`[Random Select] No weapons available (all are selected).`);
+      // ★ 選択できる武器がない場合も、ターンを進めるべき。相手にターンを渡す。
+      // handleSuccessfulPick を呼ばずに switchPickTurn を直接呼ぶか、
+      // handleSuccessfulPick を呼んで「アクションは無かったがターンは進める」形にする。
+      // ここでは handleSuccessfulPick を呼ぶことにする。
+      console.log(`[Random Select] No available weapon found for ${team}. Calling handleSuccessfulPick to proceed turn.`);
+      handleSuccessfulPick(team); // アクションは無かったが、ターン進行のために呼ぶ
+      return;
+    }
 
-    if (trulyAvailableWeapons.length > 0) {
-      const randomIndex = Math.floor(Math.random() * trulyAvailableWeapons.length);
-      const weaponToSelect = trulyAvailableWeapons[randomIndex];
+    // 2. 取得した候補から、指定されたチームが禁止していない武器をフィルタリング
+    const availableWeapons = candidates.filter(weapon => {
+      let isBannedByTeam = false;
+      if (weapon.bannedBy) {
+        try {
+          // DBから取得した bannedBy が配列か文字列かを判定してパース
+          const bannedTeams = Array.isArray(weapon.bannedBy)
+            ? weapon.bannedBy
+            : JSON.parse(weapon.bannedBy as unknown as string || '[]'); // 文字列ならパース、nullなら空配列
+          isBannedByTeam = Array.isArray(bannedTeams) && bannedTeams.includes(team);
+        } catch (e) {
+          console.warn(`[Random Select] Failed to parse bannedBy for weapon ${weapon.id} (${weapon.bannedBy}). Assuming not banned by ${team}.`, e);
+          isBannedByTeam = false;
+        }
+      }
+      // console.log(`[Random Select] Checking weapon ${weapon.id}: bannedBy=${JSON.stringify(weapon.bannedBy)}, isBannedBy${team}=${isBannedByTeam}`); // デバッグ用ログ
+      return !isBannedByTeam; // 自分が禁止していないもの
+    });
+    console.log(`[Random Select] Found ${availableWeapons.length} truly available weapons for team ${team}.`);
 
+
+    if (availableWeapons.length > 0) {
+      const randomIndex = Math.floor(Math.random() * availableWeapons.length);
+      const weaponToSelect = availableWeapons[randomIndex];
+
+      console.log(`[Random Select] Team ${team} timed out. Selecting: ${weaponToSelect.name} (ID: ${weaponToSelect.id})`);
       await weaponToSelect.update({ selectedBy: team });
-
-      // 追加: 更新後のデータを再取得
       const updatedWeapon = await WeaponModel.findByPk(weaponToSelect.id);
-       if (!updatedWeapon) {
-            throw new Error('Failed to retrieve weapon after random update');
-       }
+      if (!updatedWeapon) { throw new Error('Failed to retrieve weapon after random update'); }
+      console.log(`[Random Select] Weapon ${updatedWeapon.id} updated in DB.`);
 
-      console.log(`[Random Select] Team ${team} timed out. Selected: ${updatedWeapon.name}`);
-      io.emit('weapon selected', { team });
-
-      // 修正: 再取得したデータから必要なものだけ送信
       const weaponDataToSend = {
         id: updatedWeapon.id,
         name: updatedWeapon.name,
         selectedBy: updatedWeapon.selectedBy,
         bannedBy: updatedWeapon.bannedBy,
+        attribute: updatedWeapon.attribute,
       };
       io.emit('update weapon', weaponDataToSend);
+      console.log(`[Random Select] Emitted 'update weapon' for ${updatedWeapon.id}.`);
+
+      console.log(`[Random Select] Calling handleSuccessfulPick for team ${team}.`);
+      handleSuccessfulPick(team); // ★ ターン進行処理を呼び出す
+
     } else {
-      console.log(`[Random Select] Team ${team} timed out. No available weapons.`);
-      io.emit('weapon selected', { team });
+      console.log(`[Random Select] Team ${team} timed out. No available weapons for them (possibly all banned by ${team}).`);
+      // ★ 利用可能な武器が無くてもターンを進める
+      console.log(`[Random Select] No available weapon found for ${team}. Calling handleSuccessfulPick to proceed turn.`);
+      handleSuccessfulPick(team);
     }
   } catch (error) {
     console.error(`[Random Select] Error for team ${team}:`, error);
-     io.emit('weapon selected', { team });
+    // エラー発生時もターンを進める (無限ループを防ぐため)
+    console.log(`[Random Select] Error occurred. Calling handleSuccessfulPick to proceed turn anyway.`);
+    handleSuccessfulPick(team);
   }
 };
 
-
-// 選択フェーズのターン切り替え処理 (修正: フェーズ終了チェック追加)
-const switchPickTurn = () => {
-  // 終了条件チェック
-  if (pickPhaseState.picks.alpha >= pickPhaseState.maxPicksPerTeam &&
-      pickPhaseState.picks.bravo >= pickPhaseState.maxPicksPerTeam) {
-    console.log('[Pick End] Both teams reached max picks. Returning to waiting.');
-    currentPhase = 'waiting';
-    currentTurn = null;
-    if (timer) clearInterval(timer);
+const resetGame = async () => { // DBリセットも行うように async に変更
+  console.log('[Reset] Resetting game state to waiting.');
+  if (timer) {
+    clearInterval(timer);
     timer = null;
-    io.emit('phase change', { phase: currentPhase, timeLeft, currentTurn, banPhaseState, pickPhaseState }); 
-    // 選択/禁止状態をリセットする処理も必要に応じて追加
-    // resetGameStates(); // 例えばこんな関数
-    return; // ターン切り替えせずに終了
   }
-
-  const previousTurn = currentTurn;
-  currentTurn = currentTurn === 'alpha' ? 'bravo' : 'alpha';
-  turnActionTaken.alpha = false;
-  turnActionTaken.bravo = false;
-
-  console.log(`[Turn] Switching pick turn to ${currentTurn}`);
-
-  startTimer(
-    10,
-    () => io.emit('time update', timeLeft),
-    async () => {
-      console.log(`[Timer End] Pick turn ended for ${previousTurn}. Checking action...`);
-      if (previousTurn && !turnActionTaken[previousTurn]) {
-        console.log(`[Timer End] Action NOT taken for ${previousTurn}. Selecting randomly...`);
-        await selectRandomWeapon(previousTurn);
-      }
-      // 'weapon selected' が発行される -> ハンドラで switchPickTurn が呼ばれる
-    }
-  );
-  io.emit('phase change', { phase: currentPhase, timeLeft, currentTurn });
-};
-
-// 追加: 禁止フェーズ終了処理
-const endBanPhase = () => {
-  if (currentPhase !== 'ban') return; // 既に移行済みの場合は何もしない
-  console.log('Ban phase ended. Starting pick phase...');
-  currentPhase = 'pick';
-  currentTurn = 'alpha';
-  // 選択状態リセット
+  currentPhase = 'waiting';
+  currentTurn = null;
+  timeLeft = 0;
+  currentPickTurnNumber = 0; // ターン数リセット
+  banPhaseState.bans.alpha = 0;
+  banPhaseState.bans.bravo = 0;
   pickPhaseState.picks.alpha = 0;
   pickPhaseState.picks.bravo = 0;
   turnActionTaken.alpha = false;
   turnActionTaken.bravo = false;
 
-  // 最初の選択ターン開始
+  try {
+    console.log('[Reset] Resetting selectedBy and bannedBy in database...');
+    // ★ DBの状態もリセットする
+    await WeaponModel.update(
+      { selectedBy: null, bannedBy: [] }, // bannedBy を空配列にリセット
+      { where: {} }
+    );
+    console.log('[Reset] Database reset successful.');
+
+    // 全クライアントに通知
+    io.emit('phase change', {
+      phase: currentPhase,
+      timeLeft,
+      currentTurn,
+      currentPickTurnNumber, // 0 を送信
+      banPhaseState,
+      pickPhaseState,
+    });
+    console.log('[Reset] Emitted phase change to waiting.');
+
+    // 武器情報もリセット後の状態で再送信
+    const weapons = await WeaponModel.findAll({
+      attributes: ['id', 'name', 'selectedBy', 'bannedBy', 'attribute'], // attributeも送信
+      order: [['id', 'ASC']],
+    });
+    const weaponsDataToSend = weapons.map(w => ({
+      id: w.id,
+      name: w.name,
+      selectedBy: w.selectedBy,
+      bannedBy: w.bannedBy,
+      attribute: w.attribute,
+    }));
+    io.emit('initial weapons', weaponsDataToSend);
+    console.log('[Reset] Emitted initial weapons.');
+
+  } catch (error) {
+    console.error('[Reset] Error resetting database:', error);
+    // エラーが発生しても、できるだけクライアントには通知
+    io.emit('phase change', {
+      phase: 'waiting', // waiting に戻す
+      timeLeft: 0,
+      currentTurn: null,
+      currentPickTurnNumber: 0,
+      // ban/pick state は初期値で送る
+      banPhaseState: { bans: { alpha: 0, bravo: 0 }, maxBansPerTeam: 3 },
+      pickPhaseState: { picks: { alpha: 0, bravo: 0 }, maxPicksPerTeam: 4 },
+    });
+    // エラー発生を示すメッセージをクライアントに送ることも検討
+    // io.emit('error message', 'ゲームのリセットに失敗しました。');
+  }
+};
+
+export const handleSuccessfulBan = (team: 'alpha' | 'bravo') => {
+  console.log(`[App Logic] handleSuccessfulBan called for team: ${team}. Current Phase: ${currentPhase}`);
+  // banフェーズ中のみ処理
+  if (currentPhase === 'ban') {
+    // グローバルな banPhaseState を更新
+    // ここでも上限チェックは念のため行う (コントローラーでチェック済みのはず)
+    if (banPhaseState.bans[team] < banPhaseState.maxBansPerTeam) {
+      banPhaseState.bans[team]++; // ★ カウントアップ
+      console.log(`[Ban Count] Updated by handleSuccessfulBan for ${team}. New counts: Alpha=${banPhaseState.bans.alpha}, Bravo=${banPhaseState.bans.bravo}`);
+
+      // クライアントに banPhaseState の更新を通知 (禁止数をUI表示する場合に必要)
+      io.emit('phase change', { phase: currentPhase, timeLeft, currentTurn, currentPickTurnNumber, banPhaseState, pickPhaseState });
+      console.log(`[App Logic] Emitted phase change with updated ban counts.`);
+
+      // 両チームが上限に達したかチェック
+      const alphaReachedMax = banPhaseState.bans.alpha >= banPhaseState.maxBansPerTeam;
+      const bravoReachedMax = banPhaseState.bans.bravo >= banPhaseState.maxBansPerTeam;
+      console.log(`[Ban Check by Handle] Alpha reached max: ${alphaReachedMax}, Bravo reached max: ${bravoReachedMax}`);
+
+      if (alphaReachedMax && bravoReachedMax) {
+        console.log('[Ban End Check by Handle] Both teams reached max bans. Calling endBanPhase...');
+        // タイマーが動いていても即座に終了処理へ
+        if (timer) {
+          clearInterval(timer);
+          timer = null;
+          console.log('[Ban End Check by Handle] Cleared ban phase timer.');
+        }
+        endBanPhase(); // フェーズ移行
+      }
+    } else {
+      // コントローラーでチェックしてるはずだが、もしここに来たら警告
+      console.warn(`[App Logic] handleSuccessfulBan called for ${team}, but limit already reached (${banPhaseState.bans[team]}/${banPhaseState.maxBansPerTeam}). Skipping count increment.`);
+    }
+  } else {
+    // ban フェーズ以外で呼ばれた場合
+    console.warn(`[App Logic] handleSuccessfulBan called but current phase is not 'ban' (${currentPhase})`);
+  }
+};
+
+// ★★★ ターン進行処理を export 可能にする ★★★
+export const handleSuccessfulPick = (team: 'alpha' | 'bravo') => {
+  console.log(`[App Logic] handleSuccessfulPick called for team: ${team}. Current state: Phase=${currentPhase}, Turn=${currentTurn}, AlphaTaken=${turnActionTaken.alpha}, BravoTaken=${turnActionTaken.bravo}`);
+  // この関数は選択成功/時間切れランダム選択後に呼ばれる
+  if (currentPhase === 'pick') { // pickフェーズ中であることだけ確認
+    // ターンが一致するか、アクション済みかはチェックせず、来たチームのアクションとして記録する
+    // （時間切れランダム選択の場合、currentTurnとteamが一致しない可能性があるため）
+    if (!turnActionTaken[team]) {
+      console.log(`[App Logic] Action confirmed or forced for team ${team}. Updating turnActionTaken.`);
+      turnActionTaken[team] = true; // アクション済みフラグを立てる
+      pickPhaseState.picks[team]++; // ピック数をカウント
+      console.log(`[Pick Count] ${team}: ${pickPhaseState.picks[team]}`);
+
+      // 現在のターンタイマーが動いていれば停止
+      if (timer && currentTurn === team) { // 自分のターンのタイマーのみクリア
+        console.log(`[App Logic] Clearing current timer for ${team}:`, timer);
+        clearInterval(timer);
+        timer = null;
+      }
+      console.log('[App Logic] Calling switchPickTurn().');
+      switchPickTurn(); // ★ ターン切り替え関数を呼び出す
+    } else {
+      // 既にアクション済みの場合（例：時間切れ処理と手動選択が競合した場合など）
+      console.log(`[App Logic] Action already taken for team ${team}. Turn should be switching or already switched.`);
+      // ここでは switchPickTurn を呼ばない（二重呼び出しを防ぐ）
+    }
+  } else {
+    console.warn(`[App Logic] handleSuccessfulPick called but current phase is not 'pick' (${currentPhase}). Ignoring.`);
+  }
+};
+
+const switchPickTurn = () => {
+  console.log(`[Switch Turn] Function called. Current turn number before increment: ${currentPickTurnNumber}`);
+  // タイマーが残っていればクリア（主に先行入力などでタイマー終了前に呼ばれた場合）
+  if (timer) {
+    console.log('[Switch Turn] Clearing previous timer (if any):', timer);
+    clearInterval(timer);
+    timer = null;
+  }
+
+  const previousTurnPlayer = currentTurn; // ★バグ修正：インクリメント前に保持
+  currentPickTurnNumber++; // ターン数を増やす
+  console.log(`[Switch Turn] Incremented pick turn number to ${currentPickTurnNumber}`);
+
+  // --- 8ターン完了後の処理 ---
+  if (currentPickTurnNumber > totalPickTurns) {
+    console.log(`[Switch Turn] Max pick turns reached (${totalPickTurns}). Current turn number: ${currentPickTurnNumber}`);
+    console.log(`[Pick End] Setting phase to pick_complete.`);
+    currentPhase = 'pick_complete';
+    currentTurn = null;
+    timeLeft = 0;
+    // pickPhaseState は完了時の状態を保持
+    io.emit('phase change', {
+      phase: currentPhase,
+      timeLeft,
+      currentTurn,
+      currentPickTurnNumber,
+      banPhaseState,
+      pickPhaseState,
+    });
+    console.log(`[Switch Turn] Emitted 'phase change' for pick_complete.`);
+    return; // ターン進行処理終了
+  }
+  // --------------------------
+
+  // 次のターンプレイヤーを決定
+  // ★ 修正: 初回ターン(currentTurn=null)や交互ターンを考慮
+  if (currentTurn === null) { // 最初のターン開始時
+    currentTurn = 'alpha'; // Alphaから開始
+  } else {
+    currentTurn = currentTurn === 'alpha' ? 'bravo' : 'alpha'; // 交互に
+  }
+
+  // 次のターンのアクションフラグをリセット
+  turnActionTaken.alpha = false;
+  turnActionTaken.bravo = false;
+  console.log(`[Switch Turn] Switched turn to ${currentTurn}. Reset turnActionTaken.`);
+
+  // 次のターンのタイマーを開始
+  console.log(`[Switch Turn] Starting timer for next turn (${currentTurn}, Turn ${currentPickTurnNumber})`);
   startTimer(
-    10,
+    10, // 選択時間 (設定可能にすると良い)
     () => io.emit('time update', timeLeft),
-    async () => { // 最初のターン時間切れ
-      console.log(`[Timer End] First pick turn ended for ${currentTurn}.`);
-      if (currentTurn && !turnActionTaken[currentTurn]) {
-        console.log(`[Timer End] Action NOT taken for ${currentTurn}. Selecting randomly...`);
-        await selectRandomWeapon(currentTurn);
+    async () => { // 時間切れ処理
+      const timedOutPlayer = currentTurn; // ★ 時間切れになったプレイヤーを保持
+      console.log(`[Timer End] Pick turn ${currentPickTurnNumber} (Player: ${timedOutPlayer}) timed out. Checking if action was taken...`);
+
+      // ★ 時間切れ時のプレイヤーのアクションフラグを確認
+      if (timedOutPlayer && !turnActionTaken[timedOutPlayer]) {
+        console.log(`[Timer End] Action NOT taken for ${timedOutPlayer}. Selecting randomly...`);
+        await selectRandomWeapon(timedOutPlayer); // ランダム選択 -> handleSuccessfulPick -> switchPickTurn が呼ばれる
+      } else {
+        console.log(`[Timer End] Action WAS taken for ${timedOutPlayer} or no player assigned. Turn switch likely happened already.`);
+        // 既に選択済み、または何らかの理由でプレイヤーがいない場合
+        // ここで switchPickTurn を呼ぶ必要はない
       }
     }
   );
-  io.emit('phase change', { phase: currentPhase, timeLeft, currentTurn, banPhaseState, pickPhaseState });
+
+  // クライアントに新しい状態を通知
+  console.log(`[Switch Turn] Emitting phase change. Phase: ${currentPhase}, Turn: ${currentTurn}, TurnNumber: ${currentPickTurnNumber}`);
+  io.emit('phase change', { phase: currentPhase, timeLeft, currentTurn, currentPickTurnNumber, banPhaseState, pickPhaseState });
 };
 
+
+const endBanPhase = async () => { // async に変更
+  if (currentPhase !== 'ban') return;
+  console.log('[Ban End] Ban phase ended. Starting pick phase...');
+  if (timer) { // 禁止フェーズタイマーをクリア
+    clearInterval(timer);
+    timer = null;
+  }
+  currentPhase = 'pick';
+  // currentTurn = 'alpha'; // ★ switchPickTurnで設定するので不要
+  currentTurn = null; // ★ nullにしておく
+  currentPickTurnNumber = 0; // ★ 0 にリセット (switchPickTurnで1になる)
+  pickPhaseState.picks.alpha = 0;
+  pickPhaseState.picks.bravo = 0;
+  turnActionTaken.alpha = false;
+  turnActionTaken.bravo = false;
+
+  // ★ 禁止フェーズ完了時に全武器情報を送信 (ステップ2の準備)
+  try {
+    console.log('[Ban End] Fetching all weapons data to emit...');
+    const allWeapons = await WeaponModel.findAll({
+      attributes: ['id', 'name', 'selectedBy', 'bannedBy', 'attribute'], // attribute も含める
+      order: [['id', 'ASC']],
+    });
+    const weaponsDataToSend = allWeapons.map(w => ({
+      id: w.id,
+      name: w.name,
+      selectedBy: w.selectedBy,
+      bannedBy: w.bannedBy,
+      attribute: w.attribute,
+    }));
+    io.emit('initial weapons', weaponsDataToSend);
+    console.log('[Ban End] Emitted initial weapons.');
+  } catch (error) {
+    console.error('[Ban End] Error fetching or emitting weapons data:', error);
+  }
+
+  console.log(`[Ban End] Calling switchPickTurn() to start the first pick turn.`);
+  switchPickTurn(); // ★ 最初のピックターンを開始するために呼び出す
+};
+
+
 io.on('connection', (socket: Socket) => {
-  console.log('a user connected');
+  console.log(`[Connect] User connected: ${socket.id}`);
+  const newUser: ConnectedUser = { id: socket.id };
+  connectedUsers.set(socket.id, newUser);
+  console.log('[Connect] Current users:', Array.from(connectedUsers.values()).map(u => u.id)); // IDのみ表示
 
   socket.emit('initial state', {
     phase: currentPhase,
     timeLeft,
     currentTurn,
+    currentPickTurnNumber,
     banPhaseState,
     pickPhaseState,
+  });
+  console.log(`[Connect] Sent initial state to ${socket.id}:`, { currentPhase, currentTurn, currentPickTurnNumber });
+
+  // ★ 必要に応じて現在の武器リストも送信
+  if (currentPhase !== 'waiting') {
+    WeaponModel.findAll({
+      attributes: ['id', 'name', 'selectedBy', 'bannedBy', 'attribute'],
+      order: [['id', 'ASC']],
+    }).then(weapons => {
+      const weaponsDataToSend = weapons.map(w => ({
+        id: w.id,
+        name: w.name,
+        selectedBy: w.selectedBy,
+        bannedBy: w.bannedBy,
+        attribute: w.attribute,
+      }));
+      socket.emit('initial weapons', weaponsDataToSend);
+      console.log(`[Connect] Sent initial weapons data to ${socket.id}.`);
+    }).catch(err => console.error(`[Connect] Error sending initial weapons to ${socket.id}:`, err));
+  }
+
+
+  socket.on('set user info', (data: { name: string; team: 'alpha' | 'bravo' | 'observer' }) => {
+    const user = connectedUsers.get(socket.id);
+    // ★ 受信ログを追加
+    console.log(`[User Info Event] Received 'set user info' from ${socket.id}: Name='${data.name}', Team='${data.team}'`);
+    if (user) {
+        // チーム名のバリデーション
+        if (['alpha', 'bravo', 'observer'].includes(data.team)) {
+            user.name = data.name;
+            user.team = data.team;
+            // ★ 更新成功ログを追加
+            console.log(`[User Info Update] User ${socket.id} data updated in map: Name='${user.name}', Team='${user.team}'`);
+        } else {
+             console.warn(`[User Info Update] Invalid team value received from ${socket.id}: ${data.team}`);
+        }
+    } else {
+        // ユーザーがマップに見つからない場合（接続直後などタイミングの問題？）
+        console.warn(`[User Info Update] User ${socket.id} not found in map when trying to set info. Data:`, data);
+    }
   });
 
   socket.on('start game', () => {
     if (currentPhase === 'waiting') {
-      console.log('Game starting...');
-      currentPhase = 'ban';
-      currentTurn = null;
-      // 禁止状態リセット
-      banPhaseState.bans.alpha = 0;
-      banPhaseState.bans.bravo = 0;
+      console.log('[Start Game] Received start game request.');
+      // ★ ゲーム開始時にリセット処理を呼ぶ（DB含む）
+      resetGame().then(() => {
+        console.log('[Start Game] Game reset complete. Starting ban phase...');
+        currentPhase = 'ban';
+        currentTurn = null; // 禁止フェーズはターンなし
+        currentPickTurnNumber = 0;
+        banPhaseState.bans.alpha = 0;
+        banPhaseState.bans.bravo = 0;
 
-      // 禁止フェーズ開始
-      startTimer(
-        30,
-        () => io.emit('time update', timeLeft),
-        () => { // 時間切れで禁止フェーズ終了
-          endBanPhase();
-        }
-      );
-      io.emit('phase change', { phase: currentPhase, timeLeft, currentTurn, banPhaseState, pickPhaseState });
+        startTimer(
+          30, // 禁止フェーズ時間
+          () => io.emit('time update', timeLeft),
+          () => {
+            console.log('[Start Game] Ban phase timer ended. Calling endBanPhase...');
+            endBanPhase();
+          }
+        );
+        io.emit('phase change', { phase: currentPhase, timeLeft, currentTurn, currentPickTurnNumber, banPhaseState, pickPhaseState });
+        console.log('[Start Game] Emitted phase change to ban.');
+      }).catch(error => {
+        console.error('[Start Game] Failed to reset game before starting:', error);
+        // エラー通知など
+      });
+    } else {
+      console.warn(`[Start Game] Received start game request but current phase is ${currentPhase}. Ignoring.`);
     }
   });
 
-  // weapon banned イベントハンドラ (修正)
-  socket.on('weapon banned', (data: { team: 'alpha' | 'bravo' }) => {
-    if (currentPhase === 'ban') {
-      // 変更: banPhaseState へのアクセス方法を変更
-      banPhaseState.bans[data.team]++; // カウントアップ
-      console.log(`[Ban Count] ${data.team}: ${banPhaseState.bans[data.team]}`);
-      // 変更: チェック方法を変更
-      if (banPhaseState.bans.alpha >= banPhaseState.maxBansPerTeam &&
-          banPhaseState.bans.bravo >= banPhaseState.maxBansPerTeam) {
-        console.log('[Ban End] Both teams reached max bans.');
-        if (timer) clearInterval(timer);
-        timer = null;
-        endBanPhase();
-      }
-    }
+  // ★ リセットボタン用のリスナーを追加
+  socket.on('reset game', () => {
+    console.log(`[Event] Received 'reset game' request from ${socket.id}.`);
+    // ★ ゲーム状態に関わらずリセットを実行
+    resetGame();
   });
 
-  // weapon selected イベントハンドラ (修正: 選択数カウント追加)
-  socket.on('weapon selected', (data: { team: 'alpha' | 'bravo' }) => {
-    console.log(`[Event] Received 'weapon selected' for team: ${data.team}. Current turn: ${currentTurn}`);
-    if (currentPhase === 'pick' && currentTurn === data.team) {
-      if (!turnActionTaken[data.team]) {
-        console.log(`[Event] Action confirmed for team ${data.team}.`);
-        turnActionTaken[data.team] = true;
-        // 変更: pickPhaseState へのアクセス方法を変更
-        pickPhaseState.picks[data.team]++; // カウントアップ
-        console.log(`[Pick Count] ${data.team}: ${pickPhaseState.picks[data.team]}`);
+  socket.on('disconnect', (reason: string) => {
+    const socketId = socket.id; // 切断したsocketのIDを保持
+    console.log(`[Disconnect] User disconnected: ${socketId}. Reason: ${reason}`);
+    const disconnectedUser = connectedUsers.get(socketId);
 
-        if (timer) {
-          console.log('[Event] Clearing current timer due to selection:', timer);
-          clearInterval(timer);
-          timer = null;
+    if (disconnectedUser) {
+      const userId = disconnectedUser.id;
+      const teamLeft = disconnectedUser.team;
+      const userName = disconnectedUser.name;
+      console.log(`[Disconnect] Found disconnected user in map: ID=${userId}, Name=${userName}, Team=${teamLeft}`);
+
+      // マップから削除
+      connectedUsers.delete(socketId);
+      const remainingUsers = Array.from(connectedUsers.values()); // 残りのユーザーリスト取得
+      const remainingUserIds = remainingUsers.map(u => ({ id: u.id, team: u.team }));
+      console.log(`[Disconnect] User ${userId} removed from map. Remaining users (${remainingUsers.length}):`, remainingUserIds);
+
+      // ゲーム中のプレイヤー離脱処理 ('alpha' or 'bravo' かつ 'pick' or 'ban' フェーズ)
+      if ((teamLeft === 'alpha' || teamLeft === 'bravo') && (currentPhase === 'pick' || currentPhase === 'ban')) {
+        console.log(`[Disconnect] Player ${userId} from team ${teamLeft} left during active phase (${currentPhase}).`);
+
+        // チームに残っているプレイヤーがいるか確認
+        const remainingPlayersInTeam = remainingUsers.filter(user => user.team === teamLeft); // 削除後のリストでフィルタリング
+        console.log(`[Disconnect] Checking remaining players in team ${teamLeft}: Count = ${remainingPlayersInTeam.length}`);
+
+        if (remainingPlayersInTeam.length === 0) {
+          // ★ チームメンバーが0人になったらリセット
+          console.log(`[Disconnect] No players left in team ${teamLeft}. Calling resetGame().`);
+          resetGame();
+        } else {
+          // チームにまだプレイヤーが残っている場合
+          console.log(`[Disconnect] Team ${teamLeft} still has players:`, remainingPlayersInTeam.map(u => u.id));
+          // 現在のターンプレイヤーが抜けた場合の処理
+          if (currentPhase === 'pick' && currentTurn === teamLeft) {
+            console.log(`[Disconnect] Current turn player (${currentTurn}, ${userId}) left. Forcing random selection.`);
+            if (timer) {
+              clearInterval(timer);
+              timer = null;
+              console.log(`[Disconnect] Cleared existing timer for ${currentTurn}.`);
+            }
+            selectRandomWeapon(currentTurn); // ランダム選択を実行
+          } else {
+            console.log(`[Disconnect] Player ${userId} left, but it wasn't their turn or not in pick phase. No immediate game action needed.`);
+          }
         }
-        console.log('[Event] Switching turn.');
-        switchPickTurn();
+      } else if (teamLeft === 'observer') {
+        console.log(`[Disconnect] Observer ${userId} left.`);
       } else {
-         console.log(`[Event] Action already taken for team ${data.team}. Ignoring.`);
+        // プレイヤーではない、またはアクティブフェーズでない場合
+        console.log(`[Disconnect] Disconnected user ${userId} was not an active player ('${teamLeft}') or game not in active phase ('${currentPhase}'). No reset needed.`);
       }
     } else {
-        console.info(`[Event] Received 'weapon selected' outside of pick phase or correct turn. Phase: ${currentPhase}, Turn: ${currentTurn}, Team: ${data.team}`);
+      // マップにユーザーが見つからない場合（既に削除された後など）
+      console.log(`[Disconnect] User ${socketId} not found in connected users map (might have already been removed or never registered fully).`);
     }
-  });
-
-  socket.on('disconnect', () => {
-    console.log('user disconnected');
   });
 });
 
-// データベース接続 (変更: server.listen を使用)
+// データベース接続 & サーバー起動
 sequelize
   .authenticate()
   .then(() => {
     console.log('Database connected');
-    initializeDB();
+    initializeDB(); // DB初期化 (force: true に注意)
     server.listen(3001, () => {
-      // 変更
       console.log('Server running on port 3001');
     });
   })

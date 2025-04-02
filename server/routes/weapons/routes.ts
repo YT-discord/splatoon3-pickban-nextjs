@@ -1,6 +1,6 @@
 import { Router } from 'express';
-import { getWeapons, selectWeapon, banWeapon } from './controller'; // banWeapon を追加
-import { validateSelection, validateBan } from './validation'; // 変更: validateBan もインポート
+import { getWeapons, selectWeapon, banWeapon } from './controller';
+import { validateSelection, validateBan } from './validation';
 
 const router = Router();
 
@@ -10,9 +10,9 @@ router.post(
   validateSelection,
   selectWeapon
 );
-router.post( // 追加: /ban ルート
+router.post(
   '/weapons/:id/ban',
-  validateBan, // 変更: validateBan を使用
+  validateBan,
   banWeapon
 );
 
