@@ -8,7 +8,6 @@ import cors from 'cors';
 import http from 'http';
 import { Server, Socket } from 'socket.io';
 import { WeaponModel } from './models/Weapon';
-import { Op } from 'sequelize';
 
 const app: Application = express();
 
@@ -32,7 +31,7 @@ export const io = new Server(server, {
 });
 
 // --- ゲーム状態変数 ---
-let currentPhase: 'waiting' | 'ban' | 'pick' | 'pick_complete' = 'waiting'; // ★ 'pick_complete' を追加
+let currentPhase: 'waiting' | 'ban' | 'pick' | 'pick_complete' = 'waiting';
 let timeLeft = 0;
 let currentTurn: 'alpha' | 'bravo' | null = null;
 let currentPickTurnNumber = 0;

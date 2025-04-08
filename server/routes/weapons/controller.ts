@@ -133,7 +133,6 @@ export const selectWeapon = async (req: SelectWeaponRequest, res: Response) => {
 export const banWeapon = async (req: SelectWeaponRequest, res: Response) => {
   const team = req.body.userId;
   const weaponId = req.params.id;
-  // ★ コントローラーの最初で最新のゲーム状態を取得
   const { banPhaseState, currentPhase } = getGameState();
 
   console.log(`[Ban Controller] Received request for weapon ${weaponId} by team ${team}. Current Phase: ${currentPhase}`);
@@ -154,11 +153,13 @@ export const banWeapon = async (req: SelectWeaponRequest, res: Response) => {
   try {
       const weapon = await WeaponModel.findByPk(weaponId);
 
-      // ... (weapon not found, bannedBy parse, already banned/selected checks - 変更なし) ...
       if (!weapon) { return res.status(404).json({ error: '武器が見つかりません' }); }
       let currentBans: ('alpha' | 'bravo')[] = [];
       if (weapon.bannedBy) { try { currentBans = Array.isArray(weapon.bannedBy) ? weapon.bannedBy : JSON.parse(weapon.bannedBy as unknown as string || '[]'); if (!Array.isArray(currentBans)) currentBans = []; } catch(e){ currentBans = []; } }
-      if (currentBans.length > 0) { return res.status(409).json({ error: 'その武器は既に禁止されています' }); }
+      if (currentBans.includes(team)) {
+        console.log(`[Ban Controller] Error: Weapon ${weaponId} already banned by own team ${team}.`);
+        return res.status(409).json({ error: 'あなたのチームはこの武器を既に禁止しています' });
+    }
       if (weapon.selectedBy) { return res.status(409).json({ error: 'その武器は既に選択されているため禁止できません' }); }
 
 
@@ -171,15 +172,9 @@ export const banWeapon = async (req: SelectWeaponRequest, res: Response) => {
       if (!updatedWeapon) { throw new Error('Failed to retrieve weapon after update'); }
       console.log('[Ban Controller] Updated weapon retrieved:', updatedWeapon.toJSON());
 
-      // ★★★ サーバー内部の禁止処理関数を呼び出す ★★★
       console.log(`[Ban Controller] Calling handleSuccessfulBan for team ${team}...`);
+
       handleSuccessfulBan(team); // team情報を渡す
-      // ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
-
-      // ▼▼▼ 'weapon banned' イベントの emit は削除 ▼▼▼
-      // io.emit('weapon banned', { team });
-      // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
-
       // イベント発行 (update weapon) - クライアントUI更新用 (これは必要)
       console.log(`[Ban Controller] Emitting 'update weapon' for weapon ${updatedWeapon.id}...`);
       const weaponDataToSend = {
@@ -190,12 +185,9 @@ export const banWeapon = async (req: SelectWeaponRequest, res: Response) => {
           attribute: updatedWeapon.attribute,
       };
       io.emit('update weapon', weaponDataToSend);
-
       console.log(`[Ban Controller] Sending success response for weapon ${updatedWeapon.id}.`);
-      res.json({
-          success: true,
-          weapon: weaponDataToSend,
-      });
+      res.json({ success: true, weapon: weaponDataToSend });
+
   } catch (error) {
       console.error('[Ban Controller] Error during banning process:', error);
       handleError(res, error, '武器の禁止に失敗しました');
