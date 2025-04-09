@@ -1,5 +1,8 @@
 // --- 共有される型定義 ---
 
+// --- チームを表す型 ---
+export type Team = 'alpha' | 'bravo'; // ★ この行を追加
+
 // サーバー全体で接続中のユーザー情報 (app.ts で使用)
 export interface ConnectedUserInfo {
     socketId: string;

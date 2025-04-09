@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import type { Socket } from 'socket.io-client'; // 型のみインポート
-// ★ 共有ディレクトリから型をインポート
 import type { Weapon, GameState, RoomUser, RoomWeaponState, MasterWeapon } from '../../../common/types/game';
 
 // =============================================
@@ -16,12 +15,13 @@ const totalPickTurns = 8;
 const activeGamePhases: GameState['phase'][] = ['ban', 'pick', 'pick_complete'];
 
 interface WeaponGridProps {
-  socket: Socket;
-  roomId: string;
-  masterWeapons: MasterWeapon[]; // ★ Props に masterWeapons を追加
-}
+    socket: Socket; // Socket の型は必要に応じて調整 (例: Socket<DefaultEventsMap, DefaultEventsMap>)
+    roomId: string;
+    masterWeapons: MasterWeapon[];
+    userName: string;
+  }
 
-export default function WeaponGrid({ socket, roomId, masterWeapons }: WeaponGridProps) {
+export default function WeaponGrid({ socket, roomId, masterWeapons, userName }: WeaponGridProps) {
   // --- State定義 ---
   const [weapons, setWeapons] = useState<Weapon[]>(() => {
       console.log(`[WeaponGrid ${roomId}] Initializing weapons state from master data.`);
@@ -100,14 +100,15 @@ export default function WeaponGrid({ socket, roomId, masterWeapons }: WeaponGrid
            console.log(`[WeaponGrid ${roomId}] User left: ${data.userId}`);
            // TODO: 参加者リスト表示を更新
       };
-       const handleUserUpdated = (user: RoomUser) => {
-           console.log(`[WeaponGrid ${roomId}] User updated:`, user);
-           if (user.id === socket.id) {
-               console.log(`[WeaponGrid ${roomId}] My team updated to: ${user.team}`);
-               setSelectedTeam(user.team || 'observer');
-           }
-           // TODO: 参加者リスト表示を更新
-       };
+      const handleUserUpdated = (user: RoomUser) => {
+        console.log(`[WeaponGrid ${roomId}] User updated:`, user);
+        // ↓↓↓ この if 文で userName を使っているか確認 ↓↓↓
+        if (user.name === userName) { // ★ userName を比較に使用
+            console.log(`[WeaponGrid ${roomId}] My team updated to: ${user.team}`);
+            setSelectedTeam(user.team || 'observer');
+        }
+        // TODO: 参加者リスト表示を更新
+    };
        const handleRoomStateUpdate = (newState: GameState) => {
            if (newState.roomId === roomId) {
                console.log(`[WeaponGrid ${roomId}] Received room state update:`, newState);
@@ -250,7 +251,7 @@ export default function WeaponGrid({ socket, roomId, masterWeapons }: WeaponGrid
          <div className="font-semibold text-lg">ルーム: {roomId}</div>
          {/* Team Selection Buttons */}
          <div className="flex items-center space-x-2">
-             <span className="text-sm font-medium text-gray-700">あなたのチーム:</span>
+         <span className="text-sm font-medium text-gray-700">あなたのチーム ({userName}):</span>
              <button onClick={() => handleTeamSelect('alpha')} disabled={gameState.phase !== 'waiting'} className={`px-3 py-1 rounded-md text-sm transition-colors ${selectedTeam === 'alpha' ? 'bg-blue-500 text-white font-semibold ring-2 ring-blue-300' : 'bg-gray-200 hover:bg-gray-300'} ${gameState.phase !== 'waiting' ? 'opacity-50 cursor-not-allowed' : ''}`}>アルファ</button>
              <button onClick={() => handleTeamSelect('bravo')} disabled={gameState.phase !== 'waiting'} className={`px-3 py-1 rounded-md text-sm transition-colors ${selectedTeam === 'bravo' ? 'bg-red-500 text-white font-semibold ring-2 ring-red-300' : 'bg-gray-200 hover:bg-gray-300'} ${gameState.phase !== 'waiting' ? 'opacity-50 cursor-not-allowed' : ''}`}>ブラボー</button>
              <button onClick={() => handleTeamSelect('observer')} disabled={gameState.phase !== 'waiting'} className={`px-3 py-1 rounded-md text-sm transition-colors ${selectedTeam === 'observer' ? 'bg-gray-500 text-white font-semibold ring-2 ring-gray-300' : 'bg-gray-200 hover:bg-gray-300'} ${gameState.phase !== 'waiting' ? 'opacity-50 cursor-not-allowed' : ''}`}>観戦</button>
