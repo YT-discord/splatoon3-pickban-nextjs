@@ -1,8 +1,7 @@
-import { 
-  Table, 
-  Column, 
+import {
+  Table,
+  Column,
   Model,
-  Default,
   AllowNull,
   CreatedAt,
   UpdatedAt,
@@ -11,59 +10,55 @@ import {
 
 @Table({
   tableName: 'weapons',
-  timestamps: true,
+  timestamps: true, // createdAt, updatedAt を有効にする場合
 })
-export class WeaponModel extends Model {
+// ★ export class WeaponModel extends Model<MasterWeapon> { // MasterWeapon を型引数に指定 (任意)
+export class WeaponModel extends Model { // 型引数なしでも可
   @Column({
     type: DataType.INTEGER,
     primaryKey: true,
-    autoIncrement: false,
+    autoIncrement: false, // IDは初期データで指定するため false
   })
   declare id: number;
 
   @AllowNull(false)
   @Column({
     type: DataType.STRING(50),
+    unique: true, // 武器名はユニークのはず
   })
   declare name: string;
 
-  @AllowNull(true)
-  @Default(null)
-  @Column({
-    type: DataType.STRING(5), // 'alpha' | 'bravo' | null を格納するため、最大5文字
-  })
-  declare selectedBy: 'alpha' | 'bravo' | null; // 変更: 型を string から 'alpha' | 'bravo' | null に変更
+  // ▼▼▼ selectedBy カラム削除 ▼▼▼
+  // @AllowNull(true)
+  // @Default(null)
+  // @Column({ type: DataType.STRING(5), })
+  // declare selectedBy: 'alpha' | 'bravo' | null;
+  // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
 
-  @AllowNull(true)
-  @Default([])
-  @Column({
-    type: DataType.JSON, // 'alpha' | 'bravo' | null を格納するため、最大5文字
-  })
-  declare bannedBy: ('alpha' | 'bravo' | null)[];
+  // ▼▼▼ bannedBy カラム削除 ▼▼▼
+  // @AllowNull(true)
+  // @Default('[]') // デフォルトは空のJSON配列文字列
+  // @Column({ type: DataType.JSON, })
+  // declare bannedBy: ('alpha' | 'bravo')[];
+  // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
 
   @CreatedAt
-  @Column({
-    type: DataType.DATE,
-    defaultValue: DataType.NOW,
-  })
+  @Column // createdAt カラム (Timestamps が true なら自動で追加されるが明示)
   declare createdAt: Date;
 
   @UpdatedAt
-  @Column({
-    type: DataType.DATE,
-    defaultValue: DataType.NOW,
-  })
+  @Column // updatedAt カラム (Timestamps が true なら自動で追加されるが明示)
   declare updatedAt: Date;
 
   @AllowNull(false)
   @Column({
-    type: DataType.STRING(50),
+    type: DataType.STRING(255), // URLは長くなる可能性
   })
   declare imageUrl: string;
 
   @AllowNull(false)
   @Column({
-    type: DataType.STRING(10),
+    type: DataType.STRING(50), // 属性名は少し長めでもOK
   })
   declare attribute: string;
 }

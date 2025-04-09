@@ -1,7 +1,8 @@
 import { Request, Response } from 'express';
 import { WeaponModel } from '../../models/Weapon';
 import { ValidationError } from 'sequelize';
-import { io, getGameState, handleSuccessfulPick, handleSuccessfulBan } from '../../app';
+import { getGameState, handleSuccessfulPick, handleSuccessfulBan } from '../../gameLogic';
+import { io } from '../../app';
 
 export const getWeapons = async (req: Request, res: Response) => {
     try {

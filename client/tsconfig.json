@@ -1,25 +1,25 @@
 {
+  "extends": "../tsconfig.json", // ★ ルートの設定を継承
   "compilerOptions": {
-    "target": "ES2017",
+    // Next.js 用の設定 (baseUrl, paths は継承される)
+    "target": "es5",
     "lib": ["dom", "dom.iterable", "esnext"],
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
-    "noEmit": true,
+    "forceConsistentCasingInFileNames": true,
+    "noEmit": true, // Next.js がビルドするので noEmit
     "esModuleInterop": true,
-    "module": "esnext",
-    "moduleResolution": "bundler",
+    "module": "esnext", // Next.js は ES Modules
+    "moduleResolution": "bundler", // または "node"
     "resolveJsonModule": true,
     "isolatedModules": true,
     "jsx": "preserve",
     "incremental": true,
-    "plugins": [
-      {
-        "name": "next"
-      }
-    ],
-    "paths": {
-      "@/*": ["./src/*"]
+    "plugins": [ { "name": "next" } ],
+    "paths": { // ★ ベースを上書き・追加する場合はここに記述
+       "@/*": ["./src/*"],
+       "@common/*": ["../common/*"] // 念のため再定義しても良い
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],

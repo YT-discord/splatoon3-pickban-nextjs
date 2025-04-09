@@ -1,26 +1,13 @@
+// reactnext/server/tsconfig.json
 {
+  "extends": "../tsconfig.json", // ★ ルートの設定を継承
   "compilerOptions": {
-    "target": "ES2022",
-    "module": "CommonJS",
+    "module": "CommonJS", // ベースと同じか、必要なら上書き
     "outDir": "./dist",
-    "rootDir": "./",
-    "strict": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
-    "moduleResolution": "node",
-    "types": ["node"],
-    "typeRoots": [
-      "./node_modules/@types",
-      "./types"
-    ],
-    "allowJs": true,
-    "resolveJsonModule": true,
-    "noEmit": false,
-    "sourceMap": true,
-    "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
-    "incremental": true,
-    "lib": ["ES2022", "DOM"]
-  }
+    "experimentalDecorators": true,
+    "sourceMap": true
+  },
+  "include": ["./**/*.ts"], // server ディレクトリ以下のみ対象
+  "exclude": ["node_modules", "./dist"]
 }
