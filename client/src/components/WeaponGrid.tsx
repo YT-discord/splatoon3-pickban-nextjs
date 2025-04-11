@@ -1,414 +1,499 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import Image from 'next/image';
-import type { Socket } from 'socket.io-client'; // 型のみインポート
-import type { Weapon, GameState, RoomUser, RoomWeaponState, MasterWeapon } from '../../../common/types/game';
+import type { Socket } from 'socket.io-client';
+// ★ 修正された型定義をインポート (Weapon は今回未使用)
+import type { /* Weapon, */ GameState, RoomUser, RoomWeaponState, MasterWeapon, Team } from '../../../common/types/game'; // ★ Weapon をコメントアウト
+import { TOTAL_PICK_TURNS, MAX_BANS_PER_TEAM, MAX_PICKS_PER_TEAM } from '../../../common/types/constants';
 
-// =============================================
-// == クライアント側の型定義 (共有型を使用) ==
-// =============================================
-// GameState は PublicRoomGameState のエイリアスとして @common/types/game で定義済み
-// Weapon は MasterWeapon と RoomWeaponState を結合したものとして @common/types/game で定義済み
+// ★ GameState 型は PublicRoomGameState のエイリアス
+// ★ Weapon 型は MasterWeapon と Omit<RoomWeaponState, 'id'> を結合したもの
 
-const totalPickTurns = 8;
-const activeGamePhases: GameState['phase'][] = ['ban', 'pick', 'pick_complete'];
+// ★ activeGamePhases は gameState.phase で直接判定できるので削除
+// const activeGamePhases: GameState['phase'][] = ['ban', 'pick', 'pick_complete'];
 
 interface WeaponGridProps {
-    socket: Socket; // Socket の型は必要に応じて調整 (例: Socket<DefaultEventsMap, DefaultEventsMap>)
+    socket: Socket;
     roomId: string;
     masterWeapons: MasterWeapon[];
     userName: string;
-  }
+}
+
+interface DisplayWeapon extends MasterWeapon {
+    selectedBy: Team | null;
+    bannedBy: Team[];
+    imageUrl: string;
+    isLoading?: boolean;
+}
 
 export default function WeaponGrid({ socket, roomId, masterWeapons, userName }: WeaponGridProps) {
-  // --- State定義 ---
-  const [weapons, setWeapons] = useState<Weapon[]>(() => {
-      console.log(`[WeaponGrid ${roomId}] Initializing weapons state from master data.`);
-      return masterWeapons.map(mw => ({
-          ...mw,
-          imageUrl: `/images/${encodeURIComponent(mw.name)}.png`,
-          selectedBy: null,
-          bannedBy: [],
-      }));
-  });
-  const [loading, setLoading] = useState(false); // API通信中フラグ
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [selectedTeam, setSelectedTeam] = useState<'alpha' | 'bravo' | 'observer'>('observer'); // デフォルト observer
-  const [gameState, setGameState] = useState<GameState | null>(null); // 初期値 null
-  const [hasSelectedThisTurn, setHasSelectedThisTurn] = useState(false);
+    // --- State定義 ---
+    const [gameState, setGameState] = useState<GameState | null>(null);
+    const [weaponStates, setWeaponStates] = useState<Record<number, RoomWeaponState>>({});
+    const [myTeam, setMyTeam] = useState<Team | 'observer'>('observer');
+    const [loadingWeaponId, setLoadingWeaponId] = useState<number | null>(null);
+    const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // --- WebSocketイベントリスナー設定 ---
-  useEffect(() => {
-    if (!socket) return;
-    console.log(`[WeaponGrid ${roomId}] Setting up listeners for socket: ${socket.id}`);
+    // --- 表示用武器リスト生成 (Memoized) ---
+    const displayWeapons: DisplayWeapon[] = useMemo(() => {
+        return masterWeapons.map(master => {
+            const state = weaponStates[master.id] || {
+                id: master.id,
+                selectedBy: null,
+                bannedBy: [],
+            };
+            return {
+                ...master,
+                selectedBy: state.selectedBy,
+                bannedBy: state.bannedBy,
+                imageUrl: `/images/${encodeURIComponent(master.name)}.png`,
+                isLoading: loadingWeaponId === master.id,
+            };
+        });
+    }, [masterWeapons, weaponStates, loadingWeaponId]);
 
-    // --- リスナー定義 ---
-    const handleInitialState = (initialState: GameState) => {
-        if (initialState.roomId === roomId) {
-            console.log(`[WeaponGrid ${roomId}] Received initial state:`, initialState);
-            setGameState(initialState);
-            setHasSelectedThisTurn(false);
-            // ★ TODO: サーバーから初期チーム情報を受け取る処理 (必要なら)
-            // 例: const myInfo = initialState.users?.find(u => u.id === socket.id);
-            // if (myInfo?.team) setSelectedTeam(myInfo.team);
+
+    // --- WebSocketイベントリスナー設定 ---
+    useEffect(() => {
+        if (!socket) return;
+        console.log(`[WeaponGrid ${roomId}] Setting up listeners for socket: ${socket.id}, User: ${userName}`);
+
+        // --- リスナー定義 ---
+        const handleInitialState = (initialGameState: GameState) => {
+            if (initialGameState.roomId === roomId) {
+                console.log(`[WeaponGrid ${roomId}] Received initial state:`, initialGameState);
+                setGameState(initialGameState);
+            } else {
+                console.warn(`[WeaponGrid ${roomId}] Received initial state for other room: ${initialGameState.roomId}`);
+            }
+        };
+
+        const handleInitialWeapons = (initialWeaponStates: RoomWeaponState[]) => {
+            console.log(`[WeaponGrid ${roomId}] Received initial weapons state:`, initialWeaponStates);
+            const statesMap: Record<number, RoomWeaponState> = {};
+            initialWeaponStates.forEach(state => {
+                statesMap[state.id] = state;
+            });
+            setWeaponStates(statesMap);
+            console.log(`[WeaponGrid ${roomId}] Weapons state reconstructed.`);
+        };
+
+        const handleUpdateGameState = (updatedState: GameState) => {
+            if (updatedState.roomId === roomId) {
+                console.log(`[WeaponGrid ${roomId}] Received game state update:`, updatedState);
+                setGameState(updatedState);
+                if (gameState && (updatedState.currentTurn !== gameState.currentTurn || updatedState.phase !== gameState.phase)) {
+                    setLoadingWeaponId(null);
+                }
+            }
+        };
+
+        const handleUpdateWeapon = (updatedWeaponData: RoomWeaponState) => {
+            console.log(`[WeaponGrid ${roomId}] Received update weapon:`, updatedWeaponData);
+            setWeaponStates((prevStates) => ({
+                ...prevStates,
+                [updatedWeaponData.id]: updatedWeaponData,
+            }));
+            if (loadingWeaponId === updatedWeaponData.id) {
+                setLoadingWeaponId(null);
+            }
+        };
+
+        const handleTimeUpdate = (data: { timeLeft: number }) => {
+            setGameState((prev) => prev ? { ...prev, timeLeft: data.timeLeft } : null);
+        };
+
+        const handleActionFailed = (data: { reason: string }) => {
+            console.error(`[WeaponGrid ${roomId}] Action failed: ${data.reason}`);
+            handleError(data.reason);
+            setLoadingWeaponId(null);
+        };
+
+        const handleUserJoined = (user: RoomUser) => {
+            console.log(`[WeaponGrid ${roomId}] User joined:`, user);
+            // TODO: 参加者リスト表示を更新
+        };
+
+        const handleUserLeft = (data: { userId: string; name: string; team: Team | 'observer' }) => {
+            console.log(`[WeaponGrid ${roomId}] User left: ${data.name} (${data.userId})`);
+            // TODO: 参加者リスト表示を更新
+        };
+
+        const handleUserUpdated = (user: RoomUser) => {
+            console.log(`[WeaponGrid ${roomId}] User updated:`, user);
+            if (user.name === userName) {
+                console.log(`[WeaponGrid ${roomId}] My team updated to: ${user.team}`);
+                setMyTeam(user.team ?? 'observer');
+            }
+            // TODO: 参加者リスト表示を更新
+        };
+
+        // --- リスナー登録 ---
+        socket.on('initial state', handleInitialState);
+        socket.on('initial weapons', handleInitialWeapons);
+        socket.on('phase change', handleUpdateGameState);
+        socket.on('room state update', handleUpdateGameState);
+        socket.on('update weapon', handleUpdateWeapon);
+        socket.on('time update', handleTimeUpdate);
+        socket.on('action failed', handleActionFailed);
+        socket.on('user joined', handleUserJoined);
+        socket.on('user left', handleUserLeft);
+        socket.on('user updated', handleUserUpdated);
+
+        console.log(`[WeaponGrid ${roomId}] Listeners registered.`);
+
+        // --- クリーンアップ ---
+        return () => {
+            console.log(`[WeaponGrid ${roomId}] Removing listeners...`);
+            socket.off('initial state', handleInitialState);
+            socket.off('initial weapons', handleInitialWeapons);
+            socket.off('phase change', handleUpdateGameState);
+            socket.off('room state update', handleUpdateGameState);
+            socket.off('update weapon', handleUpdateWeapon);
+            socket.off('time update', handleTimeUpdate);
+            socket.off('action failed', handleActionFailed);
+            socket.off('user joined', handleUserJoined);
+            socket.off('user left', handleUserLeft);
+            socket.off('user updated', handleUserUpdated);
+        };
+    }, [socket, roomId, userName, masterWeapons, gameState]);
+
+    // --- エラーハンドラー ---
+    const handleError = useCallback((message: string) => {
+        console.error('Handled Error:', message);
+        setErrorMessage(message);
+        // ★ timerId は使われていないので削除 (setTimeout の戻り値はクリアする場合に使う)
+        setTimeout(() => setErrorMessage(null), 5000);
+        // const timerId = setTimeout(() => setErrorMessage(null), 5000);
+    }, []);
+
+    // --- 武器選択/禁止処理 (useCallbackで最適化) ---
+    const handleWeaponClick = useCallback((weaponId: number) => {
+        if (!socket || !gameState || myTeam === 'observer' || loadingWeaponId !== null) {
+            console.log('Action prevented: Invalid state or already loading.');
+            return;
+        }
+
+        const weapon = displayWeapons.find(w => w.id === weaponId);
+        if (!weapon) return;
+
+        const { phase, currentTurn, /*banPhaseState*/ } = gameState;
+        const isMyTurn = currentTurn === myTeam;
+        const isBanningPhase = phase === 'ban';
+        const isPickingPhase = phase === 'pick';
+
+        // --- アクション判定とクリック可否 ---
+        let action: 'ban' | 'select' | null = null;
+        let canPerformAction = false;
+        // ★ myTeam が Team 型 ('alpha' or 'bravo') であることを確認してからアクセス
+        if (isBanningPhase && (myTeam === 'alpha' || myTeam === 'bravo')) {
+            // ★ BANフェーズもターン制にする場合は isMyTurn チェックを追加: && isMyTurn
+            const currentBans = gameState.banPhaseState?.bans[myTeam] ?? 0; // BAN数は gameState から取得
+            const maxBans = gameState.banPhaseState?.maxBansPerTeam ?? MAX_BANS_PER_TEAM;
+            // ★ BAN上限未満であればクリック可能 (includes(myTeam) で自分がBAN済みかもチェック)
+            if (!weapon.selectedBy && !weapon.bannedBy.includes(myTeam) && currentBans < maxBans) {
+                action = 'ban';
+                canPerformAction = true;
+            }
+        } else if (isPickingPhase && (myTeam === 'alpha' || myTeam === 'bravo') && isMyTurn) {
+            if (!weapon.selectedBy && weapon.bannedBy.length === 0) {
+                action = 'select';
+                canPerformAction = true;
+            }
+        }
+
+        // --- アクション実行 ---
+        if (canPerformAction && action) {
+            const eventName = action === 'ban' ? 'ban weapon' : 'select weapon';
+            console.log(`[WeaponGrid ${roomId}] Emitting ${eventName} for weapon ${weaponId}`);
+            setLoadingWeaponId(weaponId);
+            socket.emit(eventName, { weaponId: weaponId });
         } else {
-             console.warn(`[WeaponGrid ${roomId}] Received initial state for other room: ${initialState.roomId}`);
+            // --- エラーフィードバック ---
+            console.log('Action prevented:', { phase, currentTurn, myTeam, weaponStatus: weapon, canPerformAction, action });
+            if (isPickingPhase) {
+                if ((myTeam === 'alpha' || myTeam === 'bravo') && !isMyTurn) handleError('あなたのターンではありません。');
+                else if (weapon.bannedBy.length > 0) handleError('この武器は BAN されています。');
+                else if (weapon.selectedBy) handleError('この武器は既に Pick されています。');
+            } else if (isBanningPhase) {
+                if (myTeam === 'alpha' || myTeam === 'bravo') {
+                    const currentBans = gameState.banPhaseState?.bans[myTeam] ?? 0;
+                    const maxBans = gameState.banPhaseState?.maxBansPerTeam ?? MAX_BANS_PER_TEAM;
+                    if (weapon.selectedBy) handleError('既に選択されている武器は BAN できません。');
+                    else if (weapon.bannedBy.includes(myTeam)) handleError('この武器は既にあなたが BAN しています。');
+                    else if (currentBans >= maxBans) handleError(`BAN できるのは ${maxBans} 個までです。`);
+                }
+            }
         }
-    };
-    const handlePhaseChange = (newState: GameState) => {
-        if (newState.roomId === roomId) {
-            console.log(`[WeaponGrid ${roomId}] Received phase change:`, newState);
-            setHasSelectedThisTurn(false);
-            setGameState(newState);
+    }, [socket, roomId, gameState, myTeam, loadingWeaponId, displayWeapons, handleError]);
+
+    // --- チーム選択処理関数 (useCallbackで最適化) ---
+    const handleTeamSelect = useCallback((team: Team | 'observer') => {
+        if (socket && gameState && gameState.phase === 'waiting') {
+            console.log(`[WeaponGrid ${roomId}] Requesting team select: ${team}`);
+            socket.emit('select team', { team });
+        } else {
+            console.log(`[WeaponGrid ${roomId}] Cannot select team, phase is not 'waiting' (${gameState?.phase})`);
+            handleError('ゲーム開始前のみチームを選択できます。');
         }
-    };
-    const handleTimeUpdate = (newTimeLeft: number) => {
-        setGameState((prev) => prev ? { ...prev, timeLeft: newTimeLeft } : null);
-    };
-    const handleUpdateWeapon = (updatedWeaponData: RoomWeaponState) => {
-         console.log(`[WeaponGrid ${roomId}] Received update weapon:`, updatedWeaponData);
-         setWeapons((prevWeapons) =>
-            prevWeapons.map((w) =>
-              w.id === updatedWeaponData.id ? { ...w, ...updatedWeaponData } : w
-            )
-         );
-     };
-     const handleInitialWeapons = (initialWeaponsData: RoomWeaponState[]) => {
-         console.log(`[WeaponGrid ${roomId}] Received initial weapons state:`, initialWeaponsData);
-         setWeapons(masterWeapons.map(masterW => {
-             const weaponState = initialWeaponsData.find(ws => ws.id === masterW.id);
-             return {
-                 ...masterW,
-                 imageUrl: `/images/${encodeURIComponent(masterW.name)}.png`,
-                 selectedBy: weaponState?.selectedBy ?? null,
-                 bannedBy: weaponState?.bannedBy ?? [],
-             };
-         }));
-         console.log(`[WeaponGrid ${roomId}] Weapons state reconstructed.`);
-     };
-      const handleActionFailed = (data: { reason: string }) => {
-          console.error(`[WeaponGrid ${roomId}] Action failed: ${data.reason}`);
-          handleError(data.reason);
-          setLoading(false); // ★ エラー時はローディング解除
-      };
-      const handleUserJoined = (user: RoomUser) => {
-          console.log(`[WeaponGrid ${roomId}] User joined:`, user);
-          // TODO: 参加者リスト表示を更新
-      };
-      const handleUserLeft = (data: { userId: string }) => {
-           console.log(`[WeaponGrid ${roomId}] User left: ${data.userId}`);
-           // TODO: 参加者リスト表示を更新
-      };
-      const handleUserUpdated = (user: RoomUser) => {
-        console.log(`[WeaponGrid ${roomId}] User updated:`, user);
-        // ↓↓↓ この if 文で userName を使っているか確認 ↓↓↓
-        if (user.name === userName) { // ★ userName を比較に使用
-            console.log(`[WeaponGrid ${roomId}] My team updated to: ${user.team}`);
-            setSelectedTeam(user.team || 'observer');
+    }, [socket, gameState, handleError, roomId]);
+
+    // --- ゲーム開始処理 (useCallbackで最適化) ---
+    const handleStart = useCallback(() => {
+        if (socket && gameState && gameState.phase === 'waiting') {
+            console.log(`[WeaponGrid ${roomId}] Emitting start game`);
+            socket.emit('start game');
         }
-        // TODO: 参加者リスト表示を更新
-    };
-       const handleRoomStateUpdate = (newState: GameState) => {
-           if (newState.roomId === roomId) {
-               console.log(`[WeaponGrid ${roomId}] Received room state update:`, newState);
-               setGameState(prev => prev ? {...prev, userCount: newState.userCount} : null);
-           }
-       };
+    }, [socket, gameState, roomId]);
 
-    // --- リスナー登録 ---
-    socket.on('initial state', handleInitialState);
-    socket.on('phase change', handlePhaseChange);
-    socket.on('time update', handleTimeUpdate);
-    socket.on('update weapon', handleUpdateWeapon);
-    socket.on('initial weapons', handleInitialWeapons);
-    socket.on('action failed', handleActionFailed);
-    socket.on('user joined', handleUserJoined);
-    socket.on('user left', handleUserLeft);
-    socket.on('user updated', handleUserUpdated);
-    socket.on('room state update', handleRoomStateUpdate);
+    // --- リセット処理 (useCallbackで最適化) ---
+    const handleReset = useCallback(() => {
+        if (socket && confirm('ゲーム状態をリセットしてもよろしいですか？')) {
+            console.log(`[WeaponGrid ${roomId}] Emitting reset room`);
+            socket.emit('reset room');
+        }
+    }, [socket, roomId]);
 
-    // --- クリーンアップ ---
-    return () => {
-        console.log(`[WeaponGrid ${roomId}] Removing listeners...`);
-        socket.off('initial state', handleInitialState);
-        socket.off('phase change', handlePhaseChange);
-        socket.off('time update', handleTimeUpdate);
-        socket.off('update weapon', handleUpdateWeapon);
-        socket.off('initial weapons', handleInitialWeapons);
-        socket.off('action failed', handleActionFailed);
-        socket.off('user joined', handleUserJoined);
-        socket.off('user left', handleUserLeft);
-        socket.off('user updated', handleUserUpdated);
-        socket.off('room state update', handleRoomStateUpdate);
-    };
-  }, [socket, roomId, masterWeapons]); // masterWeapons は初期化に使うため依存配列に含める
+    // --- 表示用データの準備 (useMemoで最適化) ---
+    // ★ alphaPicksCount, bravoPicksCount は使われていないので削除
+    const { alphaPicks, bravoPicks, alphaBans, bravoBans, /* alphaPicksCount, bravoPicksCount, */ alphaBansCount, bravoBansCount } = useMemo(() => {
+        const alphaPicks = displayWeapons.filter((w) => w.selectedBy === 'alpha');
+        const bravoPicks = displayWeapons.filter((w) => w.selectedBy === 'bravo');
+        const alphaBans = displayWeapons.filter((w) => w.bannedBy.includes('alpha'));
+        const bravoBans = displayWeapons.filter((w) => w.bannedBy.includes('bravo'));
+        return {
+            alphaPicks, bravoPicks, alphaBans, bravoBans,
+            // alphaPicksCount: alphaPicks.length,
+            // bravoPicksCount: bravoPicks.length,
+            alphaBansCount: alphaBans.length,
+            bravoBansCount: bravoBans.length
+        };
+    }, [displayWeapons]);
 
-  // --- エラーハンドラー ---
-  const handleError = (message: string) => {
-    console.error('Handled Error:', message);
-    setErrorMessage(message);
-    setTimeout(() => setErrorMessage(null), 5000);
-  };
+    // --- レンダリング ---
 
-  // --- 武器選択/禁止処理 ---
-  const handleSelect = async (id: number) => {
-      if (!socket || !gameState) return;
-      const weapon = weapons.find(w => w.id === id);
-      if (!weapon) return;
-      const currentPhase = gameState.phase;
-      const isPlayerTeam = selectedTeam === 'alpha' || selectedTeam === 'bravo';
-
-      // --- クリックできない条件 ---
-      let canClickCheck = false;
-      if (currentPhase === 'pick' && isPlayerTeam && gameState.currentTurn === selectedTeam && !hasSelectedThisTurn && !weapon.selectedBy && (!weapon.bannedBy || weapon.bannedBy.length === 0)) {
-          canClickCheck = true;
-      } else if (currentPhase === 'ban' && isPlayerTeam && !weapon.selectedBy && !weapon.bannedBy?.includes(selectedTeam) && (gameState.banPhaseState?.bans[selectedTeam] ?? 0) < (gameState.banPhaseState?.maxBansPerTeam ?? 3)) {
-          canClickCheck = true;
-      }
-      const isDisabledCheck = loading || currentPhase === 'waiting' || currentPhase === 'pick_complete' || selectedTeam === 'observer' || !canClickCheck;
-      // -------------------------
-
-      if (isDisabledCheck) {
-          console.log('Selection/Ban prevented:', { phase: currentPhase, loading, selectedTeam, canClickCheck, weaponStatus: { id: weapon.id, selectedBy: weapon.selectedBy, bannedBy: weapon.bannedBy }});
-          return;
-      }
-
-      const action = currentPhase === 'ban' ? 'ban' : 'select';
-      const eventName = action === 'ban' ? 'ban weapon' : 'select weapon';
-
-      console.log(`[WeaponGrid ${roomId}] Emitting ${eventName} for weapon ${id}`);
-      setLoading(true);
-      socket.emit(eventName, { weaponId: id });
-
-      // 即時反映 (任意)
-      if (action === 'select') {
-           setHasSelectedThisTurn(true);
-           // setWeapons(prev => prev.map(w => w.id === id ? {...w, selectedBy: selectedTeam} : w));
-      } else {
-           // setWeapons(prev => prev.map(w => w.id === id ? {...w, bannedBy: [...(w.bannedBy || []), selectedTeam]} : w));
-      }
-
-      // loading解除はサーバー応答(action failed)を待つか、タイムアウトか、少し遅延させる
-      // ここでは action failed で解除される + 念のためタイムアウトも設定
-      // const loadingTimeout = setTimeout(() => {
-      //       console.warn(`[WeaponGrid ${roomId}] Action response timeout. Force setting loading to false.`);
-      //       setLoading(false);
-      // }, 3000); // 3秒応答がなければ強制解除 (時間は調整)
-
-      // action failed リスナーで clearTimeout(loadingTimeout) する必要がある
-      // useEffect 内の action failed ハンドラで setLoading(false) を行うので、
-      // ここでの setTimeout は不要かもしれない。シンプルにするため一旦コメントアウト。
-      // setLoading(false) は action failed ハンドラに任せる。
-  };
-
-  // --- ゲーム開始処理 ---
-  const handleStart = () => {
-    if (socket && gameState && gameState.phase === 'waiting') {
-      console.log(`[WeaponGrid ${roomId}] Emitting start game`);
-      socket.emit('start game');
+    if (!gameState) {
+        return (
+            <div className="container mx-auto p-4 text-center">
+                <p>ルーム情報 ({roomId}) を読み込み中...</p>
+            </div>
+        );
     }
-  };
 
-   // --- チーム選択処理関数 ---
-   const handleTeamSelect = (team: 'alpha' | 'bravo' | 'observer') => {
-       if (socket && gameState && gameState.phase === 'waiting') {
-           console.log(`[WeaponGrid ${roomId}] Requesting team select: ${team}`);
-           socket.emit('select team', { team });
-       } else {
-           console.log(`[WeaponGrid ${roomId}] Cannot select team, phase is not 'waiting' (${gameState?.phase})`);
-       }
-   };
+    // --- グリッドアイテムのレンダリングロジック ---
+    const renderWeaponItem = (weapon: DisplayWeapon) => {
+        const isSelectedByAlpha = weapon.selectedBy === 'alpha';
+        const isSelectedByBravo = weapon.selectedBy === 'bravo';
+        const isBannedByAlpha = weapon.bannedBy.includes('alpha');
+        const isBannedByBravo = weapon.bannedBy.includes('bravo');
+        const isBanned = isBannedByAlpha || isBannedByBravo;
+        const isMyTeamPlayer = myTeam === 'alpha' || myTeam === 'bravo';
 
-  // --- 表示用データの準備 ---
-  const alphaPicks = gameState ? weapons.filter((w) => w.selectedBy === 'alpha') : [];
-  const bravoPicks = gameState ? weapons.filter((w) => w.selectedBy === 'bravo') : [];
-  const alphaBans = gameState ? weapons.filter((w) => w.bannedBy?.includes('alpha')) : [];
-  const bravoBans = gameState ? weapons.filter((w) => w.bannedBy?.includes('bravo')) : [];
-  const isGameActive = gameState ? activeGamePhases.includes(gameState.phase) : false;
-  const alphaPicksCount = alphaPicks.length;
-  const bravoPicksCount = bravoPicks.length;
-  const alphaBansCount = alphaBans.length;
-  const bravoBansCount = bravoBans.length;
+        // --- クリック可否判定 ---
+        let canClick = false;
+        const isMyTurn = gameState.currentTurn === myTeam; // PICKフェーズ用
+        if (gameState.phase === 'pick' && isMyTeamPlayer && isMyTurn && !weapon.selectedBy && !isBanned) {
+            canClick = true;
+        } else if (gameState.phase === 'ban' && isMyTeamPlayer) { // ★ BANフェーズもターン制にする場合は isMyTurn チェックを追加: && isMyTurn
+            if (myTeam === 'alpha' || myTeam === 'bravo') {
+                const currentBans = gameState.banPhaseState?.bans[myTeam] ?? 0;
+                const maxBans = gameState.banPhaseState?.maxBansPerTeam ?? MAX_BANS_PER_TEAM;
+                if (!weapon.selectedBy && !weapon.bannedBy.includes(myTeam) && currentBans < maxBans) {
+                    canClick = true; // ★ 2回目以降もここが true になるはず
+                }
+            }
+            canClick = true;
+        }
+        const isDisabled = weapon.isLoading || !canClick; // isDisabled の計算
 
+        // --- スタイル決定 ---
+        let bgColor = 'bg-white'; let borderColor = 'border-gray-200'; let imageOpacity = 'opacity-100'; let overallOpacity = 'opacity-100'; let ring = ''; let hoverEffect = 'hover:bg-blue-50 hover:border-blue-300'; let banMark = null; let cursor = 'cursor-pointer';
 
-  // --- レンダリング ---
+        if (isSelectedByAlpha) { bgColor = 'bg-blue-100'; borderColor = 'border-blue-400'; ring = 'ring-2 ring-offset-1 ring-blue-500'; hoverEffect = ''; cursor = 'cursor-not-allowed'; }
+        else if (isSelectedByBravo) { bgColor = 'bg-red-100'; borderColor = 'border-red-400'; ring = 'ring-2 ring-offset-1 ring-red-500'; hoverEffect = ''; cursor = 'cursor-not-allowed'; }
+        else if (isBanned) {
+            bgColor = 'bg-gray-200'; borderColor = 'border-gray-300'; imageOpacity = 'opacity-40'; overallOpacity = 'opacity-70'; hoverEffect = ''; cursor = 'cursor-not-allowed';
+            // ★ banColor を const に変更
+            let banColorConst = 'text-gray-700';
+            if (isBannedByAlpha) { banColorConst = 'text-blue-600'; }
+            else if (isBannedByBravo) { banColorConst = 'text-red-600'; }
+            banMark = (<div className={`absolute inset-0 flex items-center justify-center rounded-lg pointer-events-none`}><svg className={`w-10 h-10 ${banColorConst} opacity-75`} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg></div>);
+            // ★ myTeam が Team 型であることを確認
+        } else if (gameState.phase === 'ban' && myTeam !== 'observer' && weapon.bannedBy.includes(myTeam) && !canClick) {
+            bgColor = 'bg-yellow-100'; borderColor = 'border-yellow-400'; imageOpacity = 'opacity-40'; overallOpacity = 'opacity-80'; hoverEffect = ''; cursor = 'cursor-not-allowed';
+            const banColor = myTeam === 'alpha' ? 'text-blue-600' : 'text-red-600';
+            banMark = (<div className={`absolute inset-0 flex items-center justify-center rounded-lg pointer-events-none`}><svg className={`w-10 h-10 ${banColor} opacity-75`} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg></div>);
+        } else if (isDisabled && !weapon.isLoading) {
+            cursor = 'cursor-not-allowed'; hoverEffect = '';
+            if (myTeam === 'observer' || gameState.phase === 'waiting' || gameState.phase === 'pick_complete') {
+                bgColor = 'bg-gray-50'; overallOpacity = 'opacity-70';
+            } else { overallOpacity = 'opacity-75'; }
+        }
 
-  if (!gameState) {
-    // gameState が null の間の表示（通常は短時間のはず）
+        // --- グリッドアイテム JSX ---
+        return (
+            <div
+                key={`weapon-grid-${weapon.id}`}
+                className={`relative p-2 rounded-lg border transition-all duration-150 ${bgColor} ${borderColor} ${overallOpacity} ${ring} ${cursor} ${hoverEffect}`}
+                onClick={() => !isDisabled && handleWeaponClick(weapon.id)}
+                title={weapon.name + (isDisabled ? ' (操作不可)' : '')}
+            >
+                <Image
+                    src={weapon.imageUrl}
+                    alt={weapon.name}
+                    width={100}
+                    height={100}
+                    className={`mx-auto transition-opacity duration-150 ${imageOpacity}`}
+                    priority={weapon.id <= 12}
+                />
+                {banMark}
+                {weapon.isLoading && (
+                    <div className="absolute inset-0 bg-white bg-opacity-50 flex items-center justify-center rounded-lg">
+                        <svg className="animate-spin h-8 w-8 text-gray-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                    </div>
+                )}
+                {/* ターン表示 */}
+                {isMyTeamPlayer && !isDisabled && gameState.phase === 'pick' && (<div className="absolute bottom-1 right-1 px-1.5 py-0.5 text-xs bg-green-200 text-green-800 rounded font-semibold animate-pulse">Pick!</div>)}
+                {/* ★ isMyTurn チェックは isMyTeamPlayer && !isDisabled に含まれるので削除しても良い */}
+                {isMyTeamPlayer && !isDisabled && gameState.phase === 'ban' /* && isMyTurn */ && (<div className="absolute bottom-1 right-1 px-1.5 py-0.5 text-xs bg-yellow-200 text-yellow-800 rounded font-semibold animate-pulse">Ban!</div>)}
+            </div>
+        );
+    }
+
+    // --- JSX レンダリング本体 ---
     return (
-        <div className="container mx-auto p-4 text-center">
-            <p>ルーム情報 ({roomId}) を読み込み中...</p>
-        </div>
-    );
-  }
-
-  return (
-    <div className="container mx-auto p-4 space-y-6">
-      {/* Header & Controls */}
-       <div className="flex flex-wrap justify-between items-center gap-4 p-4 bg-gray-100 rounded-lg shadow">
-         {/* Room ID 表示 */}
-         <div className="font-semibold text-lg">ルーム: {roomId}</div>
-         {/* Team Selection Buttons */}
-         <div className="flex items-center space-x-2">
-         <span className="text-sm font-medium text-gray-700">あなたのチーム ({userName}):</span>
-             <button onClick={() => handleTeamSelect('alpha')} disabled={gameState.phase !== 'waiting'} className={`px-3 py-1 rounded-md text-sm transition-colors ${selectedTeam === 'alpha' ? 'bg-blue-500 text-white font-semibold ring-2 ring-blue-300' : 'bg-gray-200 hover:bg-gray-300'} ${gameState.phase !== 'waiting' ? 'opacity-50 cursor-not-allowed' : ''}`}>アルファ</button>
-             <button onClick={() => handleTeamSelect('bravo')} disabled={gameState.phase !== 'waiting'} className={`px-3 py-1 rounded-md text-sm transition-colors ${selectedTeam === 'bravo' ? 'bg-red-500 text-white font-semibold ring-2 ring-red-300' : 'bg-gray-200 hover:bg-gray-300'} ${gameState.phase !== 'waiting' ? 'opacity-50 cursor-not-allowed' : ''}`}>ブラボー</button>
-             <button onClick={() => handleTeamSelect('observer')} disabled={gameState.phase !== 'waiting'} className={`px-3 py-1 rounded-md text-sm transition-colors ${selectedTeam === 'observer' ? 'bg-gray-500 text-white font-semibold ring-2 ring-gray-300' : 'bg-gray-200 hover:bg-gray-300'} ${gameState.phase !== 'waiting' ? 'opacity-50 cursor-not-allowed' : ''}`}>観戦</button>
-         </div>
-         {/* Game Status Display */}
-         <div className="text-center space-y-1">
-             <p className="text-lg font-semibold">フェーズ: <span className="font-bold text-indigo-600">{gameState.phase}</span></p>
-             {(gameState.phase === 'pick' || gameState.phase === 'pick_complete') && gameState.currentPickTurnNumber != null && (<p>ターン: {gameState.currentPickTurnNumber} / {totalPickTurns}</p>)}
-             {(gameState.phase === 'ban' || gameState.phase === 'pick') && (<p className="text-xl font-mono">残り時間: {gameState.timeLeft}秒</p>)}
-             {(gameState.phase === 'pick') && gameState.currentTurn && (<p>現在のターン: <span className={`font-bold ${gameState.currentTurn === 'alpha' ? 'text-blue-600' : 'text-red-600'}`}>{gameState.currentTurn}チーム</span></p>)}
-             {gameState.phase === 'pick_complete' && (<p className="font-bold text-green-600 text-xl">選択完了！</p>)}
-             <p className="text-xs text-gray-500">参加者: {gameState.userCount}人</p> {/* 参加人数表示 */}
-         </div>
-         {/* Control Buttons */}
-         <div>
-             {gameState.phase === 'waiting' && (<button onClick={handleStart} className="px-6 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 disabled:opacity-50" disabled={!socket || loading}>ゲーム開始</button>)}
-             {(gameState.phase === 'ban' || gameState.phase === 'pick' || gameState.phase === 'pick_complete') && (<button onClick={() => socket?.emit('reset room')} className="ml-4 px-4 py-2 bg-yellow-500 text-white rounded-md hover:bg-yellow-600">リセット</button>)}
-         </div>
-       </div>
-
-      {/* Error Message */}
-      {errorMessage && ( <div className="p-3 bg-red-100 text-red-700 rounded-lg text-center">エラー: {errorMessage}</div> )}
-
-      {/* Picked/Banned Weapons Display */}
-      <div className="flex flex-col md:flex-row gap-4">
-          {/* Alpha Team */}
-          <div className="flex-1 border rounded-lg p-3 bg-blue-50 shadow-sm min-h-[150px]">
-              <h3 className="text-lg font-semibold mb-2 text-blue-800">アルファチーム {selectedTeam === 'alpha' ? '(あなた)' : ''}</h3>
-              <div className="mb-3">
-                   <h4 className="text-md font-medium mb-1 text-blue-700">選択 ({alphaPicksCount}/{gameState.pickPhaseState?.maxPicksPerTeam ?? 4})</h4>
-                  <div className="flex flex-wrap gap-1">
-                      {isGameActive && alphaPicks.length > 0 ? alphaPicks.map((weapon) => (
-                          <div key={`alpha-pick-${weapon.id}`} className="relative border border-blue-300 rounded p-1 bg-white" title={`選択: ${weapon.name}`}>
-                              <Image src={weapon.imageUrl} alt={weapon.name} width={60} height={60} />
-                          </div>
-                      )) : <p className="text-sm text-gray-500">{gameState.phase === 'waiting' ? 'ゲーム開始前' : (alphaPicksCount === 0 ? '選択なし' : '')}</p>}
-                  </div>
-              </div>
-              <div>
-                   <h4 className="text-md font-medium mb-1 text-blue-700">禁止 ({alphaBansCount}/{gameState.banPhaseState?.maxBansPerTeam ?? 3})</h4>
-                   <div className="flex flex-wrap gap-1">
-                      {isGameActive && alphaBans.length > 0 ? alphaBans.map((weapon) => {
-                          const isSelfOrObserver = selectedTeam === 'alpha' || selectedTeam === 'observer';
-                          const shouldShow = gameState.phase === 'pick' || gameState.phase === 'pick_complete' || (gameState.phase === 'ban' && isSelfOrObserver);
-                          if (!shouldShow) return null;
-                          return (
-                              <div key={`alpha-ban-${weapon.id}`} className="relative border border-gray-400 rounded p-1 bg-gray-200" title={`禁止: ${weapon.name}`}>
-                                   <Image src={weapon.imageUrl} alt={weapon.name} width={60} height={60} className="opacity-70" />
-                                   <div className="absolute inset-0 flex items-center justify-center">
-                                       <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg>
-                                   </div>
-                              </div>
-                          );
-                      }) : <p className="text-sm text-gray-500">{gameState.phase === 'waiting' ? 'ゲーム開始前' : (alphaBansCount === 0 ? '禁止なし' : '')}</p>}
-                  </div>
-              </div>
-          </div>
-          {/* Bravo Team */}
-          <div className="flex-1 border rounded-lg p-3 bg-red-50 shadow-sm min-h-[150px]">
-               <h3 className="text-lg font-semibold mb-2 text-red-800">ブラボーチーム {selectedTeam === 'bravo' ? '(あなた)' : ''}</h3>
-               <div className="mb-3">
-                  <h4 className="text-md font-medium mb-1 text-red-700">選択 ({bravoPicksCount}/{gameState.pickPhaseState?.maxPicksPerTeam ?? 4})</h4>
-                  <div className="flex flex-wrap gap-1">
-                       {isGameActive && bravoPicks.length > 0 ? bravoPicks.map((weapon) => (
-                          <div key={`bravo-pick-${weapon.id}`} className="relative border border-red-300 rounded p-1 bg-white" title={`選択: ${weapon.name}`}>
-                              <Image src={weapon.imageUrl} alt={weapon.name} width={60} height={60} />
-                          </div>
-                      )) : <p className="text-sm text-gray-500">{gameState.phase === 'waiting' ? 'ゲーム開始前' : (bravoPicksCount === 0 ? '選択なし' : '')}</p>}
-                  </div>
-              </div>
+        <div className="container mx-auto p-4 space-y-6">
+            {/* Header & Controls */}
+            <div className="flex flex-wrap justify-between items-center gap-4 p-4 bg-gray-100 rounded-lg shadow">
+                {/* Room ID */}
+                <div className="font-semibold text-lg">ルーム: {roomId}</div>
+                {/* Team Selection */}
+                <div className="flex items-center space-x-2">
+                    <span className="text-sm font-medium text-gray-700">あなたのチーム ({userName}):</span>
+                    <button onClick={() => handleTeamSelect('alpha')} disabled={gameState.phase !== 'waiting' || myTeam === 'alpha'} className={`px-3 py-1 rounded-md text-sm transition-colors ${myTeam === 'alpha' ? 'bg-blue-500 text-white font-semibold ring-2 ring-blue-300' : 'bg-gray-200 hover:bg-gray-300'} ${gameState.phase !== 'waiting' ? 'opacity-50 cursor-not-allowed' : ''}`}>アルファ</button>
+                    <button onClick={() => handleTeamSelect('bravo')} disabled={gameState.phase !== 'waiting' || myTeam === 'bravo'} className={`px-3 py-1 rounded-md text-sm transition-colors ${myTeam === 'bravo' ? 'bg-red-500 text-white font-semibold ring-2 ring-red-300' : 'bg-gray-200 hover:bg-gray-300'} ${gameState.phase !== 'waiting' ? 'opacity-50 cursor-not-allowed' : ''}`}>ブラボー</button>
+                    <button onClick={() => handleTeamSelect('observer')} disabled={gameState.phase !== 'waiting' || myTeam === 'observer'} className={`px-3 py-1 rounded-md text-sm transition-colors ${myTeam === 'observer' ? 'bg-gray-500 text-white font-semibold ring-2 ring-gray-300' : 'bg-gray-200 hover:bg-gray-300'} ${gameState.phase !== 'waiting' ? 'opacity-50 cursor-not-allowed' : ''}`}>観戦</button>
+                </div>
+                {/* Game Status */}
+                <div className="text-center space-y-1">
+                    <p className="text-lg font-semibold">フェーズ: <span className="font-bold text-indigo-600">{gameState.phase}</span></p>
+                    {(gameState.phase === 'pick' || gameState.phase === 'pick_complete') && gameState.currentPickTurnNumber != null && (<p>Pickターン: {gameState.currentPickTurnNumber} / {TOTAL_PICK_TURNS}</p>)}
+                    {(gameState.phase === 'ban' || gameState.phase === 'pick') && gameState.timeLeft != null && (<p className="text-xl font-mono">残り時間: {gameState.timeLeft}秒</p>)}
+                    {(gameState.phase === 'ban' || gameState.phase === 'pick') && gameState.currentTurn && (<p>現在のターン: <span className={`font-bold ${gameState.currentTurn === 'alpha' ? 'text-blue-600' : 'text-red-600'}`}>{gameState.currentTurn}チーム</span></p>)}
+                    {gameState.phase === 'pick_complete' && (<p className="font-bold text-green-600 text-xl">選択完了！</p>)}
+                    <p className="text-xs text-gray-500">参加者: {gameState.userCount}人</p>
+                </div>
+                {/* Control Buttons */}
                 <div>
-                  <h4 className="text-md font-medium mb-1 text-red-700">禁止 ({bravoBansCount}/{gameState.banPhaseState?.maxBansPerTeam ?? 3})</h4>
-                   <div className="flex flex-wrap gap-1">
-                       {isGameActive && bravoBans.length > 0 ? bravoBans.map((weapon) => {
-                           const isSelfOrObserver = selectedTeam === 'bravo' || selectedTeam === 'observer';
-                           const shouldShow = gameState.phase === 'pick' || gameState.phase === 'pick_complete' || (gameState.phase === 'ban' && isSelfOrObserver);
-                           if (!shouldShow) return null;
-                          return (
-                              <div key={`bravo-ban-${weapon.id}`} className="relative border border-gray-400 rounded p-1 bg-gray-200" title={`禁止: ${weapon.name}`}>
-                                   <Image src={weapon.imageUrl} alt={weapon.name} width={60} height={60} className="opacity-70"/>
-                                   <div className="absolute inset-0 flex items-center justify-center">
-                                      <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg>
-                                   </div>
-                              </div>
-                          );
-                       }) : <p className="text-sm text-gray-500">{gameState.phase === 'waiting' ? 'ゲーム開始前' : (bravoBansCount === 0 ? '禁止なし' : '')}</p>}
-                  </div>
-              </div>
-          </div>
-      </div>
+                    {gameState.phase === 'waiting' && (<button onClick={handleStart} className="px-6 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 disabled:opacity-50" disabled={!socket || loadingWeaponId !== null}>ゲーム開始</button>)}
+                    {(gameState.phase !== 'waiting') && (<button onClick={handleReset} className="ml-4 px-4 py-2 bg-yellow-500 text-white rounded-md hover:bg-yellow-600 disabled:opacity-50" disabled={loadingWeaponId !== null}>リセット</button>)}
+                </div>
+            </div>
 
-      {/* Weapon Grid */}
-      {(gameState.phase !== 'pick_complete') && (
-          <div className="overflow-x-auto">
-              {weapons.length > 0 ? (
-                 <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-3">
-                     {weapons.map((weapon) => {
-                        // --- 状態判定 ---
-                        const isSelectedByAlpha = weapon.selectedBy === 'alpha';
-                        const isSelectedByBravo = weapon.selectedBy === 'bravo';
-                        const isPlayerTeam = selectedTeam === 'alpha' || selectedTeam === 'bravo';
-                        const isBannedByMe = isPlayerTeam && weapon.bannedBy?.includes(selectedTeam);
-                        const anyBanExists = weapon.bannedBy && weapon.bannedBy.length > 0;
-                        const showAsBannedOnGrid = (gameState.phase === 'ban' && isBannedByMe) || ((gameState.phase === 'pick' || gameState.phase === 'waiting') && anyBanExists);
+            {/* Error Message */}
+            {errorMessage && (<div className="p-3 bg-red-100 text-red-700 rounded-lg text-center">エラー: {errorMessage}</div>)}
 
-                        // --- クリック可否判定 ---
-                        let canClick = false;
-                        if (gameState.phase === 'pick' && isPlayerTeam && gameState.currentTurn === selectedTeam && !hasSelectedThisTurn && !isSelectedByAlpha && !isSelectedByBravo && !anyBanExists) {
-                            canClick = true;
-                        } else if (gameState.phase === 'ban' && isPlayerTeam && !isSelectedByAlpha && !isSelectedByBravo && !isBannedByMe && (gameState.banPhaseState?.bans[selectedTeam] ?? 0) < (gameState.banPhaseState?.maxBansPerTeam ?? 3)) {
-                            canClick = true;
-                        }
-                        const isDisabled = loading || gameState.phase === 'waiting' || selectedTeam === 'observer' || !canClick;
+            {/* Picked/Banned Weapons Display */}
+            <div className="flex flex-col md:flex-row gap-4">
+                {/* Alpha Team */}
+                <div className="flex-1 border rounded-lg p-3 bg-blue-50 shadow-sm min-h-[150px]">
+                    <h3 className="text-lg font-semibold mb-2 text-blue-800">アルファチーム {myTeam === 'alpha' ? `(あなた: ${userName})` : ''}</h3>
+                    <div className="mb-3">
+                        <h4 className="text-md font-medium mb-1 text-blue-700">選択 ({gameState.pickPhaseState?.picks.alpha ?? 0}/{MAX_PICKS_PER_TEAM})</h4>
+                        <div className="flex flex-wrap gap-1">
+                            {alphaPicks.length > 0 ? alphaPicks.map((weapon) => (
+                                <div key={`alpha-pick-${weapon.id}`} className="relative border border-blue-300 rounded p-1 bg-white" title={`選択: ${weapon.name}`}>
+                                    <Image src={weapon.imageUrl} alt={weapon.name} width={60} height={60} />
+                                </div>
+                            )) : <p className="text-sm text-gray-500">{gameState.phase === 'waiting' ? '待機中' : '-'}</p>}
+                        </div>
+                    </div>
+                    <div>
+                        <h4 className="text-md font-medium mb-1 text-blue-700">禁止 ({gameState.banPhaseState?.bans.alpha ?? 0}/{MAX_BANS_PER_TEAM})</h4>
+                        <div className="flex flex-wrap gap-1">
+                            {alphaBans.length > 0 ? alphaBans.map((weapon) => {
+                                const isSelfOrObserver = myTeam === 'alpha' || myTeam === 'observer';
+                                const shouldShowBan = gameState.phase === 'pick' || gameState.phase === 'pick_complete' || (gameState.phase === 'ban' && isSelfOrObserver);
+                                if (!shouldShowBan) return null;
+                                return (
+                                    <div key={`alpha-ban-${weapon.id}`} className="relative border border-gray-400 rounded p-1 bg-gray-200" title={`禁止: ${weapon.name}`}>
+                                        <Image src={weapon.imageUrl} alt={weapon.name} width={60} height={60} className="opacity-70" />
+                                        <div className="absolute inset-0 flex items-center justify-center">
+                                            <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg>
+                                        </div>
+                                    </div>
+                                );
+                            }) : <p className="text-sm text-gray-500">{gameState.phase === 'waiting' ? '待機中' : '-'}</p>}
+                            {gameState.phase === 'ban' && myTeam === 'bravo' && alphaBansCount > 0 && <p className="text-sm text-gray-400 italic">（相手のBANはPickフェーズで公開）</p>}
+                        </div>
+                    </div>
+                </div>
+                {/* Bravo Team */}
+                <div className="flex-1 border rounded-lg p-3 bg-red-50 shadow-sm min-h-[150px]">
+                    <h3 className="text-lg font-semibold mb-2 text-red-800">ブラボーチーム {myTeam === 'bravo' ? `(あなた: ${userName})` : ''}</h3>
+                    <div className="mb-3">
+                        <h4 className="text-md font-medium mb-1 text-red-700">選択 ({gameState.pickPhaseState?.picks.bravo ?? 0}/{MAX_PICKS_PER_TEAM})</h4>
+                        <div className="flex flex-wrap gap-1">
+                            {bravoPicks.length > 0 ? bravoPicks.map((weapon) => (
+                                <div key={`bravo-pick-${weapon.id}`} className="relative border border-red-300 rounded p-1 bg-white" title={`選択: ${weapon.name}`}>
+                                    <Image src={weapon.imageUrl} alt={weapon.name} width={60} height={60} />
+                                </div>
+                            )) : <p className="text-sm text-gray-500">{gameState.phase === 'waiting' ? '待機中' : '-'}</p>}
+                        </div>
+                    </div>
+                    <div>
+                        <h4 className="text-md font-medium mb-1 text-red-700">禁止 ({gameState.banPhaseState?.bans.bravo ?? 0}/{MAX_BANS_PER_TEAM})</h4>
+                        <div className="flex flex-wrap gap-1">
+                            {bravoBans.length > 0 ? bravoBans.map((weapon) => {
+                                const isSelfOrObserver = myTeam === 'bravo' || myTeam === 'observer';
+                                const shouldShowBan = gameState.phase === 'pick' || gameState.phase === 'pick_complete' || (gameState.phase === 'ban' && isSelfOrObserver);
+                                if (!shouldShowBan) return null;
+                                return (
+                                    <div key={`bravo-ban-${weapon.id}`} className="relative border border-gray-400 rounded p-1 bg-gray-200" title={`禁止: ${weapon.name}`}>
+                                        <Image src={weapon.imageUrl} alt={weapon.name} width={60} height={60} className="opacity-70" />
+                                        <div className="absolute inset-0 flex items-center justify-center">
+                                            <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg>
+                                        </div>
+                                    </div>
+                                );
+                            }) : <p className="text-sm text-gray-500">{gameState.phase === 'waiting' ? '待機中' : '-'}</p>}
+                            {gameState.phase === 'ban' && myTeam === 'alpha' && bravoBansCount > 0 && <p className="text-sm text-gray-400 italic">（相手のBANはPickフェーズで公開）</p>}
+                        </div>
+                    </div>
+                </div>
+            </div>
 
-                        // --- スタイル決定 ---
-                        let bgColor = 'bg-white'; let borderColor = 'border-gray-200'; let imageOpacity = 'opacity-100'; let overallOpacity = 'opacity-100'; let ring = ''; let hoverEffect = 'hover:bg-blue-50 hover:border-blue-300'; let banMark = null; let cursor = 'cursor-pointer';
-                        if (isSelectedByAlpha) { bgColor = 'bg-blue-100'; borderColor = 'border-blue-400'; ring = 'ring-2 ring-offset-1 ring-blue-500'; hoverEffect = ''; cursor = 'cursor-not-allowed'; }
-                        else if (isSelectedByBravo) { bgColor = 'bg-red-100'; borderColor = 'border-red-400'; ring = 'ring-2 ring-offset-1 ring-red-500'; hoverEffect = ''; cursor = 'cursor-not-allowed'; }
-                        else if (showAsBannedOnGrid) {
-                            bgColor = 'bg-gray-200'; borderColor = 'border-gray-300'; imageOpacity = 'opacity-40'; overallOpacity = 'opacity-70'; hoverEffect = ''; cursor = 'cursor-not-allowed';
-                            let banColor = 'text-gray-700';
-                            if (weapon.bannedBy?.includes('alpha')) { banColor = 'text-blue-600'; } else if (weapon.bannedBy?.includes('bravo')) { banColor = 'text-red-600'; }
-                            banMark = ( <div className={`absolute inset-0 flex items-center justify-center rounded-lg pointer-events-none`}><svg className={`w-10 h-10 ${banColor} opacity-75`} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/></svg></div> );
-                        } else if (isDisabled) {
-                             cursor = 'cursor-not-allowed'; hoverEffect = '';
-                             if (selectedTeam === 'observer') { bgColor = 'bg-gray-50'; overallOpacity = 'opacity-80'; }
-                             else if (gameState.phase === 'waiting') { bgColor = 'bg-gray-100'; overallOpacity = 'opacity-60'; }
-                             else { overallOpacity = 'opacity-75'; }
-                        }
+            {/* Weapon Grid */}
+            {(gameState.phase === 'ban' || gameState.phase === 'pick') && (
+                <div className="overflow-x-auto mt-6">
+                    <h3 className="text-xl font-semibold mb-3">
+                        {gameState.phase === 'ban' ? '禁止する武器を選択してください' : '選択する武器を選んでください'}
+                        {/* ★ myTeam が Team 型であることを確認 */}
+                        {myTeam !== 'observer' && ` (${gameState.phase === 'ban' ? `${gameState.banPhaseState?.bans[myTeam] ?? 0}/${MAX_BANS_PER_TEAM}` : `${gameState.pickPhaseState?.picks[myTeam] ?? 0}/${MAX_PICKS_PER_TEAM}`})`}
+                    </h3>
+                    {displayWeapons.length > 0 ? (
+                        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-3">
+                            {displayWeapons.map(renderWeaponItem)}
+                        </div>
+                    ) : (<p className="text-center text-gray-500 py-4">武器データが読み込まれていません。</p>)}
+                </div>
+            )}
+            {gameState.phase === 'pick_complete' && (
+                <div className="text-center py-6">
+                    <h3 className="text-2xl font-bold text-green-600">ピック完了！</h3>
+                </div>
+            )}
+            {gameState.phase === 'waiting' && (
+                <div className="text-center py-6">
+                    <h3 className="text-xl font-semibold text-gray-700">ゲーム開始待機中...</h3>
+                    <p className="text-gray-500">チームを選択し、「ゲーム開始」ボタンを押してください。</p>
+                </div>
+            )}
 
-                        // --- グリッドアイテム JSX ---
-                        return (
-                            <div
-                                key={`weapon-grid-${weapon.id}`}
-                                className={`relative p-2 rounded-lg border transition-all duration-150 ${bgColor} ${borderColor} ${overallOpacity} ${ring} ${cursor} ${hoverEffect}`}
-                                onClick={() => !isDisabled && handleSelect(weapon.id)}
-                                title={weapon.name}
-                            >
-                                <Image
-                                    src={weapon.imageUrl}
-                                    alt={weapon.name}
-                                    width={100}
-                                    height={100}
-                                    className={`mx-auto transition-opacity duration-150 ${imageOpacity}`}
-                                    priority={weapon.id <= 12} // 先頭に近いものを優先ロード
-                                />
-                                {banMark}
-                                {/* ターン表示 */}
-                                {gameState.phase === 'pick' && gameState.currentTurn === selectedTeam && canClick && ( <div className="absolute bottom-1 right-1 px-1.5 py-0.5 text-xs bg-green-200 text-green-800 rounded font-semibold animate-pulse">Pick!</div> )}
-                                {gameState.phase === 'ban' && canClick && ( <div className="absolute bottom-1 right-1 px-1.5 py-0.5 text-xs bg-yellow-200 text-yellow-800 rounded font-semibold animate-pulse">Ban!</div> )}
-                            </div>
-                        );
-                     })}
-                 </div>
-              ) : ( <p className="text-center text-gray-500 py-4">武器データが読み込まれていません。</p> )}
-          </div>
-       )}
-    </div> // container end
-  );
+        </div> // container end
+    );
 }
