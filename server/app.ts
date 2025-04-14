@@ -88,6 +88,35 @@ io.on('connection', (socket: Socket) => {
     connectedUsersGlobal.set(socketId, newUserInfo);
     // console.log('[Connect] Current global users:', Array.from(connectedUsersGlobal.keys()));
 
+        // --- ★ クライアントからの初期データ要求に応答 ---
+        socket.on('request initial data', (data: { roomId: string }) => {
+            const userInfo = connectedUsersGlobal.get(socketId);
+            // ユーザーが存在し、要求されたルームIDと参加中のルームIDが一致するか確認
+            if (userInfo && userInfo.roomId === data.roomId) {
+                const roomState = gameRooms.get(data.roomId);
+                if (roomState) {
+                    console.log(`[Initial Data] Sending initial state and weapons to ${socketId} for room ${data.roomId}`);
+                    // ★ 要求元のクライアントにのみ送信 (socket.emit を使用)
+                    socket.emit('initial state', GameLogic.getPublicRoomState(roomState));
+                    socket.emit('initial weapons', roomState.weapons);
+                    // ★ 自分の最新情報も送る (チーム情報などを反映させるため)
+                    const roomUser = roomState.connectedUsers.get(socketId);
+                    if (roomUser) {
+                        socket.emit('user updated', roomUser);
+                    }
+                } else {
+                    // サーバー側でルームが見つからない場合 (通常は起こらないはず)
+                    console.error(`[Initial Data] Room state not found for ${data.roomId} requested by ${socketId}`);
+                    socket.emit('action failed', { reason: `ルーム ${data.roomId} の状態が見つかりません。` });
+                }
+            } else {
+                 // 不正な要求 (別のルームの情報を要求、またはユーザー情報がない)
+                 console.warn(`[Initial Data] User ${socketId} requested data for unauthorized/invalid room ${data.roomId}. UserInfo:`, userInfo);
+                 // 必要ならエラーを返す
+                 // socket.emit('action failed', { reason: '不正なデータ要求です。'});
+            }
+        });
+
     // --- ルーム参加 ---
     socket.on('join room', (data: { roomId: string; name: string }) => {
         // ★ バリデーション: roomId と name が存在し、文字列であることを確認
@@ -160,11 +189,11 @@ io.on('connection', (socket: Socket) => {
 
         // 参加成功と状態通知
         socket.emit('join room success', { roomId });
-        // ★ 最新の公開状態と武器状態を送信
-        socket.emit('initial state', GameLogic.getPublicRoomState(roomState));
-        socket.emit('initial weapons', roomState.weapons);
-        // ★ 参加したユーザー自身の情報も送る (myTeam 設定用)
-        socket.emit('user updated', roomUser);
+        // // ★ 最新の公開状態と武器状態を送信
+        // socket.emit('initial state', GameLogic.getPublicRoomState(roomState));
+        // socket.emit('initial weapons', roomState.weapons);
+        // // ★ 参加したユーザー自身の情報も送る (myTeam 設定用)
+        // socket.emit('user updated', roomUser);
         // ★ 他のユーザーに参加を通知 & 全体の状態更新を通知
         socket.to(roomId).emit('user joined', roomUser);
         io.to(roomId).emit('room state update', GameLogic.getPublicRoomState(roomState));
@@ -236,7 +265,7 @@ io.on('connection', (socket: Socket) => {
              console.log(`[Start Game ${roomId}] Starting ban phase...`);
              // roomState の更新は GameLogic 内で行う想定に変更しても良い
              roomState.phase = 'ban';
-             roomState.currentTurn = 'alpha'; // ★ BAN フェーズもターン制にする場合（もしくは null のまま並行BAN）ここでは alpha からと仮定
+             roomState.currentTurn = null;
              roomState.banPhaseState = { bans: { alpha: 0, bravo: 0 }, maxBansPerTeam: MAX_BANS_PER_TEAM };
              roomState.timeLeft = BAN_PHASE_DURATION; // タイマー初期値設定
 

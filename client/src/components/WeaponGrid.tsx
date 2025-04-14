@@ -159,6 +159,10 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName }: 
         socket.on('user left', handleUserLeft);
         socket.on('user updated', handleUserUpdated);
 
+        // 初期データ要求イベントを送信
+        console.log(`[WeaponGrid ${roomId}] Requesting initial data...`);
+        socket.emit('request initial data', { roomId });
+
         console.log(`[WeaponGrid ${roomId}] Listeners registered.`);
 
         // --- クリーンアップ ---
@@ -175,7 +179,7 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName }: 
             socket.off('user left', handleUserLeft);
             socket.off('user updated', handleUserUpdated);
         };
-    }, [socket, roomId, userName, masterWeapons, gameState, handleError]);
+    }, [socket, roomId, userName, handleError]);
 
     // --- 武器選択/禁止処理 (useCallbackで最適化) ---
     const handleWeaponClick = useCallback((weaponId: number) => {
@@ -297,8 +301,8 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName }: 
         );
     }
 
-    // --- グリッドアイテムのレンダリングロジック ---
-    const renderWeaponItem = (weapon: DisplayWeapon) => {
+    // --- グリッドアイテムレンダリング関数 ---
+     const renderWeaponItem = (weapon: DisplayWeapon) => {
         const isSelectedByAlpha = weapon.selectedBy === 'alpha';
         const isSelectedByBravo = weapon.selectedBy === 'bravo';
         const isBannedByAlpha = weapon.bannedBy.includes('alpha');
@@ -306,10 +310,10 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName }: 
         const isBanned = isBannedByAlpha || isBannedByBravo;
         const isMyTeamPlayer = myTeam === 'alpha' || myTeam === 'bravo';
 
-        // --- クリック可否判定 ---
+        // --- クリック可否判定 (変更なし) ---
         let canClick = false;
         const isMyTurn = gameState.currentTurn === myTeam;
-        if (gameState.phase === 'pick' && isMyTeamPlayer && isMyTurn && !weapon.selectedBy && !weapon.bannedBy.includes('alpha') && !weapon.bannedBy.includes('bravo')) {
+        if (gameState.phase === 'pick' && isMyTeamPlayer && isMyTurn && !weapon.selectedBy && !isBanned) {
             canClick = true;
         } else if (gameState.phase === 'ban' && isMyTeamPlayer) {
             if (myTeam === 'alpha' || myTeam === 'bravo') {
@@ -320,31 +324,43 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName }: 
                 }
             }
         }
-        // ★ isDisabled の計算から weapon.isLoading を削除
-        const isDisabled = !canClick; // isDisabled の計算
+        const isDisabled = !canClick; // ローディングはコメントアウト中
 
         // --- スタイル決定 ---
-        let bgColor = 'bg-white'; let borderColor = 'border-gray-200'; let imageOpacity = 'opacity-100'; let overallOpacity = 'opacity-100'; let ring = ''; let hoverEffect = 'hover:bg-blue-50 hover:border-blue-300'; let banMark = null; let cursor = 'cursor-pointer';
+        let bgColor = 'bg-white', borderColor = 'border-gray-200', imageOpacity = 'opacity-100', overallOpacity = 'opacity-100', ring = '', hoverEffect = 'hover:bg-blue-50 hover:border-blue-300', banMark = null, cursor = 'cursor-pointer';
 
+        // 1. 選択済みのスタイル (最優先)
         if (isSelectedByAlpha) { bgColor = 'bg-blue-100'; borderColor = 'border-blue-400'; ring = 'ring-2 ring-offset-1 ring-blue-500'; hoverEffect = ''; cursor = 'cursor-not-allowed'; }
         else if (isSelectedByBravo) { bgColor = 'bg-red-100'; borderColor = 'border-red-400'; ring = 'ring-2 ring-offset-1 ring-red-500'; hoverEffect = ''; cursor = 'cursor-not-allowed'; }
-        else if (isBanned) {
-            bgColor = 'bg-gray-200'; borderColor = 'border-gray-300'; imageOpacity = 'opacity-40'; overallOpacity = 'opacity-70'; hoverEffect = ''; cursor = 'cursor-not-allowed';
-            // ★ banColor を const に変更
-            let banColorConst = 'text-gray-700';
-            if (isBannedByAlpha) { banColorConst = 'text-blue-600'; }
-            else if (isBannedByBravo) { banColorConst = 'text-red-600'; }
-            banMark = (<div className={`absolute inset-0 flex items-center justify-center rounded-lg pointer-events-none`}><svg className={`w-10 h-10 ${banColorConst} opacity-75`} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg></div>);
-            // ★ myTeam が Team 型であることを確認
-        } else if (gameState.phase === 'ban' && myTeam !== 'observer' && weapon.bannedBy.includes(myTeam) && !canClick) {
-            bgColor = 'bg-yellow-100'; borderColor = 'border-yellow-400'; imageOpacity = 'opacity-40'; overallOpacity = 'opacity-80'; hoverEffect = ''; cursor = 'cursor-not-allowed';
-            const banColor = myTeam === 'alpha' ? 'text-blue-600' : 'text-red-600';
-            banMark = (<div className={`absolute inset-0 flex items-center justify-center rounded-lg pointer-events-none`}><svg className={`w-10 h-10 ${banColor} opacity-75`} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg></div>);
-        } else if (isDisabled /*&& !weapon.isLoading*/) {
-            cursor = 'cursor-not-allowed'; hoverEffect = '';
-            if (myTeam === 'observer' || gameState.phase === 'waiting' || gameState.phase === 'pick_complete') {
-                bgColor = 'bg-gray-50'; overallOpacity = 'opacity-70';
-            } else { overallOpacity = 'opacity-75'; }
+
+        // 2. BANフェーズ中の自チームBANのスタイル
+        else if (gameState.phase === 'ban' && myTeam !== 'observer' && weapon.bannedBy.includes(myTeam)) {
+             bgColor = 'bg-yellow-100'; // 例: BAN中は黄色背景
+             borderColor = 'border-yellow-400';
+             imageOpacity = 'opacity-50'; // 少し薄く
+             overallOpacity = 'opacity-90';
+             hoverEffect = '';
+             cursor = 'cursor-not-allowed'; // 自分がBANしたらもうクリックできない
+             const banColor = myTeam === 'alpha' ? 'text-blue-600' : 'text-red-600';
+             banMark = (<div className={`absolute inset-0 flex items-center justify-center rounded-lg pointer-events-none`}><svg className={`w-10 h-10 ${banColor} opacity-75`} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg></div>);
+        }
+        // 3. PICKフェーズ以降のBAN済みスタイル (公開)
+        else if ((gameState.phase === 'pick' || gameState.phase === 'pick_complete') && isBanned) {
+             bgColor = 'bg-gray-200'; // 例: 公開BANはグレー背景
+             borderColor = 'border-gray-300';
+             imageOpacity = 'opacity-40';
+             overallOpacity = 'opacity-70';
+             hoverEffect = '';
+             cursor = 'cursor-not-allowed';
+             const banColorConst = isBannedByAlpha ? 'text-blue-600' : isBannedByBravo ? 'text-red-600' : 'text-gray-700';
+             banMark = (<div className={`absolute inset-0 flex items-center justify-center rounded-lg pointer-events-none`}><svg className={`w-10 h-10 ${banColorConst} opacity-75`} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg></div>);
+        }
+        // 4. その他のクリック不可状態
+        else if (isDisabled) {
+             cursor = 'cursor-not-allowed'; hoverEffect = '';
+             if (myTeam === 'observer' || gameState.phase === 'waiting' || gameState.phase === 'pick_complete') {
+                 bgColor = 'bg-gray-50'; overallOpacity = 'opacity-70';
+             } else { overallOpacity = 'opacity-75'; } // 自分のターンではないなど
         }
 
         // --- グリッドアイテム JSX ---
@@ -407,8 +423,8 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName }: 
                 <div>
                     {/* {gameState.phase === 'waiting' && (<button onClick={handleStart} className="px-6 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 disabled:opacity-50" disabled={!socket || loadingWeaponId !== null}>ゲーム開始</button>)}
                     {(gameState.phase !== 'waiting') && (<button onClick={handleReset} className="ml-4 px-4 py-2 bg-yellow-500 text-white rounded-md hover:bg-yellow-600 disabled:opacity-50" disabled={loadingWeaponId !== null}>リセット</button>)} */}
-                    {gameState.phase === 'waiting' && (<button onClick={handleStart} className="px-6 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 disabled:opacity-50" disabled={!socket}>ゲーム開始</button>)}
-                    {(gameState.phase !== 'waiting') && (<button onClick={handleReset} className="ml-4 px-4 py-2 bg-yellow-500 text-white rounded-md hover:bg-yellow-600 disabled:opacity-50" >リセット</button>)}
+                    {gameState.phase === 'waiting' && (<button onClick={handleStart} className="px-6 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 disabled:opacity-50" disabled={!socket || myTeam === 'observer' /* || loadingWeaponId !== null */}>ゲーム開始</button>)}
+                    {(gameState.phase !== 'waiting') && (<button onClick={handleReset} className="ml-4 px-4 py-2 bg-yellow-500 text-white rounded-md hover:bg-yellow-600 disabled:opacity-50" disabled={!socket || myTeam === 'observer' /* || loadingWeaponId !== null */}>リセット</button>)}
 
                 </div>
             </div>
