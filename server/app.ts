@@ -291,11 +291,12 @@ io.on('connection', (socket: Socket) => {
          try {
              weapon.bannedBy.push(team); // メモリ上の状態を更新
              console.log(`[Ban Weapon ${roomId}] Weapon ${weaponId} updated in memory. bannedBy: ${JSON.stringify(weapon.bannedBy)}`);
-             GameLogic.handleSuccessfulBan(roomId, team); // ロジック呼び出し (BANカウント増加、フェーズ終了判定など)
-
              // ★ 更新された武器情報のみを送信
              const updatedWeaponState: RoomWeaponState = { id: weapon.id, selectedBy: weapon.selectedBy, bannedBy: weapon.bannedBy };
              io.to(roomId).emit('update weapon', updatedWeaponState);
+             console.log(`[Ban Weapon ${roomId}] Emitted 'update weapon'.`);
+
+             GameLogic.handleSuccessfulBan(roomId, team); // ロジック呼び出し (BANカウント増加、フェーズ終了判定など)
 
              // ★ handleSuccessfulBan 内で phase change が emit されるのでここでは不要
              // socket.emit('ban success', { weaponId }); // 個別成功通知は不要かも
@@ -342,11 +343,13 @@ io.on('connection', (socket: Socket) => {
           try {
               weapon.selectedBy = team; // メモリ上の状態を更新
               console.log(`[Select Weapon ${roomId}] Weapon ${weaponId} updated in memory. Selected by ${team}`);
-              GameLogic.handleSuccessfulPick(roomId, team); // ロジック呼び出し (Pickカウント増加、ターン切り替えなど)
 
               // ★ 更新された武器情報のみを送信
               const updatedWeaponState: RoomWeaponState = { id: weapon.id, selectedBy: weapon.selectedBy, bannedBy: weapon.bannedBy };
               io.to(roomId).emit('update weapon', updatedWeaponState);
+              console.log(`[Select Weapon ${roomId}] Emitted 'update weapon'.`);
+
+              GameLogic.handleSuccessfulPick(roomId, team); // ロジック呼び出し (Pickカウント増加、ターン切り替えなど)
 
               // ★ handleSuccessfulPick 内で phase change が emit されるのでここでは不要
               // socket.emit('select success', { weaponId }); // 個別成功通知は不要かも

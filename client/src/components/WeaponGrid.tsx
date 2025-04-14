@@ -3,15 +3,8 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import Image from 'next/image';
 import type { Socket } from 'socket.io-client';
-// ★ 修正された型定義をインポート (Weapon は今回未使用)
-import type { /* Weapon, */ GameState, RoomUser, RoomWeaponState, MasterWeapon, Team } from '../../../common/types/game'; // ★ Weapon をコメントアウト
+import type { GameState, RoomUser, RoomWeaponState, MasterWeapon, Team } from '../../../common/types/game';
 import { TOTAL_PICK_TURNS, MAX_BANS_PER_TEAM, MAX_PICKS_PER_TEAM } from '../../../common/types/constants';
-
-// ★ GameState 型は PublicRoomGameState のエイリアス
-// ★ Weapon 型は MasterWeapon と Omit<RoomWeaponState, 'id'> を結合したもの
-
-// ★ activeGamePhases は gameState.phase で直接判定できるので削除
-// const activeGamePhases: GameState['phase'][] = ['ban', 'pick', 'pick_complete'];
 
 interface WeaponGridProps {
     socket: Socket;
@@ -24,7 +17,8 @@ interface DisplayWeapon extends MasterWeapon {
     selectedBy: Team | null;
     bannedBy: Team[];
     imageUrl: string;
-    isLoading?: boolean;
+    // ★ isLoading プロパティをコメントアウト (または削除)
+    // isLoading?: boolean;
 }
 
 export default function WeaponGrid({ socket, roomId, masterWeapons, userName }: WeaponGridProps) {
@@ -32,7 +26,8 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName }: 
     const [gameState, setGameState] = useState<GameState | null>(null);
     const [weaponStates, setWeaponStates] = useState<Record<number, RoomWeaponState>>({});
     const [myTeam, setMyTeam] = useState<Team | 'observer'>('observer');
-    const [loadingWeaponId, setLoadingWeaponId] = useState<number | null>(null);
+    // ★ loadingWeaponId state をコメントアウト (または削除)
+    // const [loadingWeaponId, setLoadingWeaponId] = useState<number | null>(null);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
     // --- 表示用武器リスト生成 (Memoized) ---
@@ -48,11 +43,27 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName }: 
                 selectedBy: state.selectedBy,
                 bannedBy: state.bannedBy,
                 imageUrl: `/images/${encodeURIComponent(master.name)}.png`,
-                isLoading: loadingWeaponId === master.id,
+                // ★ isLoading の設定をコメントアウト
+                // isLoading: loadingWeaponId === master.id,
             };
         });
-    }, [masterWeapons, weaponStates, loadingWeaponId]);
+    // ★ 依存配列から loadingWeaponId を削除
+    }, [masterWeapons, weaponStates /*, loadingWeaponId */]);
 
+
+    // --- デバッグ用 useEffect ---
+    useEffect(() => { if (gameState) { /* console.log('[DEBUG] gameState updated:', JSON.stringify(gameState, null, 2)); */ } }, [gameState]);
+    useEffect(() => { /* console.log('[DEBUG] weaponStates updated:', JSON.stringify(weaponStates, null, 2)); */ }, [weaponStates]);
+    // --- デバッグ用 useEffect ここまで ---
+
+    // --- エラーハンドラー ---
+    const handleError = useCallback((message: string) => {
+        console.error('Handled Error:', message);
+        setErrorMessage(message);
+        // ★ timerId は使われていないので削除 (setTimeout の戻り値はクリアする場合に使う)
+        setTimeout(() => setErrorMessage(null), 5000);
+        // const timerId = setTimeout(() => setErrorMessage(null), 5000);
+    }, []);
 
     // --- WebSocketイベントリスナー設定 ---
     useEffect(() => {
@@ -82,22 +93,28 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName }: 
         const handleUpdateGameState = (updatedState: GameState) => {
             if (updatedState.roomId === roomId) {
                 console.log(`[WeaponGrid ${roomId}] Received game state update:`, updatedState);
-                setGameState(updatedState);
+                setGameState(updatedState); // gameState を更新するだけにする
+   
+                // ★★★ ターン/フェーズ変更によるローディング解除ロジックをコメントアウト ★★★
+                /*
                 if (gameState && (updatedState.currentTurn !== gameState.currentTurn || updatedState.phase !== gameState.phase)) {
-                    setLoadingWeaponId(null);
+                   console.log(`[DEBUG handleUpdateGameState] Clearing loadingWeaponId due to turn/phase change.`);
+                   setLoadingWeaponId(null);
                 }
+                */
+                // ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
             }
         };
 
         const handleUpdateWeapon = (updatedWeaponData: RoomWeaponState) => {
             console.log(`[WeaponGrid ${roomId}] Received update weapon:`, updatedWeaponData);
-            setWeaponStates((prevStates) => ({
-                ...prevStates,
-                [updatedWeaponData.id]: updatedWeaponData,
-            }));
+            setWeaponStates((prevStates) => ({ ...prevStates, [updatedWeaponData.id]: updatedWeaponData }));
+             // ★ loadingWeaponId の解除ロジックをコメントアウト
+            /*
             if (loadingWeaponId === updatedWeaponData.id) {
                 setLoadingWeaponId(null);
             }
+            */
         };
 
         const handleTimeUpdate = (data: { timeLeft: number }) => {
@@ -107,7 +124,8 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName }: 
         const handleActionFailed = (data: { reason: string }) => {
             console.error(`[WeaponGrid ${roomId}] Action failed: ${data.reason}`);
             handleError(data.reason);
-            setLoadingWeaponId(null);
+            // ★ loadingWeaponId の解除ロジックをコメントアウト
+            // setLoadingWeaponId(null);
         };
 
         const handleUserJoined = (user: RoomUser) => {
@@ -157,23 +175,19 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName }: 
             socket.off('user left', handleUserLeft);
             socket.off('user updated', handleUserUpdated);
         };
-    }, [socket, roomId, userName, masterWeapons, gameState]);
-
-    // --- エラーハンドラー ---
-    const handleError = useCallback((message: string) => {
-        console.error('Handled Error:', message);
-        setErrorMessage(message);
-        // ★ timerId は使われていないので削除 (setTimeout の戻り値はクリアする場合に使う)
-        setTimeout(() => setErrorMessage(null), 5000);
-        // const timerId = setTimeout(() => setErrorMessage(null), 5000);
-    }, []);
+    }, [socket, roomId, userName, masterWeapons, gameState, handleError]);
 
     // --- 武器選択/禁止処理 (useCallbackで最適化) ---
     const handleWeaponClick = useCallback((weaponId: number) => {
-        if (!socket || !gameState || myTeam === 'observer' || loadingWeaponId !== null) {
-            console.log('Action prevented: Invalid state or already loading.');
-            return;
-        }
+        // ★ 条件分岐の詳細ログ
+        if (!socket) { console.log('Action prevented: socket is null.'); return; }
+        if (!gameState) { console.log('Action prevented: gameState is null.'); return; }
+        if (myTeam === 'observer') { console.log('Action prevented: myTeam is observer.'); return; }
+        // if (loadingWeaponId !== null) {
+        //     // ★ なぜローディング中なのかログ出力
+        //     console.log(`Action prevented: loadingWeaponId is not null (current: ${loadingWeaponId}, trying to click: ${weaponId}).`);
+        //     return;
+        // }
 
         const weapon = displayWeapons.find(w => w.id === weaponId);
         if (!weapon) return;
@@ -207,7 +221,9 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName }: 
         if (canPerformAction && action) {
             const eventName = action === 'ban' ? 'ban weapon' : 'select weapon';
             console.log(`[WeaponGrid ${roomId}] Emitting ${eventName} for weapon ${weaponId}`);
-            setLoadingWeaponId(weaponId);
+            // ★ setLoadingWeaponId のログ追加
+            console.log(`[DEBUG handleWeaponClick] Setting loadingWeaponId to: ${weaponId}`);
+            // setLoadingWeaponId(weaponId); // ★ ローディング開始
             socket.emit(eventName, { weaponId: weaponId });
         } else {
             // --- エラーフィードバック ---
@@ -226,7 +242,7 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName }: 
                 }
             }
         }
-    }, [socket, roomId, gameState, myTeam, loadingWeaponId, displayWeapons, handleError]);
+    }, [socket, roomId, gameState, myTeam, /*loadingWeaponId,*/ displayWeapons, handleError]);
 
     // --- チーム選択処理関数 (useCallbackで最適化) ---
     const handleTeamSelect = useCallback((team: Team | 'observer') => {
@@ -292,20 +308,20 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName }: 
 
         // --- クリック可否判定 ---
         let canClick = false;
-        const isMyTurn = gameState.currentTurn === myTeam; // PICKフェーズ用
-        if (gameState.phase === 'pick' && isMyTeamPlayer && isMyTurn && !weapon.selectedBy && !isBanned) {
+        const isMyTurn = gameState.currentTurn === myTeam;
+        if (gameState.phase === 'pick' && isMyTeamPlayer && isMyTurn && !weapon.selectedBy && !weapon.bannedBy.includes('alpha') && !weapon.bannedBy.includes('bravo')) {
             canClick = true;
-        } else if (gameState.phase === 'ban' && isMyTeamPlayer) { // ★ BANフェーズもターン制にする場合は isMyTurn チェックを追加: && isMyTurn
+        } else if (gameState.phase === 'ban' && isMyTeamPlayer) {
             if (myTeam === 'alpha' || myTeam === 'bravo') {
                 const currentBans = gameState.banPhaseState?.bans[myTeam] ?? 0;
                 const maxBans = gameState.banPhaseState?.maxBansPerTeam ?? MAX_BANS_PER_TEAM;
                 if (!weapon.selectedBy && !weapon.bannedBy.includes(myTeam) && currentBans < maxBans) {
-                    canClick = true; // ★ 2回目以降もここが true になるはず
+                    canClick = true;
                 }
             }
-            canClick = true;
         }
-        const isDisabled = weapon.isLoading || !canClick; // isDisabled の計算
+        // ★ isDisabled の計算から weapon.isLoading を削除
+        const isDisabled = !canClick; // isDisabled の計算
 
         // --- スタイル決定 ---
         let bgColor = 'bg-white'; let borderColor = 'border-gray-200'; let imageOpacity = 'opacity-100'; let overallOpacity = 'opacity-100'; let ring = ''; let hoverEffect = 'hover:bg-blue-50 hover:border-blue-300'; let banMark = null; let cursor = 'cursor-pointer';
@@ -324,7 +340,7 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName }: 
             bgColor = 'bg-yellow-100'; borderColor = 'border-yellow-400'; imageOpacity = 'opacity-40'; overallOpacity = 'opacity-80'; hoverEffect = ''; cursor = 'cursor-not-allowed';
             const banColor = myTeam === 'alpha' ? 'text-blue-600' : 'text-red-600';
             banMark = (<div className={`absolute inset-0 flex items-center justify-center rounded-lg pointer-events-none`}><svg className={`w-10 h-10 ${banColor} opacity-75`} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg></div>);
-        } else if (isDisabled && !weapon.isLoading) {
+        } else if (isDisabled /*&& !weapon.isLoading*/) {
             cursor = 'cursor-not-allowed'; hoverEffect = '';
             if (myTeam === 'observer' || gameState.phase === 'waiting' || gameState.phase === 'pick_complete') {
                 bgColor = 'bg-gray-50'; overallOpacity = 'opacity-70';
@@ -348,14 +364,14 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName }: 
                     priority={weapon.id <= 12}
                 />
                 {banMark}
-                {weapon.isLoading && (
+                {/* {weapon.isLoading && (
                     <div className="absolute inset-0 bg-white bg-opacity-50 flex items-center justify-center rounded-lg">
                         <svg className="animate-spin h-8 w-8 text-gray-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                         </svg>
                     </div>
-                )}
+                )} */}
                 {/* ターン表示 */}
                 {isMyTeamPlayer && !isDisabled && gameState.phase === 'pick' && (<div className="absolute bottom-1 right-1 px-1.5 py-0.5 text-xs bg-green-200 text-green-800 rounded font-semibold animate-pulse">Pick!</div>)}
                 {/* ★ isMyTurn チェックは isMyTeamPlayer && !isDisabled に含まれるので削除しても良い */}
@@ -389,8 +405,11 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName }: 
                 </div>
                 {/* Control Buttons */}
                 <div>
-                    {gameState.phase === 'waiting' && (<button onClick={handleStart} className="px-6 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 disabled:opacity-50" disabled={!socket || loadingWeaponId !== null}>ゲーム開始</button>)}
-                    {(gameState.phase !== 'waiting') && (<button onClick={handleReset} className="ml-4 px-4 py-2 bg-yellow-500 text-white rounded-md hover:bg-yellow-600 disabled:opacity-50" disabled={loadingWeaponId !== null}>リセット</button>)}
+                    {/* {gameState.phase === 'waiting' && (<button onClick={handleStart} className="px-6 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 disabled:opacity-50" disabled={!socket || loadingWeaponId !== null}>ゲーム開始</button>)}
+                    {(gameState.phase !== 'waiting') && (<button onClick={handleReset} className="ml-4 px-4 py-2 bg-yellow-500 text-white rounded-md hover:bg-yellow-600 disabled:opacity-50" disabled={loadingWeaponId !== null}>リセット</button>)} */}
+                    {gameState.phase === 'waiting' && (<button onClick={handleStart} className="px-6 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 disabled:opacity-50" disabled={!socket}>ゲーム開始</button>)}
+                    {(gameState.phase !== 'waiting') && (<button onClick={handleReset} className="ml-4 px-4 py-2 bg-yellow-500 text-white rounded-md hover:bg-yellow-600 disabled:opacity-50" >リセット</button>)}
+
                 </div>
             </div>
 
