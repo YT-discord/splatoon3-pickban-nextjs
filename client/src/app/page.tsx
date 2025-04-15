@@ -161,10 +161,20 @@ export default function Home() {
   }, [socket]); // ★ socket のみでOK
 
   // ★ RoomSelector から userName を受け取る関数
-  const handleSetUserName = useCallback((name: string) => {
-      console.log(`[handleSetUserName] Setting userName to: ${name}`);
-      setUserName(name);
-  }, []);
+  const handleSetUserName = useCallback((name: string) => { setUserName(name); }, []);
+
+  // ★★★ ルーム退出処理関数を追加 ★★★
+  const handleLeaveRoom = useCallback(() => {
+      console.log(`[Home] Leaving room ${joinedRoomId}`);
+      setJoinedRoomId(null);
+      setUserStatus('selecting_room');
+      // userName はリセットしない方が、再入室時に便利かもしれない
+      // setUserName('');
+      // ★ サーバー側の leave room ハンドラで socket.leave() が呼ばれる
+      // ★ 必要であれば、ここで明示的に socket?.emit('leave room') を呼んでも良いが、
+      // ★ WeaponGrid 側で呼ぶ方が責務分担として自然かもしれない
+  }, [joinedRoomId]);
+  // ★★★★★★★★★★★★★★★★★★★★★
 
   // --- レンダリング ---
   console.log(`[renderContent] Rendering content for userStatus: ${userStatus}`); // ★ レンダリング時の状態確認
@@ -177,7 +187,7 @@ export default function Home() {
             if (!masterWeapons) { return <p className="text-center p-8 text-red-500">エラー: 武器データの読み込みに失敗しました。</p>; }
             return <RoomSelector socket={socket} setUserNameForParent={handleSetUserName} />;
         case 'in_room':
-            if (socket && joinedRoomId && masterWeapons && userName) { return <WeaponGrid socket={socket} roomId={joinedRoomId} masterWeapons={masterWeapons} userName={userName} />; }
+            if (socket && joinedRoomId && masterWeapons && userName) { return <WeaponGrid socket={socket} roomId={joinedRoomId} masterWeapons={masterWeapons} userName={userName} onLeaveRoom={handleLeaveRoom} />; }
             else { return <p className="text-center p-8 text-red-500">エラー: ルーム参加情報の準備ができていません (State: {userStatus})</p>; }
         case 'error': return <p className="text-center p-8 text-red-500">エラー: {connectionError || '不明な接続エラー'} (ページを更新してください)</p>;
         default: return null;

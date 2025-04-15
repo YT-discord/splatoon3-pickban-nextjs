@@ -1,6 +1,19 @@
 // --- チームを表す型 ---
 export type Team = 'alpha' | 'bravo';
 
+export interface Stage {
+  id: number;
+  name: string;
+  imageUrl: string; // 例: '/images/stages/stage_a.png'
+}
+
+export interface Rule {
+  id: number;
+  name: string;
+  imageUrl: string; // 例: '/images/rules/rule_1.png'
+  description?: string; // ルールの説明など (任意)
+}
+
 // サーバー全体で接続中のユーザー情報 (app.ts で使用)
 export interface ConnectedUserInfo {
     socketId: string;
@@ -47,7 +60,9 @@ export interface ConnectedUserInfo {
     pickPhaseState: PickPhaseState;
     weapons: RoomWeaponState[];
     connectedUsers: Map<string, RoomUser>;
-    teams?: Record<Team, { users: RoomUser[] }>; // 例: チームごとのユーザーリストなど
+    teams?: Record<Team, { users: RoomUser[] }>;
+    // selectedStageId: number | 'random' | null;
+    // selectedRuleId: number | 'random' | null;
   }
 
   // クライアントに送信する公開ゲーム状態
@@ -55,6 +70,8 @@ export interface ConnectedUserInfo {
       userCount: number;
       banCounts: Record<Team, number>;
       pickCounts: Record<Team, number>;
+      // selectedStageId: number | 'random' | null;
+      // selectedRuleId: number | 'random' | null;
   }
   // ★ クライアント側で使用する GameState 型
   export type GameState = PublicRoomGameState;

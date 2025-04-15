@@ -56,17 +56,22 @@ export const initializeRoomState = (roomId: string): RoomGameState => {
 
 export const resetRoom = (roomId: string): void => {
     console.log(`[Game Logic] Resetting room: ${roomId}`);
-    const roomState = initializeRoomState(roomId);
+    const roomState = initializeRoomState(roomId); // 状態を初期化
     if (roomState) {
-        // ★ リセット時も最新状態を通知
+        // 1. リセットされた初期状態を通知
         io.to(roomId).emit('initial state', getPublicRoomState(roomState));
         io.to(roomId).emit('initial weapons', roomState.weapons);
-        // ★ 全ユーザーにチームをobserverに戻すよう通知 (任意)
+
+        // 2. ユーザーのチームを observer に戻す通知
         roomState.connectedUsers.forEach(user => {
              user.team = 'observer';
              io.to(roomId).emit('user updated', user);
         });
-        console.log(`[Game Logic] Room ${roomId} reset and notified.`);
+
+        // 3. リセット通知イベントを発行
+        io.to(roomId).emit('room reset notification', { message: `ルーム "${roomId}" がリセットされました。` });
+
+        console.log(`[Game Logic] Room ${roomId} reset and notified all events.`);
     } else {
         console.error(`[Game Logic] Failed to reset room ${roomId}, state is null after init?`);
     }

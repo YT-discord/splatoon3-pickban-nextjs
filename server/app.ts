@@ -1,5 +1,5 @@
 // reactnext/server/app.ts (修正後)
-import express, { Application, Request, Response, NextFunction } from 'express'; // ★ Request, Response, NextFunction をインポート
+import express, { Application, Request, Response, NextFunction } from 'express';
 import { sequelize, initializeDB, getMasterWeapons } from './config/database';
 import { errorHandler } from './middlewares/errorHandler';
 import 'reflect-metadata';
@@ -7,8 +7,8 @@ import cors from 'cors';
 import http from 'http';
 import { Server, Socket } from 'socket.io';
 import path from 'path';
-import type { ConnectedUserInfo, RoomUser, RoomGameState, PublicRoomGameState, MasterWeapon, RoomWeaponState, Team } from '../common/types/game'; // ★ Team をインポート
-import { ROOM_IDS, MAX_USERS_PER_ROOM, MAX_BANS_PER_TEAM, BAN_PHASE_DURATION, PICK_PHASE_TURN_DURATION } from '../common/types/constants'; // ★ PICK_PHASE_TURN_DURATION もインポート
+import type { ConnectedUserInfo, RoomUser, RoomGameState, PublicRoomGameState, MasterWeapon, RoomWeaponState, Team } from '../common/types/game';
+import { ROOM_IDS, MAX_USERS_PER_ROOM, MAX_BANS_PER_TEAM, BAN_PHASE_DURATION, PICK_PHASE_TURN_DURATION, MAX_PLAYERS_PER_TEAM, MIN_PLAYERS_PER_TEAM } from '../common/types/constants';
 import * as GameLogic from './gameLogic';
 
 const app: Application = express();
@@ -99,6 +99,7 @@ io.on('connection', (socket: Socket) => {
                     // ★ 要求元のクライアントにのみ送信 (socket.emit を使用)
                     socket.emit('initial state', GameLogic.getPublicRoomState(roomState));
                     socket.emit('initial weapons', roomState.weapons);
+                    socket.emit('initial users', Array.from(roomState.connectedUsers.values()));
                     // ★ 自分の最新情報も送る (チーム情報などを反映させるため)
                     const roomUser = roomState.connectedUsers.get(socketId);
                     if (roomUser) {
@@ -199,68 +200,121 @@ io.on('connection', (socket: Socket) => {
         io.to(roomId).emit('room state update', GameLogic.getPublicRoomState(roomState));
     });
 
-    // --- チーム選択 ---
-    socket.on('select team', (data: { team: Team | 'observer'}) => { // ★ 型を Team | 'observer' に
-        const userInfo = connectedUsersGlobal.get(socketId);
-        if (!userInfo || !userInfo.roomId) { console.log(`[Select Team] Error: User ${socketId} not found or not in a room.`); return; }
+            // --- ★ ルーム退出処理 ---
+            socket.on('leave room', () => {
+                const userInfo = connectedUsersGlobal.get(socketId);
+                if (userInfo && userInfo.roomId) {
+                    const roomId = userInfo.roomId;
+                    const teamLeft = userInfo.team;
+                    const userName = userInfo.name;
+                    console.log(`[Leave Room ${roomId}] User ${socketId} (${userName}) is leaving.`);
+    
+                    socket.leave(roomId); // Socket.IO のルームから退出
+                    const roomState = gameRooms.get(roomId);
+                    let userWasInRoom = false;
+                    if (roomState) {
+                        userWasInRoom = roomState.connectedUsers.delete(socketId); // ルームの状態から削除
+                    }
+                    userInfo.roomId = null; // グローバル情報のルームIDをクリア
+                    userInfo.team = undefined; // チーム情報もクリア (任意)
+    
+                    if (userWasInRoom && roomState) { // ルームに実際に存在した場合のみ通知
+                         // 他のユーザーに通知
+                         io.to(roomId).emit('user left', { userId: socketId, name: userName, team: teamLeft });
+                         io.to(roomId).emit('room state update', GameLogic.getPublicRoomState(roomState));
+                         // ★ ゲーム進行中にプレイヤーが抜けた場合の処理 (disconnect と同様)
+                        if ((teamLeft === 'alpha' || teamLeft === 'bravo') && (roomState.phase === 'pick' || roomState.phase === 'ban')) {
+                            // ... (disconnect 時と同様のロジック) ...
+                            const remainingPlayersInTeam = Array.from(roomState.connectedUsers.values()).filter(u => u.team === teamLeft);
+                            if (remainingPlayersInTeam.length === 0) { GameLogic.resetRoom(roomId); }
+                            else if (roomState.phase === 'pick' && roomState.currentTurn === teamLeft) { GameLogic.selectRandomWeapon(roomId, teamLeft); }
+                        }
+                    }
+                     console.log(`[Leave Room ${roomId}] User ${socketId} left.`);
+                } else {
+                    console.log(`[Leave Room] User ${socketId} is not in a room or user info not found.`);
+                }
+            });
 
-        // ★ バリデーション: team が正しい値か
-        if (!data || !['alpha', 'bravo', 'observer'].includes(data.team)) {
-            console.log(`[Select Team ${userInfo.roomId}] Invalid team data from ${socketId}:`, data);
-            socket.emit('action failed', { reason: '無効なチーム指定です' });
-            return;
-        }
+    // --- チーム選択 ---
+    socket.on('select team', (data: { team: Team | 'observer'}) => {
+        const userInfo = connectedUsersGlobal.get(socketId);
+        if (!userInfo || !userInfo.roomId) { return; }
+        if (!data || !['alpha', 'bravo', 'observer'].includes(data.team)) { socket.emit('action failed', { reason: '無効なチーム指定です' }); return; }
 
         const roomId = userInfo.roomId;
         const requestedTeam = data.team;
         const roomState = gameRooms.get(roomId);
-        if (!roomState) { console.log(`[Select Team ${roomId}] Error: Room state not found.`); return; }
+        if (!roomState) { return; }
         const roomUser = roomState.connectedUsers.get(socketId);
-        if (!roomUser) { console.log(`[Select Team ${roomId}] Error: User ${socketId} not found in room state.`); return; }
+        if (!roomUser) { return; }
 
-        // ゲーム進行中チェック
-        if (roomState.phase !== 'waiting') {
-             console.log(`[Select Team ${roomId}] Denied: Not in waiting phase (Phase: ${roomState.phase}).`);
-             socket.emit('action failed', { reason: 'ゲーム開始前のみチームを変更できます' });
-             return;
+        if (roomState.phase !== 'waiting') { socket.emit('action failed', { reason: 'ゲーム開始前のみチームを変更できます' }); return; }
+
+        // ★ 既に同じチームにいる場合は何もしない (任意)
+        if (roomUser.team === requestedTeam) {
+            console.log(`[Select Team ${roomId}] User ${socketId} is already in team ${requestedTeam}.`);
+            return; // 何もせず終了
         }
 
-        // ★ 人数制限チェック (各チーム最大5人、全体で10人とする例)
-        const teamUsers = Array.from(roomState.connectedUsers.values()).filter(u => u.team === requestedTeam);
-        const MAX_PLAYERS_PER_TEAM = 5; // 定数化推奨
-        if (requestedTeam !== 'observer' && teamUsers.length >= MAX_PLAYERS_PER_TEAM) {
-            console.log(`[Select Team ${roomId}] Denied: Team ${requestedTeam} is full (${teamUsers.length}/${MAX_PLAYERS_PER_TEAM}).`);
-            socket.emit('action failed', { reason: `チーム ${requestedTeam} は満員です (${MAX_PLAYERS_PER_TEAM}人まで)` });
-            return;
+        // ★★★ チーム人数制限チェック (上限値 "以上" かどうかをチェック) ★★★
+        if (requestedTeam !== 'observer') {
+            const teamUsers = Array.from(roomState.connectedUsers.values()).filter(u => u.team === requestedTeam);
+            const teamUsersCount = teamUsers.length;
+
+            // ★ >= に変更
+            if (teamUsersCount >= MAX_PLAYERS_PER_TEAM) {
+                console.log(`[Select Team ${roomId}] Denied: Team ${requestedTeam} is full (${teamUsersCount}/${MAX_PLAYERS_PER_TEAM}).`);
+                // ★ エラーメッセージを具体的に
+                socket.emit('action failed', { reason: `チーム ${requestedTeam === 'alpha' ? 'アルファ' : 'ブラボー'} は満員です (${MAX_PLAYERS_PER_TEAM}人まで)` });
+                return;
+            }
         }
 
         // チーム変更
         roomUser.team = requestedTeam;
-        userInfo.team = requestedTeam; // グローバルも更新
+        userInfo.team = requestedTeam;
         console.log(`[Select Team ${roomId}] User ${socketId} (${userInfo.name}) selected team ${requestedTeam}.`);
-        io.to(roomId).emit('user updated', roomUser); // ルーム全員に通知
-        // ★ チーム変更後、最新のルーム状態も通知する (チーム構成が変わるため)
+        io.to(roomId).emit('user updated', roomUser);
         io.to(roomId).emit('room state update', GameLogic.getPublicRoomState(roomState));
     });
 
      // --- ゲーム開始 ---
      socket.on('start game', () => {
-         const userInfo = connectedUsersGlobal.get(socketId);
-         if (!userInfo || !userInfo.roomId) return;
-         const roomId = userInfo.roomId;
-         const roomState = gameRooms.get(roomId);
-         if (!roomState) return;
-         console.log(`[Start Game ${roomId}] Request from ${socketId} (${userInfo.name}). Phase: ${roomState.phase}`);
+        const userInfo = connectedUsersGlobal.get(socketId);
+        // ★ 観戦者は開始できないチェックを追加
+        if (!userInfo || !userInfo.roomId || userInfo.team === 'observer') {
+            console.log(`[Start Game] Denied: User ${socketId} is observer or invalid.`);
+            // ★ 観戦者へのフィードバック (任意)
+            if (userInfo?.team === 'observer') {
+                socket.emit('action failed', { reason: '観戦者はゲームを開始できません' });
+            }
+            return;
+        }
+        const roomId = userInfo.roomId;
+        const roomState = gameRooms.get(roomId);
+        if (!roomState) return;
+        console.log(`[Start Game ${roomId}] Request from ${socketId} (${userInfo.name}). Phase: ${roomState.phase}`);
 
-         if (roomState.phase === 'waiting') {
-             // ★ 開始条件チェック: 各チーム最低1人以上いるか
-             const alphaPlayers = Array.from(roomState.connectedUsers.values()).filter(u => u.team === 'alpha');
-             const bravoPlayers = Array.from(roomState.connectedUsers.values()).filter(u => u.team === 'bravo');
-             if (alphaPlayers.length === 0 || bravoPlayers.length === 0) {
-                 console.log(`[Start Game ${roomId}] Denied: Not enough players (Alpha: ${alphaPlayers.length}, Bravo: ${bravoPlayers.length}).`);
-                 socket.emit('action failed', { reason: '各チーム最低1人以上のプレイヤーが必要です' });
-                 return;
-             }
+        if (roomState.phase === 'waiting') {
+            // ★★★ ゲーム開始条件チェック (より詳細なエラーメッセージ) ★★★
+            const alphaPlayers = Array.from(roomState.connectedUsers.values()).filter(u => u.team === 'alpha');
+            const bravoPlayers = Array.from(roomState.connectedUsers.values()).filter(u => u.team === 'bravo');
+
+            if (alphaPlayers.length < MIN_PLAYERS_PER_TEAM || bravoPlayers.length < MIN_PLAYERS_PER_TEAM) {
+                console.log(`[Start Game ${roomId}] Denied: Not enough players (Alpha: ${alphaPlayers.length}, Bravo: ${bravoPlayers.length}). Minimum: ${MIN_PLAYERS_PER_TEAM}`);
+                // ★ エラーメッセージを具体的に
+                let reason = `各チーム最低${MIN_PLAYERS_PER_TEAM}人以上のプレイヤーが必要です。`;
+                if (alphaPlayers.length < MIN_PLAYERS_PER_TEAM && bravoPlayers.length < MIN_PLAYERS_PER_TEAM) {
+                    reason += ` (現在 アルファ: ${alphaPlayers.length}人, ブラボー: ${bravoPlayers.length}人)`;
+                } else if (alphaPlayers.length < MIN_PLAYERS_PER_TEAM) {
+                    reason += ` (現在 アルファ: ${alphaPlayers.length}人)`;
+                } else { // bravoPlayers.length < MIN_PLAYERS_PER_TEAM
+                    reason += ` (現在 ブラボー: ${bravoPlayers.length}人)`;
+                }
+                socket.emit('action failed', { reason });
+                return;
+            }
 
              console.log(`[Start Game ${roomId}] Starting ban phase...`);
              // roomState の更新は GameLogic 内で行う想定に変更しても良い
@@ -395,50 +449,27 @@ io.on('connection', (socket: Socket) => {
         console.log(`[Disconnect] User disconnected: ${socketId}. Reason: ${reason}`);
         const userInfo = connectedUsersGlobal.get(socketId);
         if (userInfo) {
-            const roomId = userInfo.roomId;
-            const teamLeft = userInfo.team;
-            const userName = userInfo.name; // ★ 名前を取得
-            connectedUsersGlobal.delete(socketId);
-            // console.log('[Disconnect] Removed from global map.');
-
+            const roomId = userInfo.roomId; // ★ roomId を取得
+            connectedUsersGlobal.delete(socketId); // グローバルから削除
             if (roomId) {
+                const teamLeft = userInfo.team;
+                const userName = userInfo.name;
+                socket.leave(roomId);
                 const roomState = gameRooms.get(roomId);
-                if (roomState) {
-                    const userExisted = roomState.connectedUsers.delete(socketId);
-                    if (userExisted) {
-                        console.log(`[Disconnect ${roomId}] Removed user ${socketId} (${userName}) from room.`);
-                        // ★ 他のユーザーに誰が退出したか通知
-                        io.to(roomId).emit('user left', { userId: socketId, name: userName, team: teamLeft }); // ★ name と team も追加
-                        // ★ 最新のルーム状態を通知 (参加者数が変わる)
-                        io.to(roomId).emit('room state update', GameLogic.getPublicRoomState(roomState));
-
-                        // ゲーム進行中にプレイヤーが抜けた場合の処理
-                        if ((teamLeft === 'alpha' || teamLeft === 'bravo') && (roomState.phase === 'pick' || roomState.phase === 'ban')) {
-                            console.log(`[Disconnect ${roomId}] Player ${userName}(${socketId}) from team ${teamLeft} left during active phase.`);
-                            const remainingPlayersInTeam = Array.from(roomState.connectedUsers.values()).filter(u => u.team === teamLeft);
-                            // チームのプレイヤーがいなくなった場合
-                            if (remainingPlayersInTeam.length === 0) {
-                                console.log(`[Disconnect ${roomId}] No players left in team ${teamLeft}. Resetting room.`);
-                                GameLogic.resetRoom(roomId); // リセット
-                            }
-                            // Pick フェーズで、現在のターンプレイヤーが抜けた場合
-                            else if (roomState.phase === 'pick' && roomState.currentTurn === teamLeft) {
-                                console.log(`[Disconnect ${roomId}] Current turn player left. Forcing random select/turn switch.`);
-                                // ★ タイマーをクリアして即座にターンを進める or ランダム選択
-                                if(roomState.timer) { clearInterval(roomState.timer); roomState.timer = null; }
-                                // gameLogic側でランダム選択＋ターン進行させるのが良い
-                                // GameLogic.handlePlayerDisconnectDuringPick(roomId, teamLeft); のような関数を呼ぶ
-                                GameLogic.selectRandomWeapon(roomId, teamLeft); // 現状はランダム選択を呼ぶ
-                            }
-                             // BAN フェーズで抜けた場合の処理 (必要なら追加)
-                             // 例: BAN フェーズがターン制なら Pick と同様の処理
-                             // 例: 並行 BAN なら何もしない or 制限時間を短縮？
-                        }
+                let userWasInRoom = false;
+                if (roomState) { userWasInRoom = roomState.connectedUsers.delete(socketId); }
+                if (userWasInRoom && roomState) {
+                    io.to(roomId).emit('user left', { userId: socketId, name: userName, team: teamLeft });
+                    io.to(roomId).emit('room state update', GameLogic.getPublicRoomState(roomState));
+                    if ((teamLeft === 'alpha' || teamLeft === 'bravo') && (roomState.phase === 'pick' || roomState.phase === 'ban')) {
+                       // ... (ゲーム進行中の離脱処理) ...
+                        const remainingPlayersInTeam = Array.from(roomState.connectedUsers.values()).filter(u => u.team === teamLeft);
+                        if (remainingPlayersInTeam.length === 0) { GameLogic.resetRoom(roomId); }
+                        else if (roomState.phase === 'pick' && roomState.currentTurn === teamLeft) { GameLogic.selectRandomWeapon(roomId, teamLeft); }
                     }
                 }
+                 console.log(`[Disconnect Cleanup] User ${socketId} removed from room ${roomId}.`);
             }
-        } else {
-            console.log(`[Disconnect] User ${socketId} not found in global map.`);
         }
         // console.log('[Disconnect] Current global users:', Array.from(connectedUsersGlobal.keys()));
     });
