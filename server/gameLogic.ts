@@ -24,7 +24,6 @@ export const initializeGameLogic = (
 // =============================================
 
 export const initializeRoomState = (roomId: string): RoomGameState => {
-    // ... (変更なし)
     console.log(`[Game Logic] Initializing state for room: ${roomId}`);
     const existingRoomState = gameRooms.get(roomId);
     if (existingRoomState?.timer) {
@@ -49,6 +48,8 @@ export const initializeRoomState = (roomId: string): RoomGameState => {
         pickPhaseState: { picks: { alpha: 0, bravo: 0 }, maxPicksPerTeam: MAX_PICKS_PER_TEAM },
         weapons: initialWeapons,
         connectedUsers: existingRoomState?.connectedUsers ?? new Map<string, RoomUser>(),
+        selectedStageId: 'random', 
+        selectedRuleId: 'random'  
     };
     gameRooms.set(roomId, newState);
     return newState;

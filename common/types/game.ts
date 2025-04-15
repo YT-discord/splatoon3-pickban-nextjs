@@ -61,8 +61,8 @@ export interface ConnectedUserInfo {
     weapons: RoomWeaponState[];
     connectedUsers: Map<string, RoomUser>;
     teams?: Record<Team, { users: RoomUser[] }>;
-    // selectedStageId: number | 'random' | null;
-    // selectedRuleId: number | 'random' | null;
+    selectedStageId: number | 'random' | null;
+    selectedRuleId: number | 'random' | null;
   }
 
   // クライアントに送信する公開ゲーム状態
@@ -70,8 +70,8 @@ export interface ConnectedUserInfo {
       userCount: number;
       banCounts: Record<Team, number>;
       pickCounts: Record<Team, number>;
-      // selectedStageId: number | 'random' | null;
-      // selectedRuleId: number | 'random' | null;
+      selectedStageId: number | 'random' | null;
+      selectedRuleId: number | 'random' | null;
   }
   // ★ クライアント側で使用する GameState 型
   export type GameState = PublicRoomGameState;

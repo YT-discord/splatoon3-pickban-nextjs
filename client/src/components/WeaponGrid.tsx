@@ -3,8 +3,10 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import Image from 'next/image';
 import type { Socket } from 'socket.io-client';
-import type { GameState, RoomUser, RoomWeaponState, MasterWeapon, Team } from '../../../common/types/game';
-import { TOTAL_PICK_TURNS, MAX_BANS_PER_TEAM, MAX_PICKS_PER_TEAM } from '../../../common/types/constants';
+import type { GameState, RoomUser, RoomWeaponState, MasterWeapon, Team, Stage, Rule } from '../../../common/types/game';
+import { TOTAL_PICK_TURNS, MAX_BANS_PER_TEAM, MAX_PICKS_PER_TEAM, STAGES_DATA, RULES_DATA } from '../../../common/types/constants';
+
+const RANDOM_CHOICE = { id: 'random', name: 'ランダム', imageUrl: '/images/stages/ランダム.png' };
 
 interface WeaponGridProps {
     socket: Socket;
@@ -29,6 +31,10 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, on
     const [loadingWeaponId, setLoadingWeaponId] = useState<number | null>(null);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
     const [roomUsers, setRoomUsers] = useState<RoomUser[]>([]);
+    const [selectedStage, setSelectedStage] = useState<Stage | typeof RANDOM_CHOICE | null>(RANDOM_CHOICE);
+    const [selectedRule, setSelectedRule] = useState<Rule | typeof RANDOM_CHOICE | null>(RANDOM_CHOICE);
+    const [isStageModalOpen, setIsStageModalOpen] = useState(false);
+    const [isRuleModalOpen, setIsRuleModalOpen] = useState(false);
 
     // --- 表示用武器リスト生成 (Memoized) ---
     const displayWeapons: DisplayWeapon[] = useMemo(() => {
@@ -88,6 +94,26 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, on
         const handleUpdateGameState = (updatedState: GameState) => {
             if (updatedState.roomId === roomId) {
                 console.log(`[WeaponGrid ${roomId}] Received game state update:`, updatedState);
+                const newStageId = updatedState.selectedStageId;
+                const newRuleId = updatedState.selectedRuleId;
+
+                if (newStageId === 'random') {
+                    setSelectedStage(RANDOM_CHOICE);
+                } else if (newStageId !== null) {
+                    const foundStage = STAGES_DATA.find(s => s.id === newStageId);
+                    setSelectedStage(foundStage || null); // 見つからなければ null
+                } else {
+                    setSelectedStage(null); // 未選択の場合
+                }
+
+                if (newRuleId === 'random') {
+                    setSelectedRule(RANDOM_CHOICE);
+                } else if (newRuleId !== null) {
+                    const foundRule = RULES_DATA.find(r => r.id === newRuleId);
+                    setSelectedRule(foundRule || null); // 見つからなければ null
+                } else {
+                    setSelectedRule(null); // 未選択の場合
+                }
                 setGameState(updatedState);
             }
         };
@@ -494,6 +520,47 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, on
                  </div>
             </div>
 
+            {/* ★★★ ステージ・ルール選択セクションを追加 ★★★ */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                {/* ステージセレクター */}
+                <div className="border rounded-lg p-3 shadow-sm">
+                    <h4 className="font-semibold mb-2 text-center">ステージ</h4>
+                    <button
+                        onClick={() => setIsStageModalOpen(true)}
+                        disabled={gameState.phase !== 'waiting'} // ゲーム開始前のみ変更可能
+                        className={`w-full p-2 border rounded-md flex flex-col items-center hover:bg-gray-50 transition-colors ${gameState.phase !== 'waiting' ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    >
+                        {selectedStage ? (
+                            <>
+                                <Image src={selectedStage.imageUrl} alt={selectedStage.name} width={120} height={67} className="object-cover mb-1 border" />
+                                <span className="text-sm font-medium">{selectedStage.name}</span>
+                            </>
+                        ) : (
+                            <span className="text-gray-500 h-[88px] flex items-center justify-center">ステージ未選択</span> // 高さを画像に合わせる
+                        )}
+                    </button>
+                </div>
+
+                {/* ルールセレクター */}
+                <div className="border rounded-lg p-3 shadow-sm">
+                     <h4 className="font-semibold mb-2 text-center">ルール</h4>
+                     <button
+                         onClick={() => setIsRuleModalOpen(true)}
+                         disabled={gameState.phase !== 'waiting'}
+                         className={`w-full p-2 border rounded-md flex flex-col items-center hover:bg-gray-50 transition-colors ${gameState.phase !== 'waiting' ? 'opacity-50 cursor-not-allowed' : ''}`}
+                     >
+                         {selectedRule ? (
+                             <>
+                                 <Image src={selectedRule.imageUrl} alt={selectedRule.name} width={120} height={67} className="object-cover mb-1 border" />
+                                 <span className="text-sm font-medium">{selectedRule.name}</span>
+                             </>
+                         ) : (
+                             <span className="text-gray-500 h-[88px] flex items-center justify-center">ルール未選択</span>
+                         )}
+                     </button>
+                </div>
+            </div>
+
             {/* Picked/Banned Weapons Display */}
             <div className="flex flex-col md:flex-row gap-4">
                 {/* Alpha Team */}
@@ -590,7 +657,96 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, on
                     <p className="text-gray-500">チームを選択し、「ゲーム開始」ボタンを押してください。</p>
                 </div>
             )}
-
+             <SelectionModal
+                 isOpen={isStageModalOpen}
+                 onClose={() => setIsStageModalOpen(false)}
+                 items={STAGES_DATA}
+                 onSelect={(stage) => {
+                     setSelectedStage(stage);
+                     if (socket) {
+                        console.log(`[WeaponGrid ${roomId}] Emitting 'select stage':`, stage.id);
+                        socket.emit('select stage', { stageId: stage.id });
+                    }
+                     console.log('Selected Stage:', stage);
+                 }}
+                 title="ステージを選択"
+                 randomOption={RANDOM_CHOICE} // ランダム選択肢を渡す
+             />
+             <SelectionModal
+                 isOpen={isRuleModalOpen}
+                 onClose={() => setIsRuleModalOpen(false)}
+                 items={RULES_DATA}
+                 onSelect={(rule) => {
+                     setSelectedRule(rule);
+                     if (socket) {
+                        console.log(`[WeaponGrid ${roomId}] Emitting 'select rule':`, rule.id);
+                        socket.emit('select rule', { ruleId: rule.id });
+                     }
+                     console.log('Selected Rule:', rule);
+                 }}
+                 title="ルールを選択"
+                 randomOption={RANDOM_CHOICE} // ランダム選択肢を渡す
+             />
         </div> // container end
     );
+
+    // ★★★ 選択肢の型定義 (ステージまたはルール) ★★★
+type SelectableItem = Stage | Rule | typeof RANDOM_CHOICE;
+
+// ★★★ 汎用選択モーダルコンポーネント (簡易版) ★★★
+interface SelectionModalProps<T extends SelectableItem> {
+    isOpen: boolean;
+    onClose: () => void;
+    items: T[];
+    onSelect: (item: T) => void;
+    title: string;
+    randomOption?: typeof RANDOM_CHOICE; // ランダム選択肢を追加
+}
+
+function SelectionModal<T extends SelectableItem>({ isOpen, onClose, items, onSelect, title, randomOption }: SelectionModalProps<T>) {
+    if (!isOpen) return null;
+
+    const handleSelect = (item: T) => {
+        onSelect(item);
+        onClose();
+    };
+
+    return (
+        // オーバーレイ
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
+            {/* モーダル本体 */}
+            <div className="bg-white rounded-lg shadow-xl p-6 max-w-3xl w-full max-h-[80vh] overflow-y-auto">
+                <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-xl font-semibold">{title}</h3>
+                    <button onClick={onClose} className="text-gray-500 hover:text-gray-700 text-2xl">×</button>
+                </div>
+                {/* 選択肢グリッド */}
+                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-4">
+                    {/* ランダム選択肢 (あれば表示) */}
+                    {randomOption && (
+                         <button
+                            key={randomOption.id}
+                            onClick={() => handleSelect(randomOption as T)} // 型アサーション
+                            className="flex flex-col items-center p-2 border rounded-md hover:bg-gray-100 hover:shadow-sm transition-all"
+                         >
+                            <Image src={randomOption.imageUrl} alt={randomOption.name} width={80} height={45} className="object-cover mb-1 border" />
+                            <span className="text-xs text-center">{randomOption.name}</span>
+                         </button>
+                    )}
+                    {/* 通常の選択肢 */}
+                    {items.map((item) => (
+                        <button
+                            key={item.id}
+                            onClick={() => handleSelect(item)}
+                            className="flex flex-col items-center p-2 border rounded-md hover:bg-gray-100 hover:shadow-sm transition-all"
+                        >
+                            <Image src={item.imageUrl} alt={item.name} width={80} height={45} className="object-cover mb-1 border" />
+                            <span className="text-xs text-center">{item.name}</span>
+                        </button>
+                    ))}
+                </div>
+            </div>
+        </div>
+    );
+}
 }
