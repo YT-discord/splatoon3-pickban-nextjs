@@ -4,12 +4,12 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import Image from 'next/image';
 import type { Socket } from 'socket.io-client';
 import type { GameState, RoomUser, RoomWeaponState, MasterWeapon, Team, Stage, Rule } from '../../../common/types/game';
-import { TOTAL_PICK_TURNS, MAX_BANS_PER_TEAM, MAX_PICKS_PER_TEAM, STAGES_DATA, RULES_DATA } from '../../../common/types/constants';
+import { TOTAL_PICK_TURNS, MAX_BANS_PER_TEAM, MAX_PICKS_PER_TEAM, STAGES_DATA, RULES_DATA, WEAPON_ATTRIBUTES } from '../../../common/types/constants';
+import toast from 'react-hot-toast';
 
 // ★ ランダム選択肢の定義
 const RANDOM_CHOICE = { id: 'random', name: 'ランダム', imageUrl: '/images/icons/random.png' };
 const RANDOM_CHOICE_ID = -1; // ランダム選択用の特別なID
-// const RANDOM_CHOICE_ITEM = { id: 'random' as const, name: 'ランダム', attribute:'special', imageUrl: '/images/icons/random.png' };
 const RANDOM_CHOICE_ITEM = { id: RANDOM_CHOICE_ID, name: 'ランダム', attribute:'special', imageUrl: '/images/icons/random.png' };
 
 
@@ -29,29 +29,37 @@ interface DisplayWeapon extends MasterWeapon {
 }
 
 type SortableKey = keyof Pick<MasterWeapon, 'id' | 'name' | 'attribute'>;
+type WeaponAttribute = typeof WEAPON_ATTRIBUTES[number];
 
 export default function WeaponGrid({ socket, roomId, masterWeapons, userName, onLeaveRoom }: WeaponGridProps) {
     const [gameState, setGameState] = useState<GameState | null>(null);
     const [weaponStates, setWeaponStates] = useState<Record<number, RoomWeaponState>>({});
     const [myTeam, setMyTeam] = useState<Team | 'observer'>('observer');
     const [loadingWeaponId, setLoadingWeaponId] = useState<number | null>(null);
-    const [errorMessage, setErrorMessage] = useState<string | null>(null);
     const [roomUsers, setRoomUsers] = useState<RoomUser[]>([]);
     const [selectedStage, setSelectedStage] = useState<Stage | typeof RANDOM_CHOICE | null>(RANDOM_CHOICE);
     const [selectedRule, setSelectedRule] = useState<Rule | typeof RANDOM_CHOICE | null>(RANDOM_CHOICE);
     const [isStageModalOpen, setIsStageModalOpen] = useState(false);
     const [isRuleModalOpen, setIsRuleModalOpen] = useState(false);
     const [sortConfig, setSortConfig] = useState<{ key: SortableKey | null; direction: 'ascending' | 'descending' }>({ key: 'id', direction: 'ascending' });
+    const [selectedAttributes, setSelectedAttributes] = useState<WeaponAttribute[]>([]);
 
     // --- 表示用武器リスト生成 (Memoized) ---
     const displayWeapons: DisplayWeapon[] = useMemo(() => {
-        // ★ ソート処理を追加 ★
-        const sortableItems = [...masterWeapons]; // ここletか？
+        let filteredWeapons = [...masterWeapons];
+
+        if (selectedAttributes.length > 0) {
+            filteredWeapons = filteredWeapons.filter(weapon =>
+                // MasterWeapon の attribute が selectedAttributes 配列に含まれているかチェック
+                selectedAttributes.includes(weapon.attribute as WeaponAttribute) // 型アサーション
+            );
+        }
+
+        const sortableItems = filteredWeapons
         if (sortConfig.key !== null) {
             sortableItems.sort((a, b) => {
                 const aValue = a[sortConfig.key!]; // sortConfig.key は null でないことを保証
                 const bValue = b[sortConfig.key!];
-                // ① IDでソートする場合 (数値比較) ★★★★★ 変更点 ★★★★★
                 if (sortConfig.key === 'id' && typeof aValue === 'number' && typeof bValue === 'number') {
                      return sortConfig.direction === 'ascending' ? aValue - bValue : bValue - aValue;
                 }
@@ -71,69 +79,24 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, on
                 ...master,
                 selectedBy: state.selectedBy,
                 bannedBy: state.bannedBy,
-                imageUrl: `/images/weapons/${encodeURIComponent(master.name)}.png`,
+                imageUrl: `/images/${encodeURIComponent(master.name)}.png`,
                 isLoading: loadingWeaponId === master.id,
             };
         });
 
-        // ★★★ Pickフェーズの自分のターンなら先頭にランダム選択アイテムを追加 ★★★
+        // Pickフェーズの自分のターンなら先頭にランダム選択アイテムを追加 ★★★
         if (gameState && gameState.phase === 'pick' && gameState.currentTurn === myTeam && (myTeam === 'alpha' || myTeam === 'bravo')) {
-            // ② isLoading を boolean に変更 ★★★★★ 変更点 ★★★★★
             const randomItemWithState: DisplayWeapon = {
-                ...RANDOM_CHOICE_ITEM, // id は RANDOM_CHOICE_ID (-1) になる
+                ...RANDOM_CHOICE_ITEM,
                 selectedBy: null,
                 bannedBy: [],
-                // loadingWeaponId が RANDOM_CHOICE_ID と一致すれば true、一致しなければ false
                 isLoading: loadingWeaponId === RANDOM_CHOICE_ID,
             };
-            currentDisplayWeapons.unshift(randomItemWithState); // 配列の先頭に追加
+            currentDisplayWeapons.unshift(randomItemWithState);
         }
 
         return currentDisplayWeapons;
-    }, [masterWeapons, weaponStates, loadingWeaponId, sortConfig, gameState, myTeam]);
-
-    // // --- 表示用武器リスト生成 (Memoized) ---
-    // const displayWeapons: DisplayWeapon[] = useMemo(() => {
-    //     // ★ ソート処理を追加 ★
-    //     const sortableItems = [...masterWeapons]; // ここletか？
-    //     if (sortConfig.key !== null) {
-    //         sortableItems.sort((a, b) => {
-    //             const aValue = a[sortConfig.key!]; // sortConfig.key は null でないことを保証
-    //             const bValue = b[sortConfig.key!];
-    //             if (typeof aValue === 'string' && typeof bValue === 'string') {
-    //                  return sortConfig.direction === 'ascending'
-    //                    ? aValue.localeCompare(bValue, 'ja') // 日本語対応
-    //                    : bValue.localeCompare(aValue, 'ja');
-    //             }
-    //             return 0;
-    //         });
-    //     }
-
-    //     const currentDisplayWeapons = sortableItems.map(master => {
-    //         const state = weaponStates[master.id] || { id: master.id, selectedBy: null, bannedBy: [], };
-    //         return {
-    //             ...master,
-    //             selectedBy: state.selectedBy,
-    //             bannedBy: state.bannedBy,
-    //             imageUrl: `/images/${encodeURIComponent(master.name)}.png`,
-    //             isLoading: loadingWeaponId === master.id,
-    //         };
-    //     });
-
-    //     // ★★★ Pickフェーズの自分のターンなら先頭にランダム選択アイテムを追加 ★★★
-    //     if (gameState && gameState.phase === 'pick' && gameState.currentTurn === myTeam && (myTeam === 'alpha' || myTeam === 'bravo')) {
-    //         const randomItemWithState: DisplayWeapon = {
-    //             ...RANDOM_CHOICE_ITEM,
-    //             selectedBy: null,
-    //             bannedBy: [],
-    //             // loadingWeaponId が RANDOM_CHOICE_ID と一致すれば true、そうでなければ undefined
-    //             isLoading: loadingWeaponId === RANDOM_CHOICE_ID ? true : undefined,
-    //         };
-    //         currentDisplayWeapons.unshift(randomItemWithState); // 配列の先頭に追加
-    //     }
-
-    //     return currentDisplayWeapons;
-    // }, [masterWeapons, weaponStates, loadingWeaponId, sortConfig, gameState, myTeam]);
+    }, [masterWeapons, weaponStates, loadingWeaponId, sortConfig, gameState, myTeam, selectedAttributes]);
 
     // 参加者リストをチームごとに分類
     const alphaTeamUsers = useMemo(() => roomUsers.filter(u => u.team === 'alpha'), [roomUsers]);
@@ -143,8 +106,7 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, on
     // --- エラーハンドラー ---
     const handleError = useCallback((message: string) => {
         console.error('Handled Error:', message);
-        setErrorMessage(message);
-        setTimeout(() => setErrorMessage(null), 5000);
+        toast.error(message);
     }, []);
 
     // --- WebSocketイベントリスナー設定 ---
@@ -224,8 +186,10 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, on
         const handleActionFailed = (data: { reason: string }) => {
             console.error(`[WeaponGrid ${roomId}] Action failed: ${data.reason}`);
             handleError(data.reason);
-            console.log(`[DEBUG handleActionFailed] Clearing loadingWeaponId (was: ${loadingWeaponId})`);
-            setLoadingWeaponId(null);
+            if (loadingWeaponId !== null) {
+                console.log(`[DEBUG handleActionFailed] Clearing loadingWeaponId (was: ${loadingWeaponId})`);
+                setLoadingWeaponId(null);
+            }
         };
 
         const handleInitialUsers = (users: RoomUser[]) => {
@@ -259,8 +223,19 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, on
         };
 
         const handleRoomResetNotification = (data: { message: string }) => {
-            console.log(`[WeaponGrid ${roomId}] Received room reset notification:`, data.message);
-            alert(data.message);
+            toast.success(data.message, { icon: '🔄' });
+        };
+
+        const handleSystemMessage = (data: { type: string; message: string }) => {
+            console.log(`[System Message] Received: ${data.message}`);
+            // type によってアイコンなどを変えても良い
+            if (data.type === 'game_started') {
+                toast.success(data.message, { icon: '▶️' });
+            } else if (data.type === 'room_reset') {
+                toast.success(data.message, { icon: '🔄' });
+            } else {
+                toast.success(data.message, { icon: 'ℹ️' }); // デフォルト
+            }
         };
 
         // --- リスナー登録 ---
@@ -276,6 +251,7 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, on
         socket.on('user left', handleUserLeft);
         socket.on('user updated', handleUserUpdated);
         socket.on('room reset notification', handleRoomResetNotification);
+        socket.on('system message', handleSystemMessage);
 
         // 初期データ要求イベントを送信
         console.log(`[WeaponGrid ${roomId}] Requesting initial data...`);
@@ -298,10 +274,27 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, on
             socket.off('user left', handleUserLeft);
             socket.off('user updated', handleUserUpdated);
             socket.off('room reset notification', handleRoomResetNotification);
+            socket.off('system message', handleSystemMessage);
         };
-    }, [socket, roomId, userName, masterWeapons, handleError, loadingWeaponId]);
+    }, [socket, roomId, userName, masterWeapons, loadingWeaponId]);
 
-    const handleSort = (key: SortableKey) => {
+    const handleAttributeFilterChange = (attribute: WeaponAttribute) => {
+        setSelectedAttributes(prev =>
+            prev.includes(attribute)
+                ? prev.filter(a => a !== attribute) // 既に選択されていれば解除
+                : [...prev, attribute] // 選択されていなければ追加
+        );
+    };
+
+    const handleClearFilters = () => {
+        setSelectedAttributes([]); // 空にする = すべて表示
+    };
+    const handleSelectAllFilters = () => {
+        setSelectedAttributes([...WEAPON_ATTRIBUTES]); // 全て選択
+    };
+
+    // eslint-disable-next-line
+    const handleSort = (key: SortableKey) => { 
         let direction: 'ascending' | 'descending' = 'ascending';
         // 現在と同じキーがクリックされたら方向を反転
         if (sortConfig.key === key && sortConfig.direction === 'ascending') {
@@ -403,15 +396,14 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, on
 
     // --- リセット処理 (useCallbackで最適化) ---
     const handleReset = useCallback(() => {
-        if (socket && confirm('ゲーム状態をリセットしてもよろしいですか？')) {
+        if (socket && confirm('ゲーム状態をリセットしてもよろしいですか？（全員が待機状態に戻ります）')) {
             console.log(`[WeaponGrid ${roomId}] Emitting reset room`);
             socket.emit('reset room');
         }
     }, [socket, roomId]);
 
     // --- 表示用データの準備 (useMemoで最適化) ---
-    // ★ alphaPicksCount, bravoPicksCount は使われていないので削除
-    const { alphaPicks, bravoPicks, alphaBans, bravoBans, /* alphaPicksCount, bravoPicksCount, */ alphaBansCount, bravoBansCount } = useMemo(() => {
+    const { alphaPicks, bravoPicks, alphaBans, bravoBans, /* alphaPicksCount, bravoPicksCount, alphaBansCount, bravoBansCount */} = useMemo(() => {
         const alphaPicks = displayWeapons.filter((w) => w.selectedBy === 'alpha');
         const bravoPicks = displayWeapons.filter((w) => w.selectedBy === 'bravo');
         const alphaBans = displayWeapons.filter((w) => w.bannedBy.includes('alpha'));
@@ -559,8 +551,6 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, on
                 {/* ターン表示 */}
                 {!isRandomChoice && isMyTeamPlayer && !isDisabled && gameState.phase === 'pick' && (<div className="absolute bottom-1 right-1 px-1.5 py-0.5 text-xs bg-green-200 text-green-800 rounded font-semibold animate-pulse">Pick!</div> )}
                 {!isRandomChoice && isMyTeamPlayer && !isDisabled && gameState.phase === 'ban' && (<div className="absolute bottom-1 right-1 px-1.5 py-0.5 text-xs bg-yellow-200 text-yellow-800 rounded font-semibold animate-pulse">Ban!</div> )}
-                {/* {weapon.id !== RANDOM_CHOICE_ID && isMyTeamPlayer && !isDisabled && gameState.phase === 'pick' && (<div className="absolute bottom-1 right-1 px-1.5 py-0.5 text-xs bg-green-200 text-green-800 rounded font-semibold animate-pulse">Pick!</div> )} */}
-                {/* {weapon.id !== RANDOM_CHOICE_ID && isMyTeamPlayer && !isDisabled && gameState.phase === 'ban' && (<div className="absolute bottom-1 right-1 px-1.5 py-0.5 text-xs bg-yellow-200 text-yellow-800 rounded font-semibold animate-pulse">Ban!</div> )} */}
             </div>
         );
     }
@@ -568,278 +558,360 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, on
     // --- JSX レンダリング本体 ---
     return (
         <div className="container mx-auto p-4 space-y-6">
-            {/* Header & Controls */}
-            <div className="flex flex-wrap justify-between items-center gap-4 p-4 bg-gray-100 rounded-lg shadow">
-                {/* Room ID */}
-                <div className="font-semibold text-lg">ルーム: {roomId}</div>
-                {/* Team Selection */}
-                <div className="flex items-center space-x-2">
-                    <span className="text-sm font-medium text-gray-700">あなたのチーム ({userName}):</span>
-                    <button onClick={() => handleTeamSelect('alpha')} disabled={gameState.phase !== 'waiting' || myTeam === 'alpha'} className={`px-3 py-1 rounded-md text-sm transition-colors ${myTeam === 'alpha' ? 'bg-blue-500 text-white font-semibold ring-2 ring-blue-300' : 'bg-gray-200 hover:bg-gray-300'} ${gameState.phase !== 'waiting' ? 'opacity-50 cursor-not-allowed' : ''}`}>アルファ</button>
-                    <button onClick={() => handleTeamSelect('bravo')} disabled={gameState.phase !== 'waiting' || myTeam === 'bravo'} className={`px-3 py-1 rounded-md text-sm transition-colors ${myTeam === 'bravo' ? 'bg-red-500 text-white font-semibold ring-2 ring-red-300' : 'bg-gray-200 hover:bg-gray-300'} ${gameState.phase !== 'waiting' ? 'opacity-50 cursor-not-allowed' : ''}`}>ブラボー</button>
-                    <button onClick={() => handleTeamSelect('observer')} disabled={gameState.phase !== 'waiting' || myTeam === 'observer'} className={`px-3 py-1 rounded-md text-sm transition-colors ${myTeam === 'observer' ? 'bg-gray-500 text-white font-semibold ring-2 ring-gray-300' : 'bg-gray-200 hover:bg-gray-300'} ${gameState.phase !== 'waiting' ? 'opacity-50 cursor-not-allowed' : ''}`}>観戦</button>
+            {/* ================== ヘッダーエリア ================== */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center p-4 bg-gray-100 rounded-lg shadow mb-6">
+                {/* 左ブロック: ルーム情報 */}
+                <div className="flex flex-col items-start">
+                    <div className="font-semibold text-lg text-gray-800">ルーム: {roomId}</div>
+                    {/* 参加者数はステータス表示部に移動 */}
                 </div>
-                {/* Game Status */}
+
+                {/* 中央ブロック: ゲームステータス & ステージ/ルール */}
                 <div className="text-center space-y-1">
-                    <p className="text-lg font-semibold">フェーズ: <span className="font-bold text-indigo-600">{gameState.phase}</span></p>
-                    {(gameState.phase === 'pick' || gameState.phase === 'pick_complete') && gameState.currentPickTurnNumber != null && (<p>Pickターン: {gameState.currentPickTurnNumber} / {TOTAL_PICK_TURNS}</p>)}
-                    {(gameState.phase === 'ban' || gameState.phase === 'pick') && gameState.timeLeft != null && (<p className="text-xl font-mono">残り時間: {gameState.timeLeft}秒</p>)}
-                    {(gameState.phase === 'ban' || gameState.phase === 'pick') && gameState.currentTurn && (<p>現在のターン: <span className={`font-bold ${gameState.currentTurn === 'alpha' ? 'text-blue-600' : 'text-red-600'}`}>{gameState.currentTurn}チーム</span></p>)}
+                    <p className="text-lg font-semibold text-gray-800">
+                        フェーズ: <span className="font-bold">{gameState.phase}</span>
+                        <span className="text-sm text-gray-600 ml-2">({gameState.userCount}人参加)</span>
+                    </p>
+                    {(gameState.phase === 'pick' || gameState.phase === 'pick_complete') && gameState.currentPickTurnNumber != null && (
+                        <p className="text-sm text-gray-700">Pickターン: {gameState.currentPickTurnNumber} / {TOTAL_PICK_TURNS}</p>
+                    )}
+                    {(gameState.phase === 'ban' || gameState.phase === 'pick') && gameState.timeLeft != null && (
+                        <p className="text-xl font-mono text-gray-800">残り時間: {gameState.timeLeft}秒</p>
+                    )}
+                    {(gameState.phase === 'ban' || gameState.phase === 'pick') && gameState.currentTurn && (
+                        <p className="text-sm text-gray-700">現在のターン: <span className={`font-bold ${gameState.currentTurn === 'alpha' ? 'text-blue-600' : 'text-red-600'}`}>{gameState.currentTurn}チーム</span></p>
+                    )}
                     {gameState.phase === 'pick_complete' && (<p className="font-bold text-green-600 text-xl">PICK完了！</p>)}
-                    <p className="text-xs text-gray-500">参加者: {gameState.userCount}人</p>
-                </div>
-                {/* Control Buttons */}
-                <div className="flex items-center gap-4">
-                    <button
-                        onClick={handleLeaveButtonClick}
-                        className="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 text-sm"
-                    >
-                        ルーム退出
-                    </button>
-
-                    {gameState.phase === 'waiting' && (<button onClick={handleStart} disabled={!socket || myTeam === 'observer'} className="px-6 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 disabled:opacity-50">ゲーム開始</button>)}
-                    {(gameState.phase !== 'waiting') && (<button onClick={handleReset} disabled={!socket || myTeam === 'observer'} className="ml-4 px-4 py-2 bg-yellow-500 text-white rounded-md hover:bg-yellow-600 disabled:opacity-50">リセット</button>)}
-                </div>
-            </div>
-
-            {/* Error Message */}
-            {errorMessage && (<div className="p-3 bg-red-100 text-red-700 rounded-lg text-center">エラー: {errorMessage}</div>)}
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                {/* Alpha Team List */}
-                <div className="border rounded-lg p-3 bg-blue-50 shadow-sm">
-                    <h4 className="font-semibold text-blue-800 mb-2">アルファチーム ({alphaTeamUsers.length})</h4>
-                    <ul className="space-y-1">
-                        {alphaTeamUsers.map(user => (
-                            <li key={user.id} className={`flex items-center ${user.name === userName ? 'font-bold text-blue-600' : ''}`}>
-                                <span className="inline-block w-2 h-2 bg-blue-500 rounded-full mr-2"></span>
-                                {user.name}
-                            </li>
-                        ))}
-                        {alphaTeamUsers.length === 0 && <li className="text-gray-500 italic">プレイヤーがいません</li>}
-                    </ul>
-                </div>
-                {/* Bravo Team List */}
-                 <div className="border rounded-lg p-3 bg-red-50 shadow-sm">
-                     <h4 className="font-semibold text-red-800 mb-2">ブラボーチーム ({bravoTeamUsers.length})</h4>
-                     <ul className="space-y-1">
-                         {bravoTeamUsers.map(user => (
-                             <li key={user.id} className={`flex items-center ${user.name === userName ? 'font-bold text-red-600' : ''}`}>
-                                 <span className="inline-block w-2 h-2 bg-red-500 rounded-full mr-2"></span>
-                                 {user.name}
-                             </li>
-                         ))}
-                         {bravoTeamUsers.length === 0 && <li className="text-gray-500 italic">プレイヤーがいません</li>}
-                     </ul>
-                 </div>
-                 {/* Observer List */}
-                 <div className="border rounded-lg p-3 bg-gray-50 shadow-sm">
-                      <h4 className="font-semibold text-gray-800 mb-2">観戦者 ({observers.length})</h4>
-                      <ul className="space-y-1">
-                          {observers.map(user => (
-                              <li key={user.id} className={`flex items-center ${user.name === userName ? 'font-bold text-gray-600' : ''}`}>
-                                  <span className="inline-block w-2 h-2 bg-gray-500 rounded-full mr-2"></span>
-                                  {user.name}
-                              </li>
-                          ))}
-                           {observers.length === 0 && <li className="text-gray-500 italic">観戦者はいません</li>}
-                      </ul>
-                 </div>
-            </div>
-
-            {/* ★★★ ステージ・ルール選択セクションを追加 ★★★ */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                {/* ステージセレクター */}
-                <div className="border rounded-lg p-3 shadow-sm">
-                    <h4 className="font-semibold mb-2 text-center">ステージ</h4>
-                    <button
-                        onClick={() => setIsStageModalOpen(true)}
-                        disabled={gameState.phase !== 'waiting'} // ゲーム開始前のみ変更可能
-                        className={`w-full p-2 border rounded-md flex flex-col items-center hover:bg-gray-50 transition-colors ${gameState.phase !== 'waiting' ? 'opacity-50 cursor-not-allowed' : ''}`}
-                    >
-                        {selectedStage ? (
-                            <>
-                                <Image src={selectedStage.imageUrl} alt={selectedStage.name} width={120} height={67} className="object-cover mb-1 border" />
-                                <span className="text-sm font-medium">{selectedStage.name}</span>
-                            </>
-                        ) : (
-                            <span className="text-gray-500 h-[88px] flex items-center justify-center">ステージ未選択</span> // 高さを画像に合わせる
-                        )}
-                    </button>
+                    {/* ステージ・ルール表示 */}
+                    <div className="flex justify-center gap-4 mt-2">
+                         {/* ステージ */}
+                         <div className="flex flex-col items-center text-xs border rounded p-1 bg-white shadow-sm w-[100px]"> {/* ★ 横幅固定 */}
+                             <span className="font-medium text-gray-600 mb-0.5">ステージ</span>
+                             {/* ★ 高さ確保用のコンテナ */}
+                             <div className="flex items-center justify-center w-full min-h-[68px] mb-0.5"> {/* 画像(h45)+テキスト分の高さを確保 */}
+                                 {selectedStage ? (
+                                     <div className="flex flex-col items-center">
+                                         <Image src={selectedStage.imageUrl} alt={selectedStage.name} width={80} height={45} className="object-cover border" />
+                                         <span className="font-semibold text-gray-800 mt-0.5">{selectedStage.name}</span>
+                                     </div>
+                                 ) : (<span className="text-gray-500 text-xs">未選択</span>)}
+                             </div>
+                             <button
+                                 onClick={() => setIsStageModalOpen(true)}
+                                 disabled={gameState.phase !== 'waiting'}
+                                 className={`mt-1 px-2 py-0.5 text-xs rounded ${gameState.phase === 'waiting' ? 'bg-gray-300 hover:bg-gray-400' : 'bg-gray-200 text-gray-500 cursor-not-allowed'}`}
+                             >変更</button>
+                         </div>
+                         {/* ルール */}
+                         <div className="flex flex-col items-center text-xs border rounded p-1 bg-white shadow-sm w-[100px]"> {/* ★ 横幅固定 */}
+                              <span className="font-medium text-gray-600 mb-0.5">ルール</span>
+                              {/* ★ 高さ確保用のコンテナ */}
+                              <div className="flex items-center justify-center w-full min-h-[68px] mb-0.5"> {/* 画像(h45)+テキスト分の高さを確保 */}
+                                  {selectedRule ? (
+                                     <div className="flex flex-col items-center">
+                                          <Image src={selectedRule.imageUrl} alt={selectedRule.name} width={80} height={45} className="object-cover border" />
+                                          <span className="font-semibold text-gray-800 mt-0.5">{selectedRule.name}</span>
+                                      </div>
+                                  ) : (<span className="text-gray-500 text-xs">未選択</span>)}
+                              </div>
+                              <button
+                                  onClick={() => setIsRuleModalOpen(true)}
+                                  disabled={gameState.phase !== 'waiting'}
+                                  className={`mt-1 px-2 py-0.5 text-xs rounded ${gameState.phase === 'waiting' ? 'bg-gray-300 hover:bg-gray-400' : 'bg-gray-200 text-gray-500 cursor-not-allowed'}`}
+                              >変更</button>
+                          </div>
+                    </div>
                 </div>
 
-                {/* ルールセレクター */}
-                <div className="border rounded-lg p-3 shadow-sm">
-                     <h4 className="font-semibold mb-2 text-center">ルール</h4>
+                {/* 右ブロック: 操作ボタン */}
+                <div className="flex flex-col items-end gap-2">
                      <button
-                         onClick={() => setIsRuleModalOpen(true)}
-                         disabled={gameState.phase !== 'waiting'}
-                         className={`w-full p-2 border rounded-md flex flex-col items-center hover:bg-gray-50 transition-colors ${gameState.phase !== 'waiting' ? 'opacity-50 cursor-not-allowed' : ''}`}
+                         onClick={handleLeaveButtonClick}
+                         className="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 text-sm w-full md:w-auto"
                      >
-                         {selectedRule ? (
-                             <>
-                                 <Image src={selectedRule.imageUrl} alt={selectedRule.name} width={120} height={67} className="object-cover mb-1 border" />
-                                 <span className="text-sm font-medium">{selectedRule.name}</span>
-                             </>
-                         ) : (
-                             <span className="text-gray-500 h-[88px] flex items-center justify-center">ルール未選択</span>
-                         )}
+                         ルーム退出
                      </button>
+                     {gameState.phase === 'waiting' && (
+                         <button onClick={handleStart} disabled={!socket || myTeam === 'observer'} className="px-6 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 disabled:opacity-50 text-sm w-full md:w-auto">ゲーム開始</button>
+                     )}
+                     {(gameState.phase !== 'waiting') && (
+                         <button onClick={handleReset} disabled={!socket || myTeam === 'observer'} className="px-4 py-2 bg-yellow-500 text-white rounded-md hover:bg-yellow-600 disabled:opacity-50 text-sm w-full md:w-auto">リセット</button>
+                     )}
                 </div>
             </div>
 
-            <div className="my-4 p-2 bg-gray-50 rounded border flex items-center justify-end gap-2 text-sm">
-                <span>並び替え:</span>
-                <button
-                    onClick={() => handleSort('id')}
-                    className={`px-3 py-1 rounded ${sortConfig.key === 'id' ? 'bg-blue-500 text-white' : 'bg-white hover:bg-gray-100 border'}`}
-                >
-                    ID {sortConfig.key === 'id' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : ''}
-                </button>
-                 <button
-                     onClick={() => handleSort('name')}
-                     className={`px-3 py-1 rounded ${sortConfig.key === 'name' ? 'bg-blue-500 text-white' : 'bg-white hover:bg-gray-100 border'}`}
-                 >
-                     名前 {sortConfig.key === 'name' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : ''}
-                 </button>
-                 <button
-                     onClick={() => handleSort('attribute')}
-                     className={`px-3 py-1 rounded ${sortConfig.key === 'attribute' ? 'bg-blue-500 text-white' : 'bg-white hover:bg-gray-100 border'}`}
-                 >
-                     属性 {sortConfig.key === 'attribute' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : ''}
-                 </button>
-            </div>
+            {/* ================== メインエリア (3カラム) ================== */}
+            {/* lg以上で3カラム、それ未満は1カラム */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
 
-            {/* Picked/Banned Weapons Display */}
-            <div className="flex flex-col md:flex-row gap-4">
-                {/* Alpha Team */}
-                <div className="flex-1 border rounded-lg p-3 bg-blue-50 shadow-sm min-h-[150px]">
-                    <h3 className="text-lg font-semibold mb-2 text-blue-800">アルファチーム {myTeam === 'alpha' ? `(あなた: ${userName})` : ''}</h3>
-                    <div className="mb-3">
+                {/* ----- 左カラム: アルファチーム ----- */}
+                <div className="lg:col-span-3 border rounded-lg p-3 bg-blue-50 shadow-sm space-y-3">
+                    {/* チーム選択ボタン */}
+                    <button
+                        onClick={() => handleTeamSelect('alpha')}
+                        disabled={gameState.phase !== 'waiting' || myTeam === 'alpha'}
+                        className={`w-full px-3 py-1.5 rounded-md text-sm transition-colors font-semibold ${
+                            myTeam === 'alpha' ? 'bg-blue-600 text-white ring-2 ring-blue-300' : 'bg-white border border-blue-300 text-blue-700 hover:bg-blue-100'
+                        } ${gameState.phase !== 'waiting' ? 'opacity-60 cursor-not-allowed' : ''}`}
+                    >
+                        アルファに参加 {myTeam === 'alpha' ? '(選択中)' : ''}
+                    </button>
+                    {/* メンバーリスト */}
+                    <div>
+                        <h4 className="font-semibold text-blue-800 mb-1">メンバー ({alphaTeamUsers.length})</h4>
+                        <ul className="space-y-0.5 text-sm">
+                            {alphaTeamUsers.map(user => (
+                                <li key={user.id} className={`flex items-center ${user.name === userName ? 'font-bold' : ''} text-blue-700`}> {/* 文字色変更 */}
+                                    <span className="inline-block w-2 h-2 bg-blue-500 rounded-full mr-1.5"></span>
+                                    {user.name}
+                                </li>
+                            ))}
+                            {alphaTeamUsers.length === 0 && <li className="text-gray-500 italic text-xs">プレイヤーがいません</li>}
+                        </ul>
+                    </div>
+                    {/* PICK 表示 */}
+                    <div className="border-t pt-2">
                         <h4 className="text-md font-medium mb-1 text-blue-700">PICK ({gameState.pickPhaseState?.picks.alpha ?? 0}/{MAX_PICKS_PER_TEAM})</h4>
-                        <div className="flex flex-wrap gap-1">
+                        {/* ★ 高さ確保 min-h-[60px] を維持 */}
+                        <div className="flex flex-wrap gap-1 min-h-[60px] items-center"> {/* ★ items-center 追加 */}
                             {alphaPicks.length > 0 ? alphaPicks.map((weapon) => (
                                 <div key={`alpha-pick-${weapon.id}`} className="relative border border-blue-300 rounded p-1 bg-white" title={`PICK: ${weapon.name}`}>
-                                    <Image src={weapon.imageUrl} alt={weapon.name} width={60} height={60} />
+                                    <Image src={weapon.imageUrl} alt={weapon.name} width={50} height={50} />
                                 </div>
-                            )) : <p className="text-sm text-gray-500">{gameState.phase === 'waiting' ? '待機中' : '-'}</p>}
+                            )) : <p className="text-xs text-gray-500 w-full text-center">{gameState.phase === 'waiting' ? '待機中' : '-'}</p>} {/* ★ 中央揃え */}
                         </div>
                     </div>
-                    <div>
+                    {/* BAN 表示 */}
+                    <div className="border-t pt-2">
                         <h4 className="text-md font-medium mb-1 text-blue-700">BAN ({gameState.banPhaseState?.bans.alpha ?? 0}/{MAX_BANS_PER_TEAM})</h4>
-                        <div className="flex flex-wrap gap-1">
+                        {/* ★ 高さ確保 min-h-[60px] を維持 */}
+                        <div className="flex flex-wrap gap-1 min-h-[60px] items-center"> {/* ★ items-center 追加 */}
                             {alphaBans.length > 0 ? alphaBans.map((weapon) => {
+                                if (weapon.id === RANDOM_CHOICE_ID) return null; // ランダム選択肢(-1)は表示しない
                                 const isSelfOrObserver = myTeam === 'alpha' || myTeam === 'observer';
                                 const shouldShowBan = gameState.phase === 'pick' || gameState.phase === 'pick_complete' || (gameState.phase === 'ban' && isSelfOrObserver);
-                                if (!shouldShowBan) return null;
+                                if (!shouldShowBan) return null; // 表示すべきでない場合は null を返す
                                 return (
                                     <div key={`alpha-ban-${weapon.id}`} className="relative border border-gray-400 rounded p-1 bg-gray-200" title={`BAN: ${weapon.name}`}>
-                                        <Image src={weapon.imageUrl} alt={weapon.name} width={60} height={60} className="opacity-70" />
+                                        <Image src={weapon.imageUrl} alt={weapon.name} width={50} height={50} className="opacity-70" /> {/* 少し小さく */}
                                         <div className="absolute inset-0 flex items-center justify-center">
-                                            <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg>
+                                            <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg>
                                         </div>
                                     </div>
                                 );
-                            }) : <p className="text-sm text-gray-500">{gameState.phase === 'waiting' ? '待機中' : '-'}</p>}
-                            {gameState.phase === 'ban' && myTeam === 'bravo' && alphaBansCount > 0 && <p className="text-sm text-gray-400 italic">（相手のBANはPickフェーズで公開）</p>}
+                            // BAN表示の map 処理が終わった後に、表示すべき BAN アイコンが1つもなかった場合にテキストを表示
+                            }) : null} {/* map が実行されなかった場合は何もしない */}
+                            {/* 表示されるべき BAN アイコンが1つもない (alphaBans 配列内の表示すべき要素が0) 場合にテキストを表示 */}
+                            {!alphaBans.some(weapon => {
+                                if (weapon.id === RANDOM_CHOICE_ID) return false; // ランダムはカウントしない
+                                const isSelfOrObserver = myTeam === 'alpha' || myTeam === 'observer';
+                                return gameState.phase === 'pick' || gameState.phase === 'pick_complete' || (gameState.phase === 'ban' && isSelfOrObserver);
+                            }) && <p className="text-xs text-gray-500 w-full text-center">{gameState.phase === 'waiting' ? '待機中' : '-'}</p>} {/* ★ 条件付き表示調整 */}
+                            {/* 相手チーム(Bravo)で、BANフェーズ中で、かつアルファチームがBANしている場合に表示 */}
+                            {gameState.phase === 'ban' && myTeam === 'bravo' && (gameState.banPhaseState?.bans.alpha ?? 0) > 0 && <p className="text-xs text-gray-400 italic w-full text-center mt-1">（相手のBANはPickフェーズで公開）</p>}
                         </div>
                     </div>
                 </div>
-                {/* Bravo Team */}
-                <div className="flex-1 border rounded-lg p-3 bg-red-50 shadow-sm min-h-[150px]">
-                    <h3 className="text-lg font-semibold mb-2 text-red-800">ブラボーチーム {myTeam === 'bravo' ? `(あなた: ${userName})` : ''}</h3>
-                    <div className="mb-3">
-                        <h4 className="text-md font-medium mb-1 text-red-700">PICK ({gameState.pickPhaseState?.picks.bravo ?? 0}/{MAX_PICKS_PER_TEAM})</h4>
-                        <div className="flex flex-wrap gap-1">
-                            {bravoPicks.length > 0 ? bravoPicks.map((weapon) => (
-                                <div key={`bravo-pick-${weapon.id}`} className="relative border border-red-300 rounded p-1 bg-white" title={`PICK: ${weapon.name}`}>
-                                    <Image src={weapon.imageUrl} alt={weapon.name} width={60} height={60} />
-                                </div>
-                            )) : <p className="text-sm text-gray-500">{gameState.phase === 'waiting' ? '待機中' : '-'}</p>}
+
+                {/* ----- 中央カラム: 武器グリッド ----- */}
+                <div className="lg:col-span-6 lg:max-h-[calc(100vh-250px)] lg:overflow-y-auto">
+                    {/* ★★★★★ 変更点: フィルター UI ★★★★★ */}
+                    <div className="mb-4 p-3 bg-gray-50 rounded border">
+                        <div className="flex justify-between items-center mb-2">
+                            <span className="text-sm font-semibold text-gray-700">武器フィルター:</span>
+                            <div className="space-x-2">
+                                <button
+                                    onClick={handleClearFilters}
+                                    className="text-xs px-2 py-1 border rounded bg-white hover:bg-gray-100 disabled:opacity-50"
+                                    disabled={selectedAttributes.length === 0}
+                                >
+                                    すべて表示
+                                </button>
+                                <button
+                                     onClick={handleSelectAllFilters}
+                                     className="text-xs px-2 py-1 border rounded bg-white hover:bg-gray-100 disabled:opacity-50"
+                                     disabled={selectedAttributes.length === WEAPON_ATTRIBUTES.length}
+                                >
+                                     すべて選択
+                                 </button>
+                            </div>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                            {WEAPON_ATTRIBUTES.map(attr => {
+                                const isSelected = selectedAttributes.includes(attr);
+                                return (
+                                    <button
+                                        key={attr}
+                                        onClick={() => handleAttributeFilterChange(attr)}
+                                        className={`px-2.5 py-1 text-xs rounded border transition-colors ${
+                                            isSelected
+                                                ? 'bg-blue-500 text-white border-blue-600 font-semibold'
+                                                : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-100'
+                                        }`}
+                                    >
+                                        {attr}
+                                    </button>
+                                );
+                            })}
                         </div>
                     </div>
-                    <div>
+
+
+                    {/* Weapon Grid 本体 */}
+                    {(gameState.phase === 'ban' || gameState.phase === 'pick') && (
+                        <div className="overflow-x-auto">
+                            <h3 className="text-lg font-semibold mb-3 text-gray-800">
+                                {gameState.phase === 'ban' ? 'BANする武器を選択してください' : 'PICKする武器を選んでください'}
+                                {myTeam !== 'observer' && ` (${gameState.phase === 'ban' ? `${gameState.banPhaseState?.bans[myTeam] ?? 0}/${MAX_BANS_PER_TEAM}` : `${gameState.pickPhaseState?.picks[myTeam] ?? 0}/${MAX_PICKS_PER_TEAM}`})`}
+                            </h3>
+                            {displayWeapons.length > 0 ? (
+                                <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-5 xl:grid-cols-6 gap-2"> {/* 列数を調整 */}
+                                    {displayWeapons.map(renderWeaponItem)}
+                                </div>
+                            ) : (<p className="text-center text-gray-500 py-4">武器データが読み込まれていません。</p>)}
+                        </div>
+                    )}
+                     {gameState.phase === 'pick_complete' && (
+                        <div className="text-center py-10">
+                            <h3 className="text-2xl font-bold text-green-600">ピック完了！</h3>
+                        </div>
+                    )}
+                    {gameState.phase === 'waiting' && (
+                        <div className="text-center py-10">
+                            <h3 className="text-xl font-semibold text-gray-700">ゲーム開始待機中...</h3>
+                            <p className="text-gray-500">チームを選択し、ヘッダーの「ゲーム開始」ボタンを押してください。</p>
+                        </div>
+                    )}
+                </div>
+
+                {/* ----- 右カラム: ブラボーチーム ----- */}
+                <div className="lg:col-span-3 border rounded-lg p-3 bg-red-50 shadow-sm space-y-3">
+                     {/* チーム選択ボタン */}
+                     <button
+                         onClick={() => handleTeamSelect('bravo')}
+                         disabled={gameState.phase !== 'waiting' || myTeam === 'bravo'}
+                         className={`w-full px-3 py-1.5 rounded-md text-sm transition-colors font-semibold ${
+                            myTeam === 'bravo' ? 'bg-red-600 text-white ring-2 ring-red-300' : 'bg-white border border-red-300 text-red-700 hover:bg-red-100'
+                         } ${gameState.phase !== 'waiting' ? 'opacity-60 cursor-not-allowed' : ''}`}
+                     >
+                         ブラボーに参加 {myTeam === 'bravo' ? '(選択中)' : ''}
+                     </button>
+                     {/* メンバーリスト */}
+                     <div>
+                         <h4 className="font-semibold text-red-800 mb-1">メンバー ({bravoTeamUsers.length})</h4>
+                         <ul className="space-y-0.5 text-sm">
+                             {bravoTeamUsers.map(user => (
+                                 <li key={user.id} className={`flex items-center ${user.name === userName ? 'font-bold' : ''} text-red-700`}> {/* 文字色変更 */}
+                                     <span className="inline-block w-2 h-2 bg-red-500 rounded-full mr-1.5"></span>
+                                     {user.name}
+                                 </li>
+                             ))}
+                             {bravoTeamUsers.length === 0 && <li className="text-gray-500 italic text-xs">プレイヤーがいません</li>}
+                         </ul>
+                     </div>
+                      {/* PICK 表示 */}
+                      <div className="border-t pt-2">
+                         <h4 className="text-md font-medium mb-1 text-red-700">PICK ({gameState.pickPhaseState?.picks.bravo ?? 0}/{MAX_PICKS_PER_TEAM})</h4>
+                         {/* ★ 高さ確保 min-h-[60px] を維持 */}
+                         <div className="flex flex-wrap gap-1 min-h-[60px] items-center"> {/* ★ items-center 追加 */}
+                             {bravoPicks.length > 0 ? bravoPicks.map((weapon) => (
+                                 <div key={`bravo-pick-${weapon.id}`} className="relative border border-red-300 rounded p-1 bg-white" title={`PICK: ${weapon.name}`}>
+                                     <Image src={weapon.imageUrl} alt={weapon.name} width={50} height={50} />
+                                 </div>
+                             )) : <p className="text-xs text-gray-500 w-full text-center">{gameState.phase === 'waiting' ? '待機中' : '-'}</p>} {/* ★ 中央揃え */}
+                         </div>
+                     </div>
+                     {/* BAN 表示 */}
+                     <div className="border-t pt-2">
                         <h4 className="text-md font-medium mb-1 text-red-700">BAN ({gameState.banPhaseState?.bans.bravo ?? 0}/{MAX_BANS_PER_TEAM})</h4>
-                        <div className="flex flex-wrap gap-1">
+                        {/* ★ 高さ確保 min-h-[60px] を維持 */}
+                        <div className="flex flex-wrap gap-1 min-h-[60px] items-center"> {/* ★ items-center 追加 */}
                             {bravoBans.length > 0 ? bravoBans.map((weapon) => {
+                                if (weapon.id === RANDOM_CHOICE_ID) return null; // ランダム選択肢(-1)は表示しない
                                 const isSelfOrObserver = myTeam === 'bravo' || myTeam === 'observer';
                                 const shouldShowBan = gameState.phase === 'pick' || gameState.phase === 'pick_complete' || (gameState.phase === 'ban' && isSelfOrObserver);
-                                if (!shouldShowBan) return null;
+                                if (!shouldShowBan) return null; // 表示すべきでない場合は null を返す
                                 return (
                                     <div key={`bravo-ban-${weapon.id}`} className="relative border border-gray-400 rounded p-1 bg-gray-200" title={`BAN: ${weapon.name}`}>
-                                        <Image src={weapon.imageUrl} alt={weapon.name} width={60} height={60} className="opacity-70" />
+                                        <Image src={weapon.imageUrl} alt={weapon.name} width={50} height={50} className="opacity-70" /> {/* 少し小さく */}
                                         <div className="absolute inset-0 flex items-center justify-center">
-                                            <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg>
+                                            <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg>
                                         </div>
                                     </div>
                                 );
-                            }) : <p className="text-sm text-gray-500">{gameState.phase === 'waiting' ? '待機中' : '-'}</p>}
-                            {gameState.phase === 'ban' && myTeam === 'alpha' && bravoBansCount > 0 && <p className="text-sm text-gray-400 italic">（相手のBANはPickフェーズで公開）</p>}
+                            // BAN表示の map 処理が終わった後に、表示すべき BAN アイコンが1つもなかった場合にテキストを表示
+                            }) : null} {/* map が実行されなかった場合は何もしない */}
+                             {/* 表示されるべき BAN アイコンが1つもない (bravoBans 配列内の表示すべき要素が0) 場合にテキストを表示 */}
+                            {!bravoBans.some(weapon => {
+                                if (weapon.id === RANDOM_CHOICE_ID) return false; // ランダムはカウントしない
+                                const isSelfOrObserver = myTeam === 'bravo' || myTeam === 'observer';
+                                return gameState.phase === 'pick' || gameState.phase === 'pick_complete' || (gameState.phase === 'ban' && isSelfOrObserver);
+                            }) && <p className="text-xs text-gray-500 w-full text-center">{gameState.phase === 'waiting' ? '待機中' : '-'}</p>} {/* ★ 条件付き表示調整 */}
+                            {/* 相手チーム(Alpha)で、BANフェーズ中で、かつブラボーチームがBANしている場合に表示 */}
+                            {gameState.phase === 'ban' && myTeam === 'alpha' && (gameState.banPhaseState?.bans.bravo ?? 0) > 0 && <p className="text-xs text-gray-400 italic w-full text-center mt-1">（相手のBANはPickフェーズで公開）</p>}
                         </div>
                     </div>
                 </div>
             </div>
 
-            {/* Weapon Grid */}
-            {(gameState.phase === 'ban' || gameState.phase === 'pick') && (
-                <div className="overflow-x-auto mt-6">
-                    <h3 className="text-xl font-semibold mb-3">
-                        {gameState.phase === 'ban' ? 'BANする武器を選択してください' : 'PICKする武器を選んでください'}
-                        {myTeam !== 'observer' && ` (${gameState.phase === 'ban' ? `${gameState.banPhaseState?.bans[myTeam] ?? 0}/${MAX_BANS_PER_TEAM}` : `${gameState.pickPhaseState?.picks[myTeam] ?? 0}/${MAX_PICKS_PER_TEAM}`})`}
-                    </h3>
-                    {displayWeapons.length > 0 ? (
-                        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-3">
-                            {displayWeapons.map(renderWeaponItem)}
-                        </div>
-                    ) : (<p className="text-center text-gray-500 py-4">武器データが読み込まれていません。</p>)}
-                </div>
-            )}
-            {gameState.phase === 'pick_complete' && (
-                <div className="text-center py-6">
-                    <h3 className="text-2xl font-bold text-green-600">ピック完了！</h3>
-                </div>
-            )}
-            {gameState.phase === 'waiting' && (
-                <div className="text-center py-6">
-                    <h3 className="text-xl font-semibold text-gray-700">ゲーム開始待機中...</h3>
-                    <p className="text-gray-500">チームを選択し、「ゲーム開始」ボタンを押してください。</p>
-                </div>
-            )}
+             {/* ================== フッターエリア: 観戦者リスト ================== */}
+             <div className="border rounded-lg p-3 bg-gray-50 shadow-sm mt-6">
+                 <div className="flex justify-between items-center mb-2">
+                     <h4 className="font-semibold text-gray-800">観戦者 ({observers.length})</h4>
+                      <button
+                          onClick={() => handleTeamSelect('observer')}
+                          disabled={gameState.phase !== 'waiting' || myTeam === 'observer'}
+                          className={`px-3 py-1 rounded-md text-xs transition-colors font-semibold ${
+                             myTeam === 'observer' ? 'bg-gray-600 text-white ring-2 ring-gray-300' : 'bg-white border border-gray-400 text-gray-700 hover:bg-gray-100'
+                          } ${gameState.phase !== 'waiting' ? 'opacity-60 cursor-not-allowed' : ''}`}
+                      >
+                          観戦に参加 {myTeam === 'observer' ? '(選択中)' : ''}
+                      </button>
+                 </div>
+                 <ul className="space-y-0.5 text-sm">
+                     {observers.map(user => (
+                         <li key={user.id} className={`flex items-center ${user.name === userName ? 'font-bold' : ''} text-gray-700`}> {/* 文字色変更 */}
+                             <span className="inline-block w-2 h-2 bg-gray-500 rounded-full mr-1.5"></span>
+                             {user.name}
+                         </li>
+                     ))}
+                      {observers.length === 0 && <li className="text-gray-500 italic text-xs">観戦者はいません</li>}
+                 </ul>
+            </div>
 
-             <SelectionModal
-                 isOpen={isStageModalOpen}
-                 onClose={() => setIsStageModalOpen(false)}
-                 items={STAGES_DATA}
-                 onSelect={(stage) => { // stage は Stage | typeof RANDOM_CHOICE 型
+            {/* Selection Modals */}
+            <SelectionModal
+                isOpen={isStageModalOpen}
+                onClose={() => setIsStageModalOpen(false)}
+                items={STAGES_DATA}
+                onSelect={(stage) => {
                     setSelectedStage(stage);
                     if (socket) {
-                       // ★★★★★ 変更点: id の型で RANDOM_CHOICE かどうかを判定 ★★★★★
                        const stageIdToSend = typeof stage.id === 'string' ? 'random' : stage.id;
                        console.log(`[WeaponGrid ${roomId}] Emitting 'select stage':`, stageIdToSend);
                        socket.emit('select stage', { stageId: stageIdToSend });
                    }
                     console.log('Selected Stage:', stage);
                 }}
-                 title="ステージを選択"
-                 randomOption={RANDOM_CHOICE} // ランダム選択肢を渡す
-             />
-             <SelectionModal
-                 isOpen={isRuleModalOpen}
-                 onClose={() => setIsRuleModalOpen(false)}
-                 items={RULES_DATA}
-                 onSelect={(rule) => { // rule は Rule | typeof RANDOM_CHOICE 型
+                title="ステージを選択"
+                randomOption={RANDOM_CHOICE}
+            />
+            <SelectionModal
+                isOpen={isRuleModalOpen}
+                onClose={() => setIsRuleModalOpen(false)}
+                items={RULES_DATA}
+                onSelect={(rule) => {
                     setSelectedRule(rule);
                     if (socket) {
-                       // ★★★★★ 変更点: id の型で RANDOM_CHOICE かどうかを判定 ★★★★★
                        const ruleIdToSend = typeof rule.id === 'string' ? 'random' : rule.id;
                        console.log(`[WeaponGrid ${roomId}] Emitting 'select rule':`, ruleIdToSend);
                        socket.emit('select rule', { ruleId: ruleIdToSend });
                     }
                     console.log('Selected Rule:', rule);
                 }}
-                 title="ルールを選択"
-                 randomOption={RANDOM_CHOICE} // ランダム選択肢を渡す
-             />
+                title="ルールを選択"
+                randomOption={RANDOM_CHOICE}
+            />
         </div> // container end
     );
 
@@ -865,25 +937,27 @@ function SelectionModal<T extends SelectableItem>({ isOpen, onClose, items, onSe
     };
 
     return (
-        // オーバーレイ
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
+        // オーバーレイ (半透明黒背景)
+        <div className="fixed inset-0 bg-black bg-opacity-80 flex justify-center items-center z-50 p-4"> {/* ★ bg-opacity-80 追加 */}
             {/* モーダル本体 */}
             <div className="bg-white rounded-lg shadow-xl p-6 max-w-3xl w-full max-h-[80vh] overflow-y-auto">
                 <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-xl font-semibold">{title}</h3>
+                    {/* ★ タイトル文字色変更 */}
+                    <h3 className="text-xl font-semibold text-gray-800">{title}</h3>
                     <button onClick={onClose} className="text-gray-500 hover:text-gray-700 text-2xl">×</button>
                 </div>
                 {/* 選択肢グリッド */}
                 <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-4">
-                    {/* ランダム選択肢 (あれば表示) */}
+                    {/* ランダム選択肢 */}
                     {randomOption && (
                          <button
                             key={randomOption.id}
-                            onClick={() => handleSelect(randomOption as T)} // 型アサーション
+                            onClick={() => handleSelect(randomOption as T)}
                             className="flex flex-col items-center p-2 border rounded-md hover:bg-gray-100 hover:shadow-sm transition-all"
                          >
                             <Image src={randomOption.imageUrl} alt={randomOption.name} width={80} height={45} className="object-cover mb-1 border" />
-                            <span className="text-xs text-center">{randomOption.name}</span>
+                            {/* ★ 文字色変更 */}
+                            <span className="text-xs text-center text-gray-800">{randomOption.name}</span>
                          </button>
                     )}
                     {/* 通常の選択肢 */}
@@ -894,7 +968,8 @@ function SelectionModal<T extends SelectableItem>({ isOpen, onClose, items, onSe
                             className="flex flex-col items-center p-2 border rounded-md hover:bg-gray-100 hover:shadow-sm transition-all"
                         >
                             <Image src={item.imageUrl} alt={item.name} width={80} height={45} className="object-cover mb-1 border" />
-                            <span className="text-xs text-center">{item.name}</span>
+                            {/* ★ 文字色変更 */}
+                            <span className="text-xs text-center text-gray-800">{item.name}</span>
                         </button>
                     ))}
                 </div>

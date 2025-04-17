@@ -51,3 +51,8 @@ export const RULES_DATA: Rule[] = [
     { id: 4, name: 'ガチアサリ', imageUrl: '/images/rules/ガチアサリ.png', description: 'アサリを集めて相手ゴールに入れろ！' },
     { id: 5, name: 'ナワバリバトル', imageUrl: '/images/rules/ナワバリバトル.png', description: 'ステージをインクで塗りたくれ！' },
 ];
+
+export const WEAPON_ATTRIBUTES = [
+    "シューター", "ローラー", "チャージャー", "スロッシャー", "スピナー",
+    "マニューバー", "シェルター", "ブラスター", "フデ", "ストリンガー", "ワイパー"
+] as const;

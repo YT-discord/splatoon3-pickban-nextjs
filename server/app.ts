@@ -86,7 +86,6 @@ io.on('connection', (socket: Socket) => {
     console.log(`[Connect] User connected: ${socketId}`);
     const newUserInfo: ConnectedUserInfo = { socketId: socketId, roomId: null };
     connectedUsersGlobal.set(socketId, newUserInfo);
-    // console.log('[Connect] Current global users:', Array.from(connectedUsersGlobal.keys()));
 
     // --- ★ クライアントからの初期データ要求に応答 ---
     socket.on('request initial data', (data: { roomId: string }) => {
@@ -283,7 +282,7 @@ io.on('connection', (socket: Socket) => {
     socket.on('start game', () => {
         const userInfo = connectedUsersGlobal.get(socketId);
         // ★ 観戦者は開始できないチェックを追加
-        if (!userInfo || !userInfo.roomId || userInfo.team === 'observer') {
+        if (!userInfo || !userInfo.roomId || userInfo.team === 'observer' || !userInfo.name) {
             console.log(`[Start Game] Denied: User ${socketId} is observer or invalid.`);
             // ★ 観戦者へのフィードバック (任意)
             if (userInfo?.team === 'observer') {
@@ -292,9 +291,10 @@ io.on('connection', (socket: Socket) => {
             return;
         }
         const roomId = userInfo.roomId;
+        const userName = userInfo.name;
         const roomState = gameRooms.get(roomId);
         if (!roomState) return;
-        console.log(`[Start Game ${roomId}] Request from ${socketId} (${userInfo.name}). Phase: ${roomState.phase}`);
+        console.log(`[Start Game ${roomId}] Request from ${socketId} (${userName}). Phase: ${roomState.phase}`);
 
         if (roomState.phase === 'waiting') {
             // ★★★ ゲーム開始条件チェック (より詳細なエラーメッセージ) ★★★
@@ -343,6 +343,10 @@ io.on('connection', (socket: Socket) => {
             // ★ 最新の公開状態を送信
             io.to(roomId).emit('phase change', GameLogic.getPublicRoomState(roomState));
             console.log(`[Start Game ${roomId}] Emitted phase change to ban with final stage/rule.`);
+
+            const message = `${userName}さんがゲームを開始しました。`;
+            io.to(roomId).emit('system message', { type: 'game_started', message: message });
+            console.log(`[System Message ${roomId}] Emitted: ${message}`);
         } else {
             console.log(`[Start Game ${roomId}] Denied: Not in waiting phase.`);
             socket.emit('action failed', { reason: 'ゲームは既に開始されているか、待機状態ではありません' });
@@ -592,10 +596,16 @@ io.on('connection', (socket: Socket) => {
     // --- ルームリセット ---
     socket.on('reset room', () => {
         const userInfo = connectedUsersGlobal.get(socketId);
-        if (!userInfo || !userInfo.roomId) return;
-        console.log(`[Reset Room ${userInfo.roomId}] Request from ${socketId} (${userInfo.name}).`);
-        GameLogic.resetRoom(userInfo.roomId);
-        // resetRoom 内で初期状態が emit されるはず
+        if (!userInfo || !userInfo.roomId || !userInfo.name) return; // ★ userInfo.name もチェック
+        const roomId = userInfo.roomId;
+        const userName = userInfo.name; // ★ 操作者名を取得
+        console.log(`[Reset Room ${roomId}] Request from ${socketId} (${userName}).`);
+
+        GameLogic.resetRoom(roomId); // resetRoom 内で初期状態が emit される
+
+        const message = `${userName}さんがルームをリセットしました。`;
+        io.to(roomId).emit('system message', { type: 'room_reset', message: message });
+        console.log(`[System Message ${roomId}] Emitted: ${message}`);
     });
 
 }); // End of io.on('connection')
