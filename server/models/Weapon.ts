@@ -28,20 +28,6 @@ export class WeaponModel extends Model { // 型引数なしでも可
   })
   declare name: string;
 
-  // ▼▼▼ selectedBy カラム削除 ▼▼▼
-  // @AllowNull(true)
-  // @Default(null)
-  // @Column({ type: DataType.STRING(5), })
-  // declare selectedBy: 'alpha' | 'bravo' | null;
-  // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
-
-  // ▼▼▼ bannedBy カラム削除 ▼▼▼
-  // @AllowNull(true)
-  // @Default('[]') // デフォルトは空のJSON配列文字列
-  // @Column({ type: DataType.JSON, })
-  // declare bannedBy: ('alpha' | 'bravo')[];
-  // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
-
   @CreatedAt
   @Column // createdAt カラム (Timestamps が true なら自動で追加されるが明示)
   declare createdAt: Date;

@@ -512,6 +512,53 @@ io.on('connection', (socket: Socket) => {
         }
     });
 
+    // --- ★ ランダム武器選択 ---
+    socket.on('select random weapon', () => { // 引数なし
+        const userInfo = connectedUsersGlobal.get(socketId);
+        if (!userInfo || !userInfo.roomId || !userInfo.team || userInfo.team === 'observer') {
+            console.log(`[Select Random Weapon] Invalid user state for ${socketId}.`);
+            // 必要なら 'action failed' を emit
+            return;
+        }
+
+        const roomId = userInfo.roomId;
+        const team = userInfo.team;
+        const roomState = gameRooms.get(roomId);
+        if (!roomState) {
+            console.log(`[Select Random Weapon ${roomId}] Room state not found.`);
+            socket.emit('action failed', { reason: 'ルーム状態が見つかりません' });
+            return;
+        }
+
+        console.log(`[Select Random Weapon ${roomId}] Req from ${socketId}(${team}). Phase: ${roomState.phase}, Turn: ${roomState.currentTurn}`);
+
+        // Pick フェーズかつ自分のターンかチェック
+        if (roomState.phase !== 'pick') {
+            socket.emit('action failed', { reason: '選択フェーズではありません' });
+            return;
+        }
+        if (roomState.currentTurn !== team) {
+            socket.emit('action failed', { reason: 'あなたのターンではありません' });
+            return;
+        }
+        // ★ ターン内で既にアクション済みでないかチェック
+        if (roomState.turnActionTaken[team]) {
+             socket.emit('action failed', { reason: 'このターンは既に選択済みです'});
+             return;
+        }
+
+        // GameLogic の selectRandomWeapon を呼び出す
+        try {
+            // selectRandomWeapon は内部で handleSuccessfulPick を呼び出し、
+            // ターン進行やイベント発行を行うので、ここでは呼び出すだけで良い
+            GameLogic.selectRandomWeapon(roomId, team);
+            console.log(`[Select Random Weapon ${roomId}] Called GameLogic.selectRandomWeapon successfully for ${team}.`);
+        } catch (error) {
+            console.error(`[Select Random Weapon ${roomId}] Error calling GameLogic.selectRandomWeapon:`, error);
+            socket.emit('action failed', { reason: 'ランダム選択処理中にエラーが発生しました' });
+        }
+    });
+
     // --- 切断処理 ---
     socket.on('disconnect', (reason: string) => {
         console.log(`[Disconnect] User disconnected: ${socketId}. Reason: ${reason}`);
