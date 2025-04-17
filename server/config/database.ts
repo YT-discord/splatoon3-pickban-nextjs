@@ -2,7 +2,6 @@ import { Sequelize } from 'sequelize-typescript';
 import "reflect-metadata";
 import { WeaponModel } from '../models/Weapon';
 import { MasterWeapon } from '../../common/types/game';
-// import { MasterWeapon } from '@common/types/game';
 import { CreationAttributes } from 'sequelize';
 
 export const sequelize = new Sequelize({

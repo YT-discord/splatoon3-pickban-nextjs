@@ -49,7 +49,7 @@ export const initializeRoomState = (roomId: string): RoomGameState => {
         weapons: initialWeapons,
         connectedUsers: existingRoomState?.connectedUsers ?? new Map<string, RoomUser>(),
         selectedStageId: 'random', 
-        selectedRuleId: 'random'  
+        selectedRuleId: 'random'
     };
     gameRooms.set(roomId, newState);
     return newState;

@@ -179,7 +179,6 @@ export default function Home() {
   // --- レンダリング ---
   console.log(`[renderContent] Rendering content for userStatus: ${userStatus}`); // ★ レンダリング時の状態確認
   const renderContent = () => {
-    // ... (switch case は変更なし) ...
     switch (userStatus) {
         case 'connecting': return <p className="text-center p-8">サーバーに接続中...</p>;
         case 'loading_master': return <p className="text-center p-8">基本データを読み込み中...</p>;
