@@ -20,7 +20,7 @@ export default function RootLayout({
     <html lang="ja">
       <body className={inter.className}>
         <Toaster
-          position="top-center" // 画面上部中央に表示
+          position="bottom-center" // 画面上部中央に表示
           gutter={8}
           toastOptions={{
             duration: 4000, // デフォルト表示時間 (4秒)
