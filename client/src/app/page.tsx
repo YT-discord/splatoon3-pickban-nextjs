@@ -19,6 +19,8 @@ export default function Home() {
   const [userName, setUserName] = useState<string>('');
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [masterWeapons, setMasterWeapons] = useState<MasterWeapon[] | null>(null);
+  const [mySocketId, setMySocketId] = useState<string | null>(null);
+  const [isConnected, setIsConnected] = useState(false);
 
   // ★ userStatus の変化を監視する useEffect
   useEffect(() => {
@@ -36,34 +38,54 @@ export default function Home() {
 
     const onConnect = () => {
       console.log('[Socket Event] connect received. Socket ID:', newSocket.id);
+      setIsConnected(true);
+
+      if (newSocket.id) {
+        console.log(`[Socket Event connect] Setting mySocketId to ${newSocket.id}`); // ★ ログ追加
+        setMySocketId(newSocket.id);
+      } else {
+        console.error('[Socket Event connect] Socket ID is undefined after connect!');
+        setConnectionError('接続エラー: Socket IDを取得できませんでした。');
+        setUserStatus('error');
+        setMySocketId(null);
+      }
+
       setConnectionError(null);
       // ★ setUserStatus の呼び出しをログで確認
-      console.log('[Socket Event connect] Current userStatus before setting:', userStatus);
-      if (userStatus !== 'in_room') {
-          console.log('[Socket Event connect] Setting userStatus to loading_master');
-          setUserStatus('loading_master');
-      } else {
-           console.log('[Socket Event connect] userStatus is already in_room, not changing.');
-      }
-    };
+      setUserStatus(prevStatus => {
+        if (prevStatus !== 'in_room') {
+            console.log('[Socket Event connect] Setting userStatus to loading_master');
+            return 'loading_master';
+        }
+        console.log('[Socket Event connect] userStatus is already in_room, not changing.');
+        return prevStatus; // 現在の status を維持
+    });
+  };
 
-    const onDisconnect = (reason: string) => {
-      console.log('[Socket Event] disconnect received. Reason:', reason);
-      console.log('[Socket Event disconnect] Setting userStatus to error');
-      setUserStatus('error');
-      setConnectionError('サーバーとの接続が切れました。ページを再読み込みしてください。');
-      setJoinedRoomId(null);
-      setUserName('');
-      setSocket(null);
-    };
+  const onDisconnect = (reason: string) => {
+    console.log('[Socket Event] disconnect received. Reason:', reason);
+    setIsConnected(false); // ★ 接続状態 state を false に
+    setMySocketId(null);
+    // サーバー側の問題かネットワークの問題かを区別するメッセージが良いかも
+    if (reason === 'io server disconnect') {
+        setConnectionError('サーバーによって切断されました。');
+    } else {
+        setConnectionError('サーバーとの接続が切れました。ページを再読み込みしてください。');
+    }
+    setUserStatus('error');
+    setJoinedRoomId(null);
+    setUserName('');
+    // setSocket(null); // Socketオブジェクト自体は維持しても良いかもしれない
+  };
 
-    const onConnectError = (err: Error) => {
-      console.error('[Socket Event] connect_error received:', err);
-      console.log('[Socket Event connect_error] Setting userStatus to error');
-      setUserStatus('error');
-      setConnectionError(`サーバーに接続できませんでした: ${err.message}`);
-      setSocket(null);
-    };
+  const onConnectError = (err: Error) => {
+    console.error('[Socket Event] connect_error received:', err);
+    setIsConnected(false); // ★ 接続状態 state を false に
+    setMySocketId(null);
+    setUserStatus('error');
+    setConnectionError(`サーバーに接続できませんでした: ${err.message}`);
+    // setSocket(null);
+  };
 
     console.log('[useEffect Socket.IO] Registering listeners...');
     newSocket.on('connect', onConnect);
@@ -76,15 +98,18 @@ export default function Home() {
       newSocket.off('disconnect', onDisconnect);
       newSocket.off('connect_error', onConnectError);
       newSocket.disconnect();
+      setIsConnected(false); // ★ クリーンアップ時も false に
+      setMySocketId(null);
+      setSocket(null); // ★ クリーンアップでは socket を null に戻す
       console.log('[useEffect Socket.IO] Cleanup: Socket disconnected.');
     };
   }, []); // ★ 依存配列は空のまま
 
   // --- マスター武器データ取得 ---
   useEffect(() => {
-    console.log(`[useEffect MasterData] Running effect. userStatus: ${userStatus}, socket connected: ${socket?.connected}, masterWeapons loaded: ${!!masterWeapons}`);
-    // ★ 条件を再確認
-    if (socket?.connected && userStatus === 'loading_master' && masterWeapons === null) {
+    console.log(`[useEffect MasterData] Running effect. isConnected: ${isConnected}, userStatus: ${userStatus}, masterWeapons loaded: ${!!masterWeapons}`);
+    // 条件: 接続済み(isConnected state が true) かつ userStatus が 'loading_master' かつ masterWeapons がまだ読み込まれていない
+    if (isConnected && userStatus === 'loading_master' && masterWeapons === null) {
       console.log('[useEffect MasterData] Conditions met, starting fetchMasterData...');
       const fetchMasterData = async () => {
         console.log('[fetchMasterData] Fetch function started.');
@@ -94,22 +119,14 @@ export default function Home() {
           console.log(`[fetchMasterData] Fetching from: ${apiUrl}`);
           const res = await fetch(apiUrl);
           console.log(`[fetchMasterData] Fetch response status: ${res.status}`);
-          if (!res.ok) {
-            const errorText = await res.text().catch(() => '');
-            const detail = errorText.length < 500 ? errorText : '(HTML response)';
-            console.error(`[fetchMasterData] Fetch failed! Status: ${res.status}, Detail: ${detail}`);
-            throw new Error(`マスター武器データの取得失敗 (Status: ${res.status}${detail ? ` - ${detail}` : ''})`);
-          }
+          if (!res.ok) { /* ... エラー処理 ... */ throw new Error(/* ... */); }
           const data: MasterWeapon[] = await res.json();
           console.log(`[fetchMasterData] Fetch successful. Data length: ${Array.isArray(data) ? data.length : 'Invalid Format'}`);
-          if (!Array.isArray(data)) {
-              console.error('[fetchMasterData] Invalid data format received.');
-              throw new Error("サーバーから受け取った武器データの形式が不正です。");
-          }
+          if (!Array.isArray(data)) { /* ... エラー処理 ... */ throw new Error(/* ... */); }
           console.log('[fetchMasterData] Calling setMasterWeapons...');
           setMasterWeapons(data);
           console.log('[fetchMasterData] Calling setUserStatus("selecting_room")...');
-          setUserStatus('selecting_room'); // ★ ここが実行されているか？
+          setUserStatus('selecting_room');
           console.log('[fetchMasterData] setUserStatus("selecting_room") called.');
         } catch (error: unknown) {
           console.error('[fetchMasterData] Error caught:', error);
@@ -125,10 +142,15 @@ export default function Home() {
       };
       fetchMasterData();
     } else {
-        console.log('[useEffect MasterData] Conditions not met or already loaded.');
-    }
+      console.log('[useEffect MasterData] Conditions NOT met. Details:', {
+          isConnected: isConnected,
+          isCorrectStatus: userStatus === 'loading_master',
+          masterWeaponsIsNull: masterWeapons === null,
+          userStatus: userStatus,
+      });
+  }
     // ★ 依存配列を再確認
-  }, [userStatus, masterWeapons, socket]);
+  }, [isConnected, userStatus, masterWeapons]);
 
   // --- ルーム参加成功/失敗ハンドラー (ログ追加) ---
   useEffect(() => {
@@ -165,14 +187,14 @@ export default function Home() {
 
   // ★★★ ルーム退出処理関数を追加 ★★★
   const handleLeaveRoom = useCallback(() => {
-      console.log(`[Home] Leaving room ${joinedRoomId}`);
-      setJoinedRoomId(null);
-      setUserStatus('selecting_room');
-      // userName はリセットしない方が、再入室時に便利かもしれない
-      // setUserName('');
-      // ★ サーバー側の leave room ハンドラで socket.leave() が呼ばれる
-      // ★ 必要であれば、ここで明示的に socket?.emit('leave room') を呼んでも良いが、
-      // ★ WeaponGrid 側で呼ぶ方が責務分担として自然かもしれない
+    console.log(`[Home] Leaving room ${joinedRoomId}`);
+    setJoinedRoomId(null);
+    setUserStatus('selecting_room');
+    // userName はリセットしない方が、再入室時に便利かもしれない
+    // setUserName('');
+    // ★ サーバー側の leave room ハンドラで socket.leave() が呼ばれる
+    // ★ 必要であれば、ここで明示的に socket?.emit('leave room') を呼んでも良いが、
+    // ★ WeaponGrid 側で呼ぶ方が責務分担として自然かもしれない
   }, [joinedRoomId]);
   // ★★★★★★★★★★★★★★★★★★★★★
 
@@ -180,16 +202,35 @@ export default function Home() {
   console.log(`[renderContent] Rendering content for userStatus: ${userStatus}`); // ★ レンダリング時の状態確認
   const renderContent = () => {
     switch (userStatus) {
-        case 'connecting': return <p className="text-center p-8">サーバーに接続中...</p>;
-        case 'loading_master': return <p className="text-center p-8">基本データを読み込み中...</p>;
-        case 'selecting_room':
-            if (!masterWeapons) { return <p className="text-center p-8 text-red-500">エラー: 武器データの読み込みに失敗しました。</p>; }
-            return <RoomSelector socket={socket} setUserNameForParent={handleSetUserName} />;
-        case 'in_room':
-            if (socket && joinedRoomId && masterWeapons && userName) { return <WeaponGrid socket={socket} roomId={joinedRoomId} masterWeapons={masterWeapons} userName={userName} onLeaveRoom={handleLeaveRoom} />; }
-            else { return <p className="text-center p-8 text-red-500">エラー: ルーム参加情報の準備ができていません (State: {userStatus})</p>; }
-        case 'error': return <p className="text-center p-8 text-red-500">エラー: {connectionError || '不明な接続エラー'} (ページを更新してください)</p>;
-        default: return null;
+      case 'connecting': return <p className="text-center p-8">サーバーに接続中...</p>;
+      case 'loading_master': return <p className="text-center p-8">基本データを読み込み中...</p>;
+      case 'selecting_room':
+        if (!masterWeapons) { return <p className="text-center p-8 text-red-500">エラー: 武器データの読み込みに失敗しました。</p>; }
+        return <RoomSelector socket={socket} setUserNameForParent={handleSetUserName} />;
+      case 'in_room':
+        // ★★★★★ 変更点: WeaponGrid に mySocketId を渡す ★★★★★
+        if (socket && joinedRoomId && masterWeapons && userName && mySocketId) { // mySocketId もチェック
+          return <WeaponGrid
+            socket={socket}
+            roomId={joinedRoomId}
+            masterWeapons={masterWeapons}
+            userName={userName}
+            myActualSocketId={mySocketId}
+            onLeaveRoom={handleLeaveRoom}
+          />;
+        } else {
+          // エラーメッセージを少し具体的に
+          const missing = [
+            !socket && "socket",
+            !joinedRoomId && "roomId",
+            !masterWeapons && "masterWeapons",
+            !userName && "userName",
+            !mySocketId && "mySocketId"
+          ].filter(Boolean).join(', ');
+          return <p className="text-center p-8 text-red-500">エラー: ルーム参加情報の準備ができていません (不足: {missing}) (State: {userStatus})</p>;
+        }
+      case 'error': return <p className="text-center p-8 text-red-500">エラー: {connectionError || '不明な接続エラー'} (ページを更新してください)</p>;
+      default: return null;
     }
   };
 

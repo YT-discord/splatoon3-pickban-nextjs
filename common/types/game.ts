@@ -63,6 +63,8 @@ export interface ConnectedUserInfo {
     teams?: Record<Team, { users: RoomUser[] }>;
     selectedStageId: number | 'random' | null;
     selectedRuleId: number | 'random' | null;
+    hostId: string | null;
+    lastActivityTime: number;
   }
 
   // クライアントに送信する公開ゲーム状態
@@ -72,6 +74,7 @@ export interface ConnectedUserInfo {
       pickCounts: Record<Team, number>;
       selectedStageId: number | 'random' | null;
       selectedRuleId: number | 'random' | null;
+      hostId: string | null;
   }
   // ★ クライアント側で使用する GameState 型
   export type GameState = PublicRoomGameState;

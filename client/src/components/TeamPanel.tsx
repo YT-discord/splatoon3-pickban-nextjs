@@ -9,7 +9,6 @@ import { RANDOM_CHOICE_ID } from './WeaponGrid';
 interface TeamPanelProps {
     team: Team; // 'alpha' または 'bravo'
     teamDisplayName: string; // 'アルファ' または 'ブラボー'
-    // teamColor: string; // ← 削除
     gameState: GameState;
     teamUsers: RoomUser[];
     pickedWeapons: DisplayWeapon[];
@@ -92,13 +91,18 @@ const TeamPanel: React.FC<TeamPanelProps> = ({
                  {/* ★ ヘッダー色、テキスト色を適用 */}
                 <h4 className={`font-semibold ${panelHeaderColor} mb-1`}>メンバー ({teamUsers.length})</h4>
                 <ul className="space-y-0.5 text-sm">
-                    {teamUsers.map(user => (
-                        // ★ テキスト色、ドット色を適用
-                        <li key={user.id} className={`flex items-center ${user.name === userName ? 'font-bold' : ''} ${panelTextColor}`}>
-                            <span className={`inline-block w-2 h-2 ${userDotColor} rounded-full mr-1.5`}></span>
-                            {user.name}
-                        </li>
-                    ))}
+                {teamUsers.map(user => {
+                        // ★★★★★ 追加: ホストかどうかの判定 ★★★★★
+                        const isHost = user.id === gameState.hostId;
+                        return (
+                            <li key={user.id} className={`flex items-center ${user.name === userName ? 'font-bold' : ''} ${panelTextColor}`}>
+                                <span className={`inline-block w-2 h-2 ${userDotColor} rounded-full mr-1.5`}></span>
+                                {user.name}
+                                {/* ★★★★★ 追加: ホスト表示 ★★★★★ */}
+                                {isHost && <span className="text-xs text-gray-500 ml-1">(ホスト)</span>}
+                            </li>
+                        );
+                    })}
                     {teamUsers.length === 0 && <li className="text-gray-500 italic text-xs">プレイヤーがいません</li>}
                 </ul>
             </div>

@@ -1,14 +1,15 @@
 import React from 'react';
 import Image from 'next/image';
 import type { GameState, Team, Stage, Rule } from '../../../common/types/game';
-// import { TOTAL_PICK_TURNS } from '../../../common/types/constants';
 import { RANDOM_CHOICE } from './WeaponGrid'; // WeaponGrid からインポート (後で場所を検討)
+import { BAN_PHASE_DURATION, PICK_PHASE_TURN_DURATION } from '../../../common/types/constants';
+import CircularTimer from './CircularTimer';
 
 interface GameHeaderProps {
     roomId: string;
     gameState: GameState | null; // GameState全体を渡すか、必要な情報だけにするか検討
-    userName: string; // 自分の名前 (表示には使わないが、操作ボタンのdisable判定等で将来使う可能性)
     myTeam: Team | 'observer'; // 自分のチーム
+    myActualSocketId: string;
     selectedStage: Stage | typeof RANDOM_CHOICE | null;
     selectedRule: Rule | typeof RANDOM_CHOICE | null;
     onLeaveRoom: () => void;
@@ -21,8 +22,9 @@ interface GameHeaderProps {
 const GameHeader: React.FC<GameHeaderProps> = ({
     roomId,
     gameState,
-    // userName,
+    //userName,
     myTeam,
+    myActualSocketId,
     selectedStage,
     selectedRule,
     onLeaveRoom,
@@ -35,6 +37,18 @@ const GameHeader: React.FC<GameHeaderProps> = ({
         return <div className="p-4 text-center">ヘッダー情報読み込み中...</div>;
     }
 
+    const amIHost = gameState.hostId !== null && gameState.hostId === myActualSocketId;
+
+    const getTimerDuration = (): number => {
+        if (gameState.phase === 'ban') {
+            return BAN_PHASE_DURATION;
+        } else if (gameState.phase === 'pick') {
+            return PICK_PHASE_TURN_DURATION;
+        }
+        return 0; // それ以外のフェーズでは 0
+    };
+    const timerDuration = getTimerDuration();
+
     return (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center p-4 bg-gray-100 rounded-lg shadow mb-6">
             {/* 左ブロック: ルーム情報 */}
@@ -44,14 +58,39 @@ const GameHeader: React.FC<GameHeaderProps> = ({
             </div>
 
             {/* 中央ブロック: ゲームステータス & ステージ/ルール */}
-            <div className="text-center space-y-1">
-                {(gameState.phase === 'ban' || gameState.phase === 'pick') && gameState.timeLeft != null && (
+            <div className="text-center space-y-1 flex flex-col items-center"> {/* ★ flex flex-col items-center 追加 */}
+                 {/* 参加者数 */}
+                 <p className="text-sm text-gray-600">({gameState.userCount}人参加)</p>
+
+                 {/* ★★★★★ 変更点: 残り時間表示を CircularTimer に変更 ★★★★★ */}
+                 {(gameState.phase === 'ban' || gameState.phase === 'pick') && gameState.timeLeft != null && timerDuration > 0 && (
+                    <div className="my-1"> {/* マージン調整用 */}
+                        <CircularTimer
+                            duration={timerDuration}
+                            currentTime={gameState.timeLeft}
+                            size={50} // サイズを少し小さめに設定 (任意)
+                            strokeWidth={5}
+                            // baseColor="#ddd" // 色はデフォルトを使用 or カスタマイズ
+                            // progressColor="#1976d2"
+                            // textColor="#111"
+                        />
+                    </div>
+                 )}
+                 {/* ★ 既存のテキスト表示は削除 */}
+                 {/*
+                 {(gameState.phase === 'ban' || gameState.phase === 'pick') && gameState.timeLeft != null && (
                     <p className="text-xl font-mono text-gray-800">残り時間: {gameState.timeLeft}秒</p>
-                )}
-                {(gameState.phase === 'ban' || gameState.phase === 'pick') && gameState.currentTurn && (
-                    <p className="text-sm text-gray-700">現在のターン: <span className={`font-bold ${gameState.currentTurn === 'alpha' ? 'text-blue-600' : 'text-red-600'}`}>{gameState.currentTurn}チーム</span></p>
-                )}
-                {gameState.phase === 'pick_complete' && (<p className="font-bold text-green-600 text-xl">PICK完了！</p>)}
+                 )}
+                 */}
+
+                 {/* 現在のターン */}
+                 {(gameState.phase === 'ban' || gameState.phase === 'pick') && gameState.currentTurn && (
+                     <p className="text-sm text-gray-700 mt-1"> {/* mt-1 追加 */}
+                        現在のターン: <span className={`font-bold ${gameState.currentTurn === 'alpha' ? 'text-blue-600' : 'text-red-600'}`}>{gameState.currentTurn}チーム</span>
+                     </p>
+                 )}
+                 {/* Pick完了 */}
+                 {gameState.phase === 'pick_complete' && (<p className="font-bold text-green-600 text-xl">PICK完了！</p>)}
                 {/* ステージ・ルール表示 */}
                 <div className="flex justify-center gap-4 mt-2">
                     {/* ステージ */}
@@ -99,11 +138,20 @@ const GameHeader: React.FC<GameHeaderProps> = ({
                 >
                     ルーム退出
                 </button>
-                {gameState.phase === 'waiting' && (
-                    <button onClick={onStartGame} disabled={myTeam === 'observer'} className="px-6 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 disabled:opacity-50 text-sm w-full md:w-auto">ゲーム開始</button>
-                )}
+                <button
+                    onClick={onStartGame}
+                    // disabled 条件: (ホストでない または 待機中でない)
+                    disabled={!amIHost || gameState.phase !== 'waiting'}
+                    className={`px-6 py-2 rounded-md text-sm w-full md:w-auto transition-colors
+                        ${(amIHost && gameState.phase === 'waiting')
+                            ? 'bg-green-500 text-white hover:bg-green-600' // ホストかつ待機中なら緑
+                            : 'bg-gray-300 text-gray-500 cursor-not-allowed' // それ以外はグレーアウト
+                        }`}
+                    title={!amIHost ? 'ホストのみ開始できます' : (gameState.phase !== 'waiting' ? '待機中のみ開始できます' : '')}
+                 >                    ゲーム開始
+                 </button>
                 {(gameState.phase !== 'waiting') && (
-                    <button onClick={onResetGame} disabled={myTeam === 'observer'} className="px-4 py-2 bg-yellow-500 text-white rounded-md hover:bg-yellow-600 disabled:opacity-50 text-sm w-full md:w-auto">リセット</button>
+                     <button onClick={onResetGame} disabled={myTeam === 'observer' || !amIHost} className="..." title={!amIHost ? 'ホストのみリセットできます' : ''}>リセット</button>
                 )}
             </div>
         </div>

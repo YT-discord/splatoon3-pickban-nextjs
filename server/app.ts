@@ -187,6 +187,20 @@ io.on('connection', (socket: Socket) => {
         roomState.connectedUsers.set(socketId, roomUser);
         console.log(`[Join Room] User ${socketId} (${trimmedName}) joined room ${roomId}. Users: ${roomState.connectedUsers.size}`);
 
+        // ホスト決定ロジック
+        if (roomState.hostId === null) {
+            // まだホストがいなければ、この参加者をホストにする
+            roomState.hostId = socketId;
+            console.log(`[Host Assignment ${roomId}] First user joined. ${trimmedName} (${socketId}) is now the host.`);
+            // ★ ホスト決定を通知 (任意だが、最初のホストが決まったことを知らせる)
+             io.to(roomId).emit('host changed', { hostId: socketId, hostName: trimmedName });
+             // ★ 状態更新も通知 (hostId が設定されたため)
+             // この後の room state update に含まれるので、ここでは不要かも
+        } else {
+            // 既にホストがいる場合は何もしない
+            console.log(`[Host Assignment ${roomId}] Host already exists: ${roomState.hostId}`);
+        }
+
         // 参加成功と状態通知
         socket.emit('join room success', { roomId });
         // // ★ 最新の公開状態と武器状態を送信
@@ -206,13 +220,16 @@ io.on('connection', (socket: Socket) => {
             const roomId = userInfo.roomId;
             const teamLeft = userInfo.team;
             const userName = userInfo.name;
+            const leavingUserId = socketId;
             console.log(`[Leave Room ${roomId}] User ${socketId} (${userName}) is leaving.`);
 
             socket.leave(roomId); // Socket.IO のルームから退出
             const roomState = gameRooms.get(roomId);
             let userWasInRoom = false;
+            let wasHost = false;
             if (roomState) {
-                userWasInRoom = roomState.connectedUsers.delete(socketId); // ルームの状態から削除
+                wasHost = roomState.hostId === leavingUserId; // ★ 退出者がホストか確認
+                userWasInRoom = roomState.connectedUsers.delete(leavingUserId);
             }
             userInfo.roomId = null; // グローバル情報のルームIDをクリア
             userInfo.team = undefined; // チーム情報もクリア (任意)
@@ -220,7 +237,13 @@ io.on('connection', (socket: Socket) => {
             if (userWasInRoom && roomState) { // ルームに実際に存在した場合のみ通知
                 // 他のユーザーに通知
                 io.to(roomId).emit('user left', { userId: socketId, name: userName, team: teamLeft });
-                io.to(roomId).emit('room state update', GameLogic.getPublicRoomState(roomState));
+                if (wasHost) {
+                    console.log(`[Host Left ${roomId}] Host ${userName} (${leavingUserId}) left. Electing new host...`);
+                    GameLogic.electNewHost(roomId); // 新しいホストを選出 (内部で通知も行う)
+                } else {
+                    // ホスト以外の退出なら、通常の参加者数更新のみ通知
+                     io.to(roomId).emit('room state update', GameLogic.getPublicRoomState(roomState));
+                }
                 // ★ ゲーム進行中にプレイヤーが抜けた場合の処理 (disconnect と同様)
                 if ((teamLeft === 'alpha' || teamLeft === 'bravo') && (roomState.phase === 'pick' || roomState.phase === 'ban')) {
                     // ... (disconnect 時と同様のロジック) ...
@@ -294,10 +317,17 @@ io.on('connection', (socket: Socket) => {
         const userName = userInfo.name;
         const roomState = gameRooms.get(roomId);
         if (!roomState) return;
+
+        if (roomState.hostId !== socketId) {
+            console.log(`[Start Game ${roomId}] Denied: User ${userName} (${socketId}) is not the host (${roomState.hostId}).`);
+            socket.emit('action failed', { reason: 'ホストのみがゲームを開始できます' });
+            return;
+        }
+
         console.log(`[Start Game ${roomId}] Request from ${socketId} (${userName}). Phase: ${roomState.phase}`);
 
         if (roomState.phase === 'waiting') {
-            // ★★★ ゲーム開始条件チェック (より詳細なエラーメッセージ) ★★★
+            // ★★★ ゲーム開始条件チェック ★★★
             const alphaPlayers = Array.from(roomState.connectedUsers.values()).filter(u => u.team === 'alpha');
             const bravoPlayers = Array.from(roomState.connectedUsers.values()).filter(u => u.team === 'bravo');
 
@@ -569,6 +599,9 @@ io.on('connection', (socket: Socket) => {
         const userInfo = connectedUsersGlobal.get(socketId);
         if (userInfo) {
             const roomId = userInfo.roomId; // ★ roomId を取得
+            const leavingUserId = socketId; // ★ 切断したユーザーのID
+            const userName = userInfo.name; // ★ 名前も取得しておく
+            const teamLeft = userInfo.team; // ★ チームも取得
             connectedUsersGlobal.delete(socketId); // グローバルから削除
             if (roomId) {
                 const teamLeft = userInfo.team;
@@ -576,10 +609,19 @@ io.on('connection', (socket: Socket) => {
                 socket.leave(roomId);
                 const roomState = gameRooms.get(roomId);
                 let userWasInRoom = false;
-                if (roomState) { userWasInRoom = roomState.connectedUsers.delete(socketId); }
+                let wasHost = false; 
+                if (roomState) {
+                    wasHost = roomState.hostId === leavingUserId;
+                    userWasInRoom = roomState.connectedUsers.delete(socketId); }
                 if (userWasInRoom && roomState) {
-                    io.to(roomId).emit('user left', { userId: socketId, name: userName, team: teamLeft });
-                    io.to(roomId).emit('room state update', GameLogic.getPublicRoomState(roomState));
+                    io.to(roomId).emit('user left', { userId: leavingUserId, name: userName, team: teamLeft }); // 先にユーザー退出を通知
+                    if (wasHost) {
+                         console.log(`[Host Disconnected ${roomId}] Host ${userName} (${leavingUserId}) disconnected. Electing new host...`);
+                         GameLogic.electNewHost(roomId); // 新しいホストを選出 (内部で通知)
+                    } else {
+                         // ホスト以外なら状態更新のみ
+                         io.to(roomId).emit('room state update', GameLogic.getPublicRoomState(roomState));
+                    }
                     if ((teamLeft === 'alpha' || teamLeft === 'bravo') && (roomState.phase === 'pick' || roomState.phase === 'ban')) {
                         // ... (ゲーム進行中の離脱処理) ...
                         const remainingPlayersInTeam = Array.from(roomState.connectedUsers.values()).filter(u => u.team === teamLeft);
@@ -596,16 +638,29 @@ io.on('connection', (socket: Socket) => {
     // --- ルームリセット ---
     socket.on('reset room', () => {
         const userInfo = connectedUsersGlobal.get(socketId);
-        if (!userInfo || !userInfo.roomId || !userInfo.name) return; // ★ userInfo.name もチェック
+        if (!userInfo || !userInfo.roomId || !userInfo.name) return;
         const roomId = userInfo.roomId;
-        const userName = userInfo.name; // ★ 操作者名を取得
-        console.log(`[Reset Room ${roomId}] Request from ${socketId} (${userName}).`);
+        const userName = userInfo.name;
+        const roomState = gameRooms.get(roomId);
+        if (!roomState) return;
 
-        GameLogic.resetRoom(roomId); // resetRoom 内で初期状態が emit される
+        if (roomState.hostId !== socketId) {
+             console.log(`[Reset Room ${roomId}] Denied: User ${userName} (${socketId}) is not the host (${roomState.hostId}).`);
+             socket.emit('action failed', { reason: 'ホストのみがルームをリセットできます' });
+             return;
+        }
 
+        console.log(`[Reset Room ${roomId}] Request from host ${userName} (${socketId}).`);
+        // ★ resetRoom を呼び出す (triggeredBy を 'user' として渡す)
+        GameLogic.resetRoom(roomId, 'user');
+
+        // ★★★★★ 変更点: ユーザー操作によるリセット通知をここに移動 ★★★★★
+        // resetRoom 内ではなく、操作をトリガーした app.ts 側で通知する
         const message = `${userName}さんがルームをリセットしました。`;
         io.to(roomId).emit('system message', { type: 'room_reset', message: message });
-        console.log(`[System Message ${roomId}] Emitted: ${message}`);
+        console.log(`[System Message ${roomId}] Emitted: ${message}`); // ログも移動
+
+        // GameLogic.resetRoom 内で状態通知は行われるので、ここでは不要
     });
 
 }); // End of io.on('connection')
@@ -644,6 +699,9 @@ sequelize
             GameLogic.initializeRoomState(roomId);
         });
         console.log('Game rooms initialized.');
+
+        console.log(`Starting room timeout check interval (${GameLogic.ROOM_CHECK_INTERVAL / 60000} minutes)...`);
+        setInterval(GameLogic.checkRoomTimeouts, GameLogic.ROOM_CHECK_INTERVAL);
 
         // サーバーリッスン開始
         server.listen(3001, () => {

@@ -31,12 +31,18 @@ const ObserverPanel: React.FC<ObserverPanelProps> = ({
                   </button>
              </div>
              <ul className="space-y-0.5 text-sm">
-                 {observers.map(user => (
-                     <li key={user.id} className={`flex items-center ${user.name === userName ? 'font-bold' : ''} text-gray-700`}>
-                         <span className="inline-block w-2 h-2 bg-gray-500 rounded-full mr-1.5"></span>
-                         {user.name}
-                     </li>
-                 ))}
+             {observers.map(user => {
+                     // ★★★★★ 追加: ホストかどうかの判定 ★★★★★
+                     const isHost = user.id === gameState.hostId;
+                     return (
+                         <li key={user.id} className={`flex items-center ${user.name === userName ? 'font-bold' : ''} text-gray-700`}>
+                             <span className="inline-block w-2 h-2 bg-gray-500 rounded-full mr-1.5"></span>
+                             {user.name}
+                             {/* ★★★★★ 追加: ホスト表示 ★★★★★ */}
+                             {isHost && <span className="text-xs text-gray-500 ml-1">(ホスト)</span>}
+                         </li>
+                     );
+                 })}
                   {observers.length === 0 && <li className="text-gray-500 italic text-xs">観戦者はいません</li>}
              </ul>
         </div>

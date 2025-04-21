@@ -3,6 +3,10 @@ import { Server } from 'socket.io';
 import { RoomGameState, RoomUser, RoomWeaponState, PublicRoomGameState, MasterWeapon, Team } from '../common/types/game';
 import { MAX_BANS_PER_TEAM, MAX_PICKS_PER_TEAM, TOTAL_PICK_TURNS, BAN_PHASE_DURATION, PICK_PHASE_TURN_DURATION, USE_FAST_TIMER, FAST_TIMER_MULTIPLIER } from '../common/types/constants';
 
+// タイムアウト関連の定数
+export const ROOM_TIMEOUT_DURATION = 30 * 60 * 1000; // 30分 (ミリ秒)
+export const ROOM_CHECK_INTERVAL = 5 * 60 * 1000; // 5分 (ミリ秒)
+
 // --- モジュールスコープ変数 ---
 let io: Server;
 let gameRooms: Map<string, RoomGameState>;
@@ -23,8 +27,8 @@ export const initializeGameLogic = (
 // == ルーム状態操作 & ゲームロジック関数群 ==
 // =============================================
 
-export const initializeRoomState = (roomId: string): RoomGameState => {
-    console.log(`[Game Logic] Initializing state for room: ${roomId}`);
+export const initializeRoomState = (roomId: string, existingUsers?: Map<string, RoomUser>): RoomGameState => {
+    console.log(`[Game Logic] Initializing basic room state for: ${roomId}`);
     const existingRoomState = gameRooms.get(roomId);
     if (existingRoomState?.timer) {
         clearInterval(existingRoomState.timer);
@@ -35,6 +39,12 @@ export const initializeRoomState = (roomId: string): RoomGameState => {
         selectedBy: null,
         bannedBy: [],
     }));
+
+    // ★ 既存ユーザーを引き継ぐ場合、ホストも引き継ぐか検討が必要
+    //   今回はリセット時は全員 observer になる運用なので、新規Mapで良い
+    const initialUsers = new Map<string, RoomUser>(); // 新規作成
+    // もし既存ユーザーを引き継ぎたい場合はコメントアウトを外す
+    // const initialUsers = existingRoomState?.connectedUsers ?? new Map<string, RoomUser>();
 
     const newState: RoomGameState = {
         roomId: roomId,
@@ -47,35 +57,84 @@ export const initializeRoomState = (roomId: string): RoomGameState => {
         banPhaseState: { bans: { alpha: 0, bravo: 0 }, maxBansPerTeam: MAX_BANS_PER_TEAM },
         pickPhaseState: { picks: { alpha: 0, bravo: 0 }, maxPicksPerTeam: MAX_PICKS_PER_TEAM },
         weapons: initialWeapons,
-        connectedUsers: existingRoomState?.connectedUsers ?? new Map<string, RoomUser>(),
+        connectedUsers: existingUsers ? new Map(existingUsers) : new Map<string, RoomUser>(),
         selectedStageId: 'random', 
-        selectedRuleId: 'random'
+        selectedRuleId: 'random',
+        hostId: null,
+        lastActivityTime: Date.now()
     };
     gameRooms.set(roomId, newState);
     return newState;
 };
 
-export const resetRoom = (roomId: string): void => {
-    console.log(`[Game Logic] Resetting room: ${roomId}`);
-    const roomState = initializeRoomState(roomId); // 状態を初期化
-    if (roomState) {
-        // 1. リセットされた初期状態を通知
-        io.to(roomId).emit('initial state', getPublicRoomState(roomState));
-        io.to(roomId).emit('initial weapons', roomState.weapons);
+export const electNewHost = (roomId: string): void => {
+    const roomState = gameRooms.get(roomId);
+    if (!roomState) return;
 
-        // 2. ユーザーのチームを observer に戻す通知
-        roomState.connectedUsers.forEach(user => {
-             user.team = 'observer';
-             io.to(roomId).emit('user updated', user);
-        });
-
-        // 3. リセット通知イベントを発行
-        io.to(roomId).emit('room reset notification', { message: `ルーム "${roomId}" がリセットされました。` });
-
-        console.log(`[Game Logic] Room ${roomId} reset and notified all events.`);
+    const currentUsers = Array.from(roomState.connectedUsers.values()); // Map からユーザー配列を取得
+    if (currentUsers.length > 0) {
+        // 単純に配列の最初のユーザーを新しいホストにする
+        const newHost = currentUsers[0];
+        roomState.hostId = newHost.id;
+        console.log(`[Host Election ${roomId}] New host elected: ${newHost.name} (${newHost.id})`);
+        // ★ ホスト変更をクライアントに通知 (新しいイベント)
+        io.to(roomId).emit('host changed', { hostId: newHost.id, hostName: newHost.name });
+        // ★ 状態更新も通知 (hostId が変わったため)
+        io.to(roomId).emit('room state update', getPublicRoomState(roomState));
     } else {
-        console.error(`[Game Logic] Failed to reset room ${roomId}, state is null after init?`);
+        // 誰もいなければホストは null
+        roomState.hostId = null;
+        console.log(`[Host Election ${roomId}] No users left, host set to null.`);
+         // ★ ホスト変更をクライアントに通知
+        io.to(roomId).emit('host changed', { hostId: null, hostName: null });
+        io.to(roomId).emit('room state update', getPublicRoomState(roomState));
     }
+};
+
+export const resetRoom = (roomId: string, triggeredBy?: 'user' | 'timeout' | 'system'): void => {
+    console.log(`[Game Logic] Resetting room: ${roomId}` + (triggeredBy ? ` (Triggered by: ${triggeredBy})` : ''));
+    const currentRoomState = gameRooms.get(roomId);
+    if (!currentRoomState) {
+        console.error(`[Reset Room ${roomId}] Room not found.`);
+        return; // ルームが存在しなければ何もしない
+    }
+
+    // 1. 現在のユーザー情報を保持
+    const currentUsersMap = new Map(currentRoomState.connectedUsers); // コピーを作成
+
+    // 2. 新しい基本状態を作成 (ユーザー情報はまだ空)
+    const newState = initializeRoomState(roomId); // 内部でタイマーはクリアされる
+
+    // 3. 保持していたユーザー情報を新しい状態にセットし、チームをリセット
+    newState.connectedUsers = currentUsersMap;
+    newState.connectedUsers.forEach(user => {
+        user.team = 'observer'; // 全員観戦者に
+    });
+
+    // 4. 新しい状態を gameRooms に保存
+    gameRooms.set(roomId, newState);
+
+    // 5. 新しいホストを選出 (ユーザー情報がセットされた後に行う)
+    electNewHost(roomId); // これで newState.hostId が設定される
+
+    // 6. クライアントに通知
+    //    - 新しいゲーム状態 (hostId含む)
+    //    - 新しい武器状態 (初期化済み)
+    //    - 各ユーザーの更新情報 (チームが observer になったこと)
+    const publicState = getPublicRoomState(newState);
+    io.to(roomId).emit('initial state', publicState); // initial state で phase や hostId を伝える
+    io.to(roomId).emit('initial weapons', newState.weapons);
+    newState.connectedUsers.forEach(user => {
+         io.to(roomId).emit('user updated', user); // チーム変更を通知
+    });
+
+    // タイムアウト or システムによるリセット時の通知
+    if (triggeredBy === 'timeout') {
+        io.to(roomId).emit('system message', { type: 'room_timeout', message: `ルーム "${roomId}" は一定時間操作がなかったためリセットされました。` });
+    }
+    // ユーザー操作によるリセット通知は app.ts 側で行う
+
+    console.log(`[Game Logic] Room ${roomId} reset. Users: ${newState.connectedUsers.size}, New Host: ${newState.hostId}`);
 };
 
 /**
@@ -258,7 +317,7 @@ export const switchPickTurn = (roomId: string): void => {
         roomState.phase = 'pick_complete';
         roomState.currentTurn = null;
         roomState.timeLeft = 0;
-        // ★★★ 完了状態を通知 ★★★
+        roomState.lastActivityTime = Date.now();
         io.to(roomId).emit('phase change', getPublicRoomState(roomState));
         return;
     }
@@ -317,4 +376,25 @@ export const endBanPhase = (roomId: string): void => {
     // Pick フェーズへの移行処理は switchPickTurn に任せる
     console.log(`[Ban End ${roomId}] Calling switchPickTurn() to start the first pick turn.`);
     switchPickTurn(roomId);
+};
+
+export const checkRoomTimeouts = (): void => {
+    const now = Date.now();
+    // console.log(`[Timeout Check] Running check at ${new Date(now).toLocaleTimeString()}`);
+    let resetCount = 0;
+
+    gameRooms.forEach((roomState, roomId) => {
+        if (roomState.phase === 'waiting' || roomState.phase === 'pick_complete') {
+            const timeSinceLastActivity = now - roomState.lastActivityTime;
+            if (timeSinceLastActivity > ROOM_TIMEOUT_DURATION) {
+                console.log(`[Timeout Check ${roomId}] Room timed out (Phase: ${roomState.phase}, Elapsed: ${Math.round(timeSinceLastActivity / 60000)}min). Resetting...`);
+                resetRoom(roomId, 'timeout');
+                resetCount++;
+            }
+        }
+    });
+
+    if (resetCount > 0) {
+        console.log(`[Timeout Check] Finished. Reset ${resetCount} room(s).`);
+    }
 };

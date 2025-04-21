@@ -24,6 +24,7 @@ interface WeaponGridProps {
     roomId: string;
     masterWeapons: MasterWeapon[];
     userName: string;
+    myActualSocketId: string;
     onLeaveRoom: () => void;
 }
 
@@ -36,7 +37,7 @@ export interface DisplayWeapon extends MasterWeapon {
 
 export type WeaponAttribute = typeof WEAPON_ATTRIBUTES[number];
 
-export default function WeaponGrid({ socket, roomId, masterWeapons, userName, onLeaveRoom }: WeaponGridProps) {
+export default function WeaponGrid({ socket, roomId, masterWeapons, userName, myActualSocketId, onLeaveRoom }: WeaponGridProps) {
     const [gameState, setGameState] = useState<GameState | null>(null);
     const [weaponStates, setWeaponStates] = useState<Record<number, RoomWeaponState>>({});
     const [myTeam, setMyTeam] = useState<Team | 'observer'>('observer');
@@ -224,6 +225,13 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, on
             }
         };
 
+        const handleHostChanged = (data: { hostId: string | null; hostName: string | null }) => {
+            console.log(`[Host Changed] New host: ${data.hostName ?? 'None'} (${data.hostId ?? 'null'})`);
+            // gameState に hostId が含まれているので、基本的には room state update で UI は更新されるはず。
+            // 必要であれば、ここで別途 state を更新したり、トースト通知を出したりする。
+            // 例: toast(`ホストが ${data.hostName ?? '不在'} になりました。`);
+        };
+
         // --- リスナー登録 ---
         socket.on('initial state', handleInitialState);
         socket.on('initial weapons', handleInitialWeapons);
@@ -238,6 +246,7 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, on
         socket.on('user updated', handleUserUpdated);
         socket.on('room reset notification', handleRoomResetNotification);
         socket.on('system message', handleSystemMessage);
+        socket.on('host changed', handleHostChanged);
 
         // 初期データ要求イベントを送信
         console.log(`[WeaponGrid ${roomId}] Requesting initial data...`);
@@ -261,6 +270,7 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, on
             socket.off('user updated', handleUserUpdated);
             socket.off('room reset notification', handleRoomResetNotification);
             socket.off('system message', handleSystemMessage);
+            socket.off('host changed', handleHostChanged);
         };
     }, [socket, roomId, userName, masterWeapons, loadingWeaponId]);
 
@@ -431,7 +441,8 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, on
             <GameHeader
                 roomId={roomId}
                 gameState={gameState}
-                userName={userName}
+                // userName={userName}
+                myActualSocketId={myActualSocketId}
                 myTeam={myTeam}
                 selectedStage={selectedStage}
                 selectedRule={selectedRule}
