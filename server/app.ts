@@ -43,6 +43,7 @@ app.get('/api/v1/rooms', (req: Request, res: Response) => { // ★ Request, Resp
         const roomState = gameRooms.get(roomId);
         return {
             roomId: roomId,
+            roomName: roomState ? roomState.roomName : roomId,
             userCount: roomState ? roomState.connectedUsers.size : 0,
             phase: roomState ? roomState.phase : 'waiting',
             maxUsers: MAX_USERS_PER_ROOM,
@@ -211,6 +212,37 @@ io.on('connection', (socket: Socket) => {
         // ★ 他のユーザーに参加を通知 & 全体の状態更新を通知
         socket.to(roomId).emit('user joined', roomUser);
         io.to(roomId).emit('room state update', GameLogic.getPublicRoomState(roomState));
+    });
+
+    socket.on('change room name', (data: { newName: string }) => {
+        const userInfo = connectedUsersGlobal.get(socketId);
+        if (!userInfo || !userInfo.roomId || !userInfo.name) {
+            console.log(`[Change Room Name] Invalid user state for ${socketId}.`);
+            return; // エラー通知はしない (UI側で制御想定)
+        }
+        const roomId = userInfo.roomId;
+        const roomState = gameRooms.get(roomId);
+
+        // データとホスト権限チェック
+        if (!data || typeof data.newName !== 'string') {
+             console.log(`[Change Room Name ${roomId}] Invalid data received from ${socketId}:`, data);
+             socket.emit('action failed', { reason: '無効なリクエストデータです' });
+             return;
+        }
+        if (!roomState || roomState.hostId !== socketId) {
+            console.log(`[Change Room Name ${roomId}] Denied: User ${userInfo.name} (${socketId}) is not the host.`);
+            socket.emit('action failed', { reason: 'ホストのみがルーム名を変更できます' });
+            return;
+        }
+
+        console.log(`[Change Room Name ${roomId}] Request from host ${userInfo.name} (${socketId}) to change name to "${data.newName}"`);
+        const success = GameLogic.changeRoomName(roomId, data.newName);
+
+        if (!success) {
+            // gameLogic 側でバリデーション失敗など
+            socket.emit('action failed', { reason: 'ルーム名の変更に失敗しました (無効な名前など)' });
+        }
+        // 成功した場合、gameLogic 内で room state update が emit される
     });
 
     // --- ★ ルーム退出処理 ---

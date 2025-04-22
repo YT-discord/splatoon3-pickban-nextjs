@@ -90,6 +90,29 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
     const bravoTeamUsers = useMemo(() => roomUsers.filter(u => u.team === 'bravo'), [roomUsers]);
     const observers = useMemo(() => roomUsers.filter(u => u.team === 'observer' || !u.team), [roomUsers]); // チーム未定も観戦扱い
 
+    const { alphaPicks, bravoPicks, alphaBans, bravoBans } = useMemo(() => {
+        // フィルター前の全マスター武器を対象にする
+        const allWeaponsWithState = masterWeapons.map(master => {
+            const state = weaponStates[master.id] || { id: master.id, selectedBy: null, bannedBy: [] };
+            return {
+                ...master,
+                selectedBy: state.selectedBy,
+                bannedBy: state.bannedBy,
+                imageUrl: `/images/weapons/${encodeURIComponent(master.name)}.png`,
+                // isLoading はここでは不要だが、DisplayWeapon 型に合わせるため false を入れておく
+                isLoading: false, // または loadingWeaponId === master.id
+            } as DisplayWeapon; // 型アサーション
+        });
+
+        // 全武器の状態から Pick/Ban を抽出
+        const picksAlpha = allWeaponsWithState.filter(w => w.selectedBy === 'alpha');
+        const picksBravo = allWeaponsWithState.filter(w => w.selectedBy === 'bravo');
+        const bansAlpha = allWeaponsWithState.filter(w => w.bannedBy.includes('alpha'));
+        const bansBravo = allWeaponsWithState.filter(w => w.bannedBy.includes('bravo'));
+
+        return { alphaPicks: picksAlpha, bravoPicks: picksBravo, alphaBans: bansAlpha, bravoBans: bansBravo };
+    }, [masterWeapons, weaponStates]);
+
     // --- エラーハンドラー ---
     const handleError = useCallback((message: string) => {
         console.error('Handled Error:', message);
@@ -387,18 +410,6 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
         }
     }, [socket, roomId]);
 
-    // --- 表示用データの準備 (useMemoで最適化) ---
-    const { alphaPicks, bravoPicks, alphaBans, bravoBans } = useMemo(() => {
-        // displayWeapons はフィルターとソートが適用されたリスト
-        const alphaPicks = displayWeapons.filter(w => w.selectedBy === 'alpha');
-        const bravoPicks = displayWeapons.filter(w => w.selectedBy === 'bravo');
-        // bannedWeapons はフィルター前の全武器から計算する方が正確かもしれないが、
-        // TeamPanel では表示されている武器の BAN 状態を見たいので displayWeapons からで良い
-        const alphaBans = displayWeapons.filter(w => w.bannedBy.includes('alpha'));
-        const bravoBans = displayWeapons.filter(w => w.bannedBy.includes('bravo'));
-        return { alphaPicks, bravoPicks, alphaBans, bravoBans };
-    }, [displayWeapons]); // displayWeapons が変更されたら再計算
-
     const handleLeaveButtonClick = useCallback(() => {
         if (socket && confirm(`${roomId} から退出しますか？`)) {
             console.log(`[WeaponGrid ${roomId}] Emitting 'leave room'`);
@@ -443,6 +454,7 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
                 gameState={gameState}
                 // userName={userName}
                 myActualSocketId={myActualSocketId}
+                socket={socket}
                 myTeam={myTeam}
                 selectedStage={selectedStage}
                 selectedRule={selectedRule}

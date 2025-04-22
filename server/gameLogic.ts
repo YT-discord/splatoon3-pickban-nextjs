@@ -48,6 +48,7 @@ export const initializeRoomState = (roomId: string, existingUsers?: Map<string, 
 
     const newState: RoomGameState = {
         roomId: roomId,
+        roomName: roomId,
         phase: 'waiting',
         timeLeft: 0,
         currentTurn: null,
@@ -135,6 +136,30 @@ export const resetRoom = (roomId: string, triggeredBy?: 'user' | 'timeout' | 'sy
     // ユーザー操作によるリセット通知は app.ts 側で行う
 
     console.log(`[Game Logic] Room ${roomId} reset. Users: ${newState.connectedUsers.size}, New Host: ${newState.hostId}`);
+};
+
+export const changeRoomName = (roomId: string, newName: string): boolean => {
+    const roomState = gameRooms.get(roomId);
+    if (!roomState) {
+        console.error(`[Change Room Name ${roomId}] Room not found.`);
+        return false;
+    }
+
+    const trimmedName = newName.trim();
+    // 簡単なバリデーション (空でないか、長すぎないか等)
+    if (!trimmedName || trimmedName.length === 0 || trimmedName.length > 50) { // 50文字制限 (任意)
+        console.warn(`[Change Room Name ${roomId}] Invalid new name: "${trimmedName}"`);
+        return false;
+    }
+
+    roomState.roomName = trimmedName;
+    roomState.lastActivityTime = Date.now(); // 名前変更もアクティビティとみなす
+    console.log(`[Change Room Name ${roomId}] Name changed to "${trimmedName}". Last activity updated.`);
+
+    // 変更をルーム全員に通知 (room state update で新しい名前が伝わる)
+    io.to(roomId).emit('room state update', getPublicRoomState(roomState));
+
+    return true;
 };
 
 /**

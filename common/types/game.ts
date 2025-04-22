@@ -50,6 +50,7 @@ export interface ConnectedUserInfo {
   // ルーム全体のゲーム状態 (gameLogic.ts で使用)
   export interface RoomGameState {
     roomId: string;
+    roomName: string;
     phase: 'waiting' | 'ban' | 'pick' | 'pick_complete';
     timeLeft: number;
     currentTurn: Team | null;
@@ -69,6 +70,7 @@ export interface ConnectedUserInfo {
 
   // クライアントに送信する公開ゲーム状態
   export interface PublicRoomGameState extends Omit<RoomGameState, | 'connectedUsers' | 'weapons' | 'timer' | 'turnActionTaken' | 'teams'> {
+      roomName: string; 
       userCount: number;
       banCounts: Record<Team, number>;
       pickCounts: Record<Team, number>;

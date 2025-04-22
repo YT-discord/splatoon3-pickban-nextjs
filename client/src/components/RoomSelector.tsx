@@ -7,6 +7,7 @@ import { Socket } from 'socket.io-client';
 // ルーム情報の型定義
 interface RoomInfo {
   roomId: string;
+  roomName: string;
   userCount: number;
   phase: string;
   maxUsers: number;
@@ -17,6 +18,8 @@ interface RoomSelectorProps {
   socket: Socket | null;
   setUserNameForParent: (name: string) => void;
 }
+
+
 
 export default function RoomSelector({ socket, setUserNameForParent }: RoomSelectorProps) {
   // --- State 定義 ---
@@ -43,7 +46,7 @@ export default function RoomSelector({ socket, setUserNameForParent }: RoomSelec
         const res = await fetch(apiUrl); // ★ 組み立てた URL で fetch
 
         if (!res.ok) {
-          const errorText = await res.text().catch(()=>'');
+          const errorText = await res.text().catch(() => '');
           // ★ 404 等のエラーメッセージを調整
           const detail = errorText.length < 500 ? errorText : '(HTML response)';
           throw new Error(`ルームリストの取得に失敗 (Status: ${res.status}${detail ? ` - ${detail}` : ''})`);
@@ -51,16 +54,16 @@ export default function RoomSelector({ socket, setUserNameForParent }: RoomSelec
         const data: RoomInfo[] = await res.json();
 
         if (isMounted) {
-            console.log('Fetched rooms:', data);
-            setRooms(data);
+          console.log('Fetched rooms:', data);
+          setRooms(data);
 
-            // デフォルト選択ロジック
-            if (data.length > 0 && !selectedRoomId) {
-               setSelectedRoomId(data[0].roomId);
-            }
-            if (selectedRoomId && !data.some(room => room.roomId === selectedRoomId)) {
-                setSelectedRoomId(data.length > 0 ? data[0].roomId : '');
-            }
+          // デフォルト選択ロジック
+          if (data.length > 0 && !selectedRoomId) {
+            setSelectedRoomId(data[0].roomId);
+          }
+          if (selectedRoomId && !data.some(room => room.roomId === selectedRoomId)) {
+            setSelectedRoomId(data.length > 0 ? data[0].roomId : '');
+          }
         }
       } catch (error: unknown) {
         console.error('Error fetching rooms:', error);
@@ -72,15 +75,15 @@ export default function RoomSelector({ socket, setUserNameForParent }: RoomSelec
         }
         // ★ サーバー接続失敗時のメッセージ
         if (message.includes('Failed to fetch')) {
-            message = `APIサーバー(${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001'})に接続できませんでした。サーバーが起動しているか確認してください。`;
+          message = `APIサーバー(${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001'})に接続できませんでした。サーバーが起動しているか確認してください。`;
         }
         if (isMounted) {
-           setError(message);
+          setError(message);
         }
       } finally {
-         if (isMounted) {
-             setIsLoading(false); // ★ finally でローディング解除
-         }
+        if (isMounted) {
+          setIsLoading(false); // ★ finally でローディング解除
+        }
       }
     };
 
@@ -90,49 +93,27 @@ export default function RoomSelector({ socket, setUserNameForParent }: RoomSelec
     return () => {
       isMounted = false;
     };
-  // ★ 依存配列から selectedRoomId を削除 (初回取得のみ実行)
+    // ★ 依存配列から selectedRoomId を削除 (初回取得のみ実行)
   }, []); // 空の依存配列: 初回マウント時のみ実行
 
   // --- 入室処理関数 (useCallbackで最適化) ---
-  const handleJoinRoom = useCallback(() => {
-    if (!socket) {
-        setError('サーバーとの接続が確立されていません。'); // ★ エラー表示を state 経由に
-        return;
-    }
-    if (!selectedRoomId) {
-        setError('参加するルームを選択してください。');
-        return;
-    }
-    const nameToJoin = userName.trim(); // ★ trim した名前を使用
-    if (!nameToJoin) {
-        setError('プレイヤー名を入力してください。');
-        return;
-    }
-    if (!socket.connected) {
-        setError('サーバーに接続されていません。再接続を試みます...');
-        socket.connect();
-        return;
-    }
+  const handleJoinRoom = useCallback((roomIdToJoin: string) => { // ★ 引数で roomId を受け取るように変更
+    if (!socket) { setError('サーバーとの接続が確立されていません。'); return; }
+    // ★ selectedRoomId ではなく引数の roomIdToJoin を使うか確認
+    // if (!selectedRoomId) { setError('参加するルームを選択してください。'); return; } // ← 不要に
+    const nameToJoin = userName.trim();
+    if (!nameToJoin) { setError('プレイヤー名を入力してください。'); return; }
+    if (!socket.connected) { setError('サーバーに接続されていません。再接続を試みます...'); socket.connect(); return; }
 
-    const roomToJoin = rooms.find(r => r.roomId === selectedRoomId);
-    if (!roomToJoin) {
-        setError('選択されたルームが見つかりません。リストを更新してください。');
-        return;
-    }
-    // ★ 満員チェックを disabled だけでなくここでも行う
-    if (roomToJoin.userCount >= roomToJoin.maxUsers) {
-        setError('このルームは満員です。他のルームを選択してください。');
-        return;
-    }
+    const roomToJoin = rooms.find(r => r.roomId === roomIdToJoin); // ★ 引数でチェック
+    if (!roomToJoin) { setError('選択されたルームが見つかりません。リストを更新してください。'); return; }
+    if (roomToJoin.userCount >= roomToJoin.maxUsers) { setError('このルームは満員です。'); return; } // 満員チェックは維持
 
-    // ★ エラーがあればクリア
-    setError(null);
-    console.log(`Attempting to join room ${selectedRoomId} as ${nameToJoin}`);
-    socket.emit('join room', { roomId: selectedRoomId, name: nameToJoin });
-    setUserNameForParent(nameToJoin); // 親コンポーネントに名前をセット
-
-  // ★ 依存配列を適切に設定
-  }, [socket, selectedRoomId, userName, rooms, setUserNameForParent]);
+    setError(null); // エラークリア
+    console.log(`Attempting to join room ${roomIdToJoin} as ${nameToJoin}`);
+    socket.emit('join room', { roomId: roomIdToJoin, name: nameToJoin });
+    setUserNameForParent(nameToJoin);
+  }, [socket, userName, rooms, setUserNameForParent]);
 
   // --- レンダリング ---
 
@@ -145,9 +126,6 @@ export default function RoomSelector({ socket, setUserNameForParent }: RoomSelec
   // if (error) { // ★ エラーはボタンの下などに表示する方がUXが良いかも
   //   return <p className="text-center p-8 text-red-500">エラー: {error}</p>;
   // }
-
-  // 選択されているルームの情報を取得
-  const selectedRoomInfo = rooms.find(r => r.roomId === selectedRoomId);
 
   return (
     <div className="container mx-auto p-6 max-w-2xl">
@@ -176,55 +154,59 @@ export default function RoomSelector({ socket, setUserNameForParent }: RoomSelec
           rooms.map((room) => {
             const isFull = room.userCount >= room.maxUsers;
             const isSelected = selectedRoomId === room.roomId;
+            // ★★★★★ 変更点: 入室ボタンの disabled 条件 ★★★★★
+            const canJoin = !isFull && userName.trim().length > 0;
+
             return (
-                <button
-                  key={room.roomId}
-                  onClick={() => setSelectedRoomId(room.roomId)}
-                  className={`w-full flex justify-between items-center p-4 border rounded-lg text-left transition-all duration-150 ease-in-out ${
-                    isSelected
-                      ? 'bg-blue-100 border-blue-400 ring-2 ring-blue-300 scale-105 shadow-md'
-                      : isFull
-                      ? 'bg-gray-100 border-gray-300 opacity-60 cursor-not-allowed'
+              <div
+                key={room.roomId}
+                onClick={() => !isFull && setSelectedRoomId(room.roomId)} // ★ 満員でなければクリックで選択
+                className={`w-full flex justify-between items-center p-4 border rounded-lg transition-all duration-150 ease-in-out cursor-pointer ${ // ★ cursor-pointer 追加
+                  isSelected
+                    ? 'bg-blue-100 border-blue-400 ring-2 ring-blue-300 scale-105 shadow-md'
+                    : isFull
+                      ? 'bg-gray-100 border-gray-300 opacity-60 cursor-not-allowed' // 全体もクリック不可に
                       : 'bg-white hover:bg-gray-50 border-gray-300 hover:shadow-sm'
                   }`}
-                  disabled={isFull}
-                >
-                  <div>
-                    <span className="font-semibold text-lg">{room.roomId}</span>
-                    <span className="text-sm text-gray-600 ml-2">({room.phase})</span>
-                  </div>
-                  <span
-                    className={`text-sm font-medium px-2 py-0.5 rounded ${
-                       isFull ? 'bg-red-200 text-red-800' : 'bg-green-200 text-green-800'
-                    }`}
+                title={isFull ? `${room.roomName} (${room.roomId}) (満員)` : `${room.roomName} (${room.roomId})`}
+              >
+                {/* 左側: ルーム情報 */}
+                <div className="flex-grow mr-4"> {/* ★ flex-grow と mr を追加 */}
+                  <span className="font-semibold text-lg mr-1">{room.roomName}</span>
+                  <span className="text-sm text-gray-500">({room.roomId})</span> {/* IDも併記 */}
+                  <span className="text-sm text-gray-600 ml-2">({room.phase})</span>
+                  <div // ★ 人数表示を下に移動 (任意)
+                    className={`text-sm font-medium mt-1 ${isFull ? 'text-red-600' : 'text-green-700'
+                      }`}
                   >
-                    {room.userCount} / {room.maxUsers} 人
-                  </span>
+                    {room.userCount} / {room.maxUsers} 人 {isFull ? '(満員)' : ''}
+                  </div>
+                </div>
+
+                {/* ★★★★★ 追加: 右側: 入室ボタン ★★★★★ */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation(); // 親 div の onClick を発火させない
+                    if (canJoin) {
+                      handleJoinRoom(room.roomId); // ★ roomId を引数で渡す
+                    }
+                  }}
+                  disabled={!canJoin} // ★ 結合した条件で disabled
+                  className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-colors ${canJoin
+                      ? 'bg-blue-600 text-white hover:bg-blue-700'
+                      : 'bg-gray-300 text-gray-400 cursor-not-allowed' // クリック不可時のスタイル
+                    }`}
+                >
+                  入室
                 </button>
+              </div>
             );
           })
         ) : (
-          // ★ エラーがない場合のみ「参加可能なルームがない」と表示
-          !error && <p className="text-gray-500">参加可能なルームがありません。サーバーが起動しているか確認してください。</p>
+          !error && <p className="text-gray-500">参加可能なルームがありません...</p>
         )}
-        {/* ★ エラーメッセージ表示 */}
         {error && <p className="text-red-500 mt-4 text-center">{error}</p>}
       </div>
-
-      {/* 入室ボタン */}
-      <button
-        onClick={handleJoinRoom}
-        disabled={
-            !socket ||
-            !selectedRoomId ||
-            !userName.trim() ||
-            !selectedRoomInfo ||
-            selectedRoomInfo.userCount >= selectedRoomInfo.maxUsers
-        }
-        className="w-full py-3 px-6 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-      >
-        {selectedRoomInfo ? `${selectedRoomInfo.roomId} に入室` : 'ルームを選択して入室'}
-      </button>
     </div>
   );
 }
