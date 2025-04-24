@@ -107,7 +107,7 @@ const TeamPanel: React.FC<TeamPanelProps> = ({
                 </ul>
             </div>
             {/* PICK 表示 */}
-            <div className="border-t pt-2">
+            <div className="pt-2">
                  {/* ★ テキスト色を適用 */}
                 <h4 className={`text-md font-medium mb-1 ${panelTextColor}`}>PICK ({pickCount}/{MAX_PICKS_PER_TEAM})</h4>
                 <div className="flex flex-wrap gap-1 min-h-[60px] items-center">
@@ -120,7 +120,7 @@ const TeamPanel: React.FC<TeamPanelProps> = ({
                 </div>
             </div>
             {/* BAN 表示 */}
-            <div className="border-t pt-2">
+            <div className="pt-2">
                  {/* ★ テキスト色を適用 */}
                 <h4 className={`text-md font-medium mb-1 ${panelTextColor}`}>BAN ({banCount}/{MAX_BANS_PER_TEAM})</h4>
                 <div className="flex flex-wrap gap-1 min-h-[60px] items-center">

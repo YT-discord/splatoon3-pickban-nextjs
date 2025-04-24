@@ -180,23 +180,15 @@ export default function Home() {
       socket.off('join room success', handleJoinSuccess);
       socket.off('join room failed', handleJoinFailed);
     };
-  }, [socket]); // ★ socket のみでOK
+  }, [socket]);
 
-  // ★ RoomSelector から userName を受け取る関数
   const handleSetUserName = useCallback((name: string) => { setUserName(name); }, []);
 
-  // ★★★ ルーム退出処理関数を追加 ★★★
   const handleLeaveRoom = useCallback(() => {
     console.log(`[Home] Leaving room ${joinedRoomId}`);
     setJoinedRoomId(null);
     setUserStatus('selecting_room');
-    // userName はリセットしない方が、再入室時に便利かもしれない
-    // setUserName('');
-    // ★ サーバー側の leave room ハンドラで socket.leave() が呼ばれる
-    // ★ 必要であれば、ここで明示的に socket?.emit('leave room') を呼んでも良いが、
-    // ★ WeaponGrid 側で呼ぶ方が責務分担として自然かもしれない
   }, [joinedRoomId]);
-  // ★★★★★★★★★★★★★★★★★★★★★
 
   // --- レンダリング ---
   console.log(`[renderContent] Rendering content for userStatus: ${userStatus}`); // ★ レンダリング時の状態確認

@@ -1,7 +1,6 @@
 import type { Stage, Rule } from './game';
 
-export const ROOM_IDS = ['room1', 'room2', 'room3', 'room4', 'room5'];
-export const MAX_USERS_PER_ROOM = 10;
+export const MAX_USERS_PER_ROOM = 16;
 export const MAX_PLAYERS_PER_TEAM = 4;
 export const MIN_PLAYERS_PER_TEAM = 1;
 export const MAX_BANS_PER_TEAM = 3;
@@ -16,6 +15,46 @@ export const PICK_PHASE_TURN_DURATION = 10;
 // Fast Timer (デバッグ用) 環境変数 FAST_TIMER=true で有効
 export const USE_FAST_TIMER = process.env.FAST_TIMER === 'true';
 export const FAST_TIMER_MULTIPLIER = 5; // 例: 1/5 の時間にする
+
+export const ROOM_IDS: string[] = [
+    "アイロニック",
+    "アナアキ",
+    "アロメ",
+    "エゾッコ",
+    "エンペリー",
+    "クラーゲス",
+    "シグレニ",
+    "シチリン",
+    "ジモン",
+    "タタキケンサキ",
+    "バトロイカ",
+    "バラズシ",
+    "フォーリマ",
+    "ホタックス",
+    "ホッコリー",
+    "ヤコ",
+    "ロッケンベルグ"
+];
+
+export const DEFAULT_ROOM_NAMES: string[] = [
+    "エンジョイ部屋", // room1
+    "エンジョイ部屋", // room2
+    "エンジョイ部屋", // room3
+    "エンジョイ部屋", // room4
+    "エンジョイ部屋", // room5
+    "エンジョイ部屋", // room6
+    "エンジョイ部屋", // room7
+    "エンジョイ部屋", // room8
+    "エンジョイ部屋", // room9
+    "エンジョイ部屋", // room10
+    "エンジョイ部屋", // room11
+    "エンジョイ部屋", // room12
+    "エンジョイ部屋", // room13
+    "エンジョイ部屋", // room14
+    "エンジョイ部屋", // room15
+    "エンジョイ部屋", // room16
+    "エンジョイ部屋", // room17
+];
 
 export const STAGES_DATA: Stage[] = [
     { id: 1, name: 'リュウグウターミナル', imageUrl: '/images/stages/リュウグウ.png' },

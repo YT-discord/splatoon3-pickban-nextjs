@@ -84,6 +84,9 @@ const renderWeaponItem = (
             onClick={() => !isDisabled && onWeaponClick(weapon.id)} // Props の関数を呼び出し
             title={weapon.name + (isDisabled ? ' (操作不可)' : '')}
         >
+            <div className="absolute top-0 left-0 px-1 py-0.5 bg-black bg-opacity-60 text-white text-[8px] rounded-br-md leading-none truncate max-w-[80%]">
+                {weapon.name}
+            </div>
             <Image
                 src={weapon.imageUrl}
                 alt={weapon.name}
@@ -101,8 +104,11 @@ const renderWeaponItem = (
                     </svg>
                 </div>
             )}
-            {!isRandomChoice && isMyTeamPlayer && !isDisabled && gameState.phase === 'pick' && (<div className="absolute bottom-1 right-1 px-1.5 py-0.5 text-xs bg-green-200 text-green-800 rounded font-semibold animate-pulse">Pick!</div> )}
-            {!isRandomChoice && isMyTeamPlayer && !isDisabled && gameState.phase === 'ban' && (<div className="absolute bottom-1 right-1 px-1.5 py-0.5 text-xs bg-yellow-200 text-yellow-800 rounded font-semibold animate-pulse">Ban!</div> )}
+            {isRandomChoice && (
+                <span className="block text-center text-xs font-medium text-purple-800 mt-1">ランダム</span>
+            )}
+            {!isRandomChoice && isMyTeamPlayer && !isDisabled && gameState.phase === 'pick' && (<div className="absolute bottom-1 right-1 px-1.5 py-0.5 text-xs bg-green-200 text-green-800 rounded font-semibold animate-pulse">Pick!</div>)}
+            {!isRandomChoice && isMyTeamPlayer && !isDisabled && gameState.phase === 'ban' && (<div className="absolute bottom-1 right-1 px-1.5 py-0.5 text-xs bg-yellow-200 text-yellow-800 rounded font-semibold animate-pulse">Ban!</div>)}
         </div>
     );
 };
@@ -117,7 +123,7 @@ const WeaponGridDisplay: React.FC<WeaponGridDisplayProps> = ({
     return (
         <>
             {(gameState.phase === 'ban' || gameState.phase === 'pick') && (
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto border-t border-gray-200 mt-4 pt-4">
                     <h3 className="text-lg font-semibold mb-3 text-gray-800">
                         {gameState.phase === 'ban' ? 'BANする武器を選択してください' : 'PICKする武器を選んでください'}
                         {/* BAN/PICK カウント表示 */}
@@ -130,21 +136,20 @@ const WeaponGridDisplay: React.FC<WeaponGridDisplayProps> = ({
                     </h3>
                     {displayWeapons.length > 0 ? (
                         <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-5 xl:grid-cols-6 gap-2">
-                             {/* ★ renderWeaponItem を呼び出す */}
                             {displayWeapons.map(weapon => renderWeaponItem(weapon, gameState, myTeam, onWeaponClick))}
                         </div>
                     ) : (<p className="text-center text-gray-500 py-4">表示対象の武器がありません。</p>)}
                 </div>
             )}
-             {gameState.phase === 'pick_complete' && (
+            {gameState.phase === 'pick_complete' && (
                 <div className="text-center py-10">
-                    <h3 className="text-2xl font-bold text-green-600">ピック完了！</h3>
+                    <h3 className="text-2xl font-bold text-green-600">PICK完了！</h3>
                 </div>
             )}
             {gameState.phase === 'waiting' && (
                 <div className="text-center py-10">
                     <h3 className="text-xl font-semibold text-gray-700">ゲーム開始待機中...</h3>
-                    <p className="text-gray-500">チームを選択し、ヘッダーの「ゲーム開始」ボタンを押してください。</p>
+                    <p className="text-gray-500">チームを選択し、ホストの「ゲーム開始」をお待ちください。</p>
                 </div>
             )}
         </>

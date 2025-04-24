@@ -1,7 +1,7 @@
 
 import { Server } from 'socket.io';
 import { RoomGameState, RoomUser, RoomWeaponState, PublicRoomGameState, MasterWeapon, Team } from '../common/types/game';
-import { MAX_BANS_PER_TEAM, MAX_PICKS_PER_TEAM, TOTAL_PICK_TURNS, BAN_PHASE_DURATION, PICK_PHASE_TURN_DURATION, USE_FAST_TIMER, FAST_TIMER_MULTIPLIER } from '../common/types/constants';
+import { MAX_BANS_PER_TEAM, MAX_PICKS_PER_TEAM, TOTAL_PICK_TURNS, BAN_PHASE_DURATION, PICK_PHASE_TURN_DURATION, USE_FAST_TIMER, FAST_TIMER_MULTIPLIER, DEFAULT_ROOM_NAMES, ROOM_IDS } from '../common/types/constants';
 
 // タイムアウト関連の定数
 export const ROOM_TIMEOUT_DURATION = 30 * 60 * 1000; // 30分 (ミリ秒)
@@ -27,12 +27,18 @@ export const initializeGameLogic = (
 // == ルーム状態操作 & ゲームロジック関数群 ==
 // =============================================
 
-export const initializeRoomState = (roomId: string, existingUsers?: Map<string, RoomUser>): RoomGameState => {
+export const initializeRoomState = (roomId: string, existingUsers?: Map<string, RoomUser>, initialRoomName?: string): RoomGameState => {
     console.log(`[Game Logic] Initializing basic room state for: ${roomId}`);
     const existingRoomState = gameRooms.get(roomId);
     if (existingRoomState?.timer) {
         clearInterval(existingRoomState.timer);
     }
+
+    const roomIndex = ROOM_IDS.indexOf(roomId);
+    const defaultName = (roomIndex !== -1 && roomIndex < DEFAULT_ROOM_NAMES.length)
+        ? DEFAULT_ROOM_NAMES[roomIndex]
+        : roomId;
+    const roomNameToSet = initialRoomName ?? defaultName;
 
     const initialWeapons: RoomWeaponState[] = masterWeapons.map(mw => ({
         id: mw.id,
@@ -48,7 +54,7 @@ export const initializeRoomState = (roomId: string, existingUsers?: Map<string, 
 
     const newState: RoomGameState = {
         roomId: roomId,
-        roomName: roomId,
+        roomName: roomNameToSet,
         phase: 'waiting',
         timeLeft: 0,
         currentTurn: null,
@@ -83,10 +89,19 @@ export const electNewHost = (roomId: string): void => {
         // ★ 状態更新も通知 (hostId が変わったため)
         io.to(roomId).emit('room state update', getPublicRoomState(roomState));
     } else {
-        // 誰もいなければホストは null
         roomState.hostId = null;
-        console.log(`[Host Election ${roomId}] No users left, host set to null.`);
-         // ★ ホスト変更をクライアントに通知
+        const roomIndex = ROOM_IDS.indexOf(roomId);
+        const defaultRoomName = (roomIndex !== -1 && roomIndex < DEFAULT_ROOM_NAMES.length)
+            ? DEFAULT_ROOM_NAMES[roomIndex]
+            : roomId;
+        // 名前が既にデフォルト名でなければ変更し通知
+        if (roomState.roomName !== defaultRoomName) {
+            console.log(`[Host Election ${roomId}] No users left, resetting room name to default: "${defaultRoomName}".`);
+            roomState.roomName = defaultRoomName;
+             // 名前変更も room state update で通知される
+        } else {
+             console.log(`[Host Election ${roomId}] No users left, host set to null. Room name already default.`);
+        }
         io.to(roomId).emit('host changed', { hostId: null, hostName: null });
         io.to(roomId).emit('room state update', getPublicRoomState(roomState));
     }
@@ -101,10 +116,11 @@ export const resetRoom = (roomId: string, triggeredBy?: 'user' | 'timeout' | 'sy
     }
 
     // 1. 現在のユーザー情報を保持
-    const currentUsersMap = new Map(currentRoomState.connectedUsers); // コピーを作成
+    const currentUsersMap = new Map(currentRoomState.connectedUsers);
+    const currentRoomName = currentRoomState.roomName;
 
     // 2. 新しい基本状態を作成 (ユーザー情報はまだ空)
-    const newState = initializeRoomState(roomId); // 内部でタイマーはクリアされる
+    const newState = initializeRoomState(roomId, currentUsersMap, currentRoomName);
 
     // 3. 保持していたユーザー情報を新しい状態にセットし、チームをリセット
     newState.connectedUsers = currentUsersMap;
@@ -123,11 +139,9 @@ export const resetRoom = (roomId: string, triggeredBy?: 'user' | 'timeout' | 'sy
     //    - 新しい武器状態 (初期化済み)
     //    - 各ユーザーの更新情報 (チームが observer になったこと)
     const publicState = getPublicRoomState(newState);
-    io.to(roomId).emit('initial state', publicState); // initial state で phase や hostId を伝える
+    io.to(roomId).emit('initial state', publicState);
     io.to(roomId).emit('initial weapons', newState.weapons);
-    newState.connectedUsers.forEach(user => {
-         io.to(roomId).emit('user updated', user); // チーム変更を通知
-    });
+    newState.connectedUsers.forEach(user => { io.to(roomId).emit('user updated', user); });
 
     // タイムアウト or システムによるリセット時の通知
     if (triggeredBy === 'timeout') {
@@ -135,7 +149,7 @@ export const resetRoom = (roomId: string, triggeredBy?: 'user' | 'timeout' | 'sy
     }
     // ユーザー操作によるリセット通知は app.ts 側で行う
 
-    console.log(`[Game Logic] Room ${roomId} reset. Users: ${newState.connectedUsers.size}, New Host: ${newState.hostId}`);
+    console.log(`[Game Logic] Room ${roomId} reset. Name kept: "${newState.roomName}", Users: ${newState.connectedUsers.size}, New Host: ${newState.hostId}`);
 };
 
 export const changeRoomName = (roomId: string, newName: string): boolean => {
@@ -145,16 +159,9 @@ export const changeRoomName = (roomId: string, newName: string): boolean => {
         return false;
     }
 
-    const trimmedName = newName.trim();
-    // 簡単なバリデーション (空でないか、長すぎないか等)
-    if (!trimmedName || trimmedName.length === 0 || trimmedName.length > 50) { // 50文字制限 (任意)
-        console.warn(`[Change Room Name ${roomId}] Invalid new name: "${trimmedName}"`);
-        return false;
-    }
-
-    roomState.roomName = trimmedName;
+    roomState.roomName = newName;
     roomState.lastActivityTime = Date.now(); // 名前変更もアクティビティとみなす
-    console.log(`[Change Room Name ${roomId}] Name changed to "${trimmedName}". Last activity updated.`);
+    console.log(`[Change Room Name ${roomId}] Name changed to "${newName}". Last activity updated.`);
 
     // 変更をルーム全員に通知 (room state update で新しい名前が伝わる)
     io.to(roomId).emit('room state update', getPublicRoomState(roomState));

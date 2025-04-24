@@ -3,6 +3,7 @@
 
 import { useState, useEffect, useCallback } from 'react'; // ★ useCallback をインポート
 import { Socket } from 'socket.io-client';
+import Image from 'next/image';
 
 // ルーム情報の型定義
 interface RoomInfo {
@@ -19,7 +20,26 @@ interface RoomSelectorProps {
   setUserNameForParent: (name: string) => void;
 }
 
+const getPhaseDisplayName = (phase: string): string => {
+  switch (phase) {
+    case 'waiting': return '開始待機中';
+    case 'ban': return 'BANフェーズ';
+    case 'pick': return 'PICKフェーズ';
+    case 'pick_complete': return 'PICK完了';
+    default: return phase; // 不明な場合はそのまま表示
+  }
+};
 
+const getRoomIconPath = (roomId: string): string => {
+  return `/images/icons/${roomId}.png`; // ★ roomId を直接使用
+};
+
+const validateName = (name: string): string | null => {
+  const trimmedName = name.trim();
+  if (trimmedName.length === 0) return '名前を入力してください。';
+  if (trimmedName.length > 10) return '名前が長すぎます (10文字以内)';
+  return null; // エラーなし
+};
 
 export default function RoomSelector({ socket, setUserNameForParent }: RoomSelectorProps) {
   // --- State 定義 ---
@@ -96,8 +116,20 @@ export default function RoomSelector({ socket, setUserNameForParent }: RoomSelec
     // ★ 依存配列から selectedRoomId を削除 (初回取得のみ実行)
   }, []); // 空の依存配列: 初回マウント時のみ実行
 
+  const handleUserNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newName = e.target.value;
+    setUserName(newName);
+    // setError(validateName(newName)); // 入力中にエラーを出す場合
+  };
+
   // --- 入室処理関数 (useCallbackで最適化) ---
   const handleJoinRoom = useCallback((roomIdToJoin: string) => { // ★ 引数で roomId を受け取るように変更
+    const nameValidationError = validateName(userName);
+    if (nameValidationError) {
+      setError(nameValidationError);
+      return;
+    }
+
     if (!socket) { setError('サーバーとの接続が確立されていません。'); return; }
     // ★ selectedRoomId ではなく引数の roomIdToJoin を使うか確認
     // if (!selectedRoomId) { setError('参加するルームを選択してください。'); return; } // ← 不要に
@@ -140,10 +172,10 @@ export default function RoomSelector({ socket, setUserNameForParent }: RoomSelec
           type="text"
           id="userName"
           value={userName}
-          onChange={(e) => setUserName(e.target.value)}
-          placeholder="名前を入力 (必須)"
-          className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          maxLength={20}
+          onChange={handleUserNameChange}
+          placeholder="名前を入力 (10文字以内)"
+          className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-500"
+          maxLength={10}
         />
       </div>
 
@@ -154,32 +186,40 @@ export default function RoomSelector({ socket, setUserNameForParent }: RoomSelec
           rooms.map((room) => {
             const isFull = room.userCount >= room.maxUsers;
             const isSelected = selectedRoomId === room.roomId;
-            // ★★★★★ 変更点: 入室ボタンの disabled 条件 ★★★★★
             const canJoin = !isFull && userName.trim().length > 0;
+            const phaseDisplayName = getPhaseDisplayName(room.phase);
 
             return (
               <div
                 key={room.roomId}
                 onClick={() => !isFull && setSelectedRoomId(room.roomId)} // ★ 満員でなければクリックで選択
-                className={`w-full flex justify-between items-center p-4 border rounded-lg transition-all duration-150 ease-in-out cursor-pointer ${ // ★ cursor-pointer 追加
-                  isSelected
-                    ? 'bg-blue-100 border-blue-400 ring-2 ring-blue-300 scale-105 shadow-md'
-                    : isFull
-                      ? 'bg-gray-100 border-gray-300 opacity-60 cursor-not-allowed' // 全体もクリック不可に
-                      : 'bg-white hover:bg-gray-50 border-gray-300 hover:shadow-sm'
+                className={`w-full flex justify-between items-center p-4 border rounded-lg transition-all duration-150 ease-in-out cursor-pointer ${isSelected
+                  ? 'bg-blue-100 border-blue-400 ring-2 ring-blue-300 scale-105 shadow-md'
+                  : isFull
+                    ? 'bg-gray-100 border-gray-300 opacity-60 cursor-not-allowed' // 全体もクリック不可に
+                    : 'bg-white hover:bg-gray-50 border-gray-300 hover:shadow-sm'
                   }`}
                 title={isFull ? `${room.roomName} (${room.roomId}) (満員)` : `${room.roomName} (${room.roomId})`}
               >
                 {/* 左側: ルーム情報 */}
-                <div className="flex-grow mr-4"> {/* ★ flex-grow と mr を追加 */}
-                  <span className="font-semibold text-lg mr-1">{room.roomName}</span>
-                  <span className="text-sm text-gray-500">({room.roomId})</span> {/* IDも併記 */}
-                  <span className="text-sm text-gray-600 ml-2">({room.phase})</span>
-                  <div // ★ 人数表示を下に移動 (任意)
-                    className={`text-sm font-medium mt-1 ${isFull ? 'text-red-600' : 'text-green-700'
-                      }`}
-                  >
-                    {room.userCount} / {room.maxUsers} 人 {isFull ? '(満員)' : ''}
+                <div className="flex-grow mr-4 flex items-center gap-3">
+                  <Image
+                    src={getRoomIconPath(room.roomId)}
+                    alt={`${room.roomId} icon`}
+                    width={32} // サイズは調整
+                    height={32}
+                    className="rounded" // 任意
+                  />
+                  <div className="flex items-baseline gap-2 mb-1">
+                    <span className="font-semibold text-lg text-gray-800">{room.roomId} :</span>
+                    <span className="font-medium text-base text-gray-800 truncate" title={room.roomName}>{room.roomName}</span>
+                  </div>
+                  {/* 状態と人数 */}
+                  <div className="flex items-center gap-2 text-sm">
+                    <span className="text-gray-600">{phaseDisplayName}</span> {/* ★ 日本語フェーズ名 */}
+                    <span className={`font-medium ${isFull ? 'text-red-600' : 'text-green-700'}`}>
+                      {room.userCount} / {room.maxUsers} 人 {isFull ? '(満員)' : ''}
+                    </span>
                   </div>
                 </div>
 
@@ -193,8 +233,8 @@ export default function RoomSelector({ socket, setUserNameForParent }: RoomSelec
                   }}
                   disabled={!canJoin} // ★ 結合した条件で disabled
                   className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-colors ${canJoin
-                      ? 'bg-blue-600 text-white hover:bg-blue-700'
-                      : 'bg-gray-300 text-gray-400 cursor-not-allowed' // クリック不可時のスタイル
+                    ? 'bg-blue-600 text-white hover:bg-blue-700'
+                    : 'bg-gray-300 text-gray-400 cursor-not-allowed' // クリック不可時のスタイル
                     }`}
                 >
                   入室

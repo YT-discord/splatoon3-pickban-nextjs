@@ -78,6 +78,13 @@ app.get('/health', (req: Request, res: Response) => {
     });
 });
 
+const validateNameServer = (name: string): string | null => {
+    const trimmedName = name.trim();
+    if (trimmedName.length === 0) return '名前が空です。';
+    if (trimmedName.length > 10) return '名前が長すぎます (10文字以内)';
+    return null;
+};
+
 // ==================================
 // == Socket.IO イベントハンドラ ==
 // ==================================
@@ -128,9 +135,17 @@ io.on('connection', (socket: Socket) => {
         }
 
         const { roomId, name } = data;
+        const nameValidationError = validateNameServer(name);
+        if (nameValidationError) {
+             console.log(`[Join Room ${roomId}] Invalid name from ${socketId}: ${name} - ${nameValidationError}`);
+             socket.emit('join room failed', { roomId, reason: nameValidationError });
+             return;
+        }
         const trimmedName = name.trim(); // ★ trim 処理を追加
         console.log(`[Join Room] User ${socketId} requests to join room ${roomId} as ${trimmedName}`);
         const userInfo = connectedUsersGlobal.get(socketId);
+
+
 
         if (!ROOM_IDS.includes(roomId)) {
             console.log(`[Join Room] Invalid roomId: ${roomId}`);
@@ -235,8 +250,16 @@ io.on('connection', (socket: Socket) => {
             return;
         }
 
+        const nameValidationError = validateNameServer(data.newName);
+        if (nameValidationError) {
+             console.log(`[Change Room Name ${roomId}] Invalid new name from ${socketId}: ${data.newName} - ${nameValidationError}`);
+             socket.emit('action failed', { reason: nameValidationError });
+             return;
+        }
+        const newNameValidated = data.newName.trim();
+
         console.log(`[Change Room Name ${roomId}] Request from host ${userInfo.name} (${socketId}) to change name to "${data.newName}"`);
-        const success = GameLogic.changeRoomName(roomId, data.newName);
+        const success = GameLogic.changeRoomName(roomId, newNameValidated);
 
         if (!success) {
             // gameLogic 側でバリデーション失敗など
@@ -336,13 +359,8 @@ io.on('connection', (socket: Socket) => {
     // --- ゲーム開始 ---
     socket.on('start game', () => {
         const userInfo = connectedUsersGlobal.get(socketId);
-        // ★ 観戦者は開始できないチェックを追加
-        if (!userInfo || !userInfo.roomId || userInfo.team === 'observer' || !userInfo.name) {
+        if (!userInfo || !userInfo.roomId || !userInfo.name) {
             console.log(`[Start Game] Denied: User ${socketId} is observer or invalid.`);
-            // ★ 観戦者へのフィードバック (任意)
-            if (userInfo?.team === 'observer') {
-                socket.emit('action failed', { reason: '観戦者はゲームを開始できません' });
-            }
             return;
         }
         const roomId = userInfo.roomId;
@@ -418,11 +436,6 @@ io.on('connection', (socket: Socket) => {
     socket.on('select stage', (data: { stageId: number | 'random' }) => {
         const userInfo = connectedUsersGlobal.get(socketId);
         if (!userInfo || !userInfo.roomId) { return; } // ルーム参加中か確認
-        // ★ プレイヤーのみ選択可能にする (観戦者は変更不可)
-        if (userInfo.team === 'observer') {
-            socket.emit('action failed', { reason: '観戦者はステージを選択できません' });
-            return;
-        }
 
         const roomId = userInfo.roomId;
         const roomState = gameRooms.get(roomId);
@@ -447,10 +460,6 @@ io.on('connection', (socket: Socket) => {
     socket.on('select rule', (data: { ruleId: number | 'random' }) => {
         const userInfo = connectedUsersGlobal.get(socketId);
         if (!userInfo || !userInfo.roomId) { return; }
-        if (userInfo.team === 'observer') {
-            socket.emit('action failed', { reason: '観戦者はルールを選択できません' });
-            return;
-        }
 
         const roomId = userInfo.roomId;
         const roomState = gameRooms.get(roomId);

@@ -307,9 +307,6 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
     const handleClearFilters = useCallback(() => {
         setSelectedAttributes([]);
     }, []);
-    const handleSelectAllFilters = useCallback(() => {
-        setSelectedAttributes([...WEAPON_ATTRIBUTES]);
-    }, []);
 
     // --- 武器選択/禁止処理 ---
     const handleWeaponClick = (weaponId: number) => {
@@ -428,26 +425,26 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
         );
     }
 
-    // ページ全体と中央カラム(グリッド部)の背景色クラスを決定
-    let pageBgColor = 'bg-white'; // デフォルトのページ背景
-    let gridBgColor = 'bg-white'; // デフォルトのグリッド背景
+    // // ページ全体と中央カラム(グリッド部)の背景色クラスを決定
+    // let pageBgColor = 'bg-white'; // デフォルトのページ背景
+    // let gridBgColor = 'bg-white'; // デフォルトのグリッド背景
 
-    if (gameState.phase === 'ban') {
-        pageBgColor = 'bg-purple-100'; // BANフェーズのページ背景
-        gridBgColor = 'bg-purple-200'; // BANフェーズのグリッド背景 (濃く)
-    } else if (gameState.phase === 'pick' && gameState.currentTurn) {
-        if (gameState.currentTurn === 'alpha') {
-            pageBgColor = 'bg-blue-100'; // アルファターンのページ背景
-            gridBgColor = 'bg-blue-200'; // アルファターンのグリッド背景 (濃く)
-        } else if (gameState.currentTurn === 'bravo') {
-            pageBgColor = 'bg-red-100'; // ブラボーターンのページ背景
-            gridBgColor = 'bg-red-200'; // ブラボーターンのグリッド背景 (濃く)
-        }
-    }
+    // if (gameState.phase === 'ban') {
+    //     pageBgColor = 'bg-purple-100'; // BANフェーズのページ背景
+    //     gridBgColor = 'bg-purple-200'; // BANフェーズのグリッド背景 (濃く)
+    // } else if (gameState.phase === 'pick' && gameState.currentTurn) {
+    //     if (gameState.currentTurn === 'alpha') {
+    //         pageBgColor = 'bg-blue-100'; // アルファターンのページ背景
+    //         gridBgColor = 'bg-blue-200'; // アルファターンのグリッド背景 (濃く)
+    //     } else if (gameState.currentTurn === 'bravo') {
+    //         pageBgColor = 'bg-red-100'; // ブラボーターンのページ背景
+    //         gridBgColor = 'bg-red-200'; // ブラボーターンのグリッド背景 (濃く)
+    //     }
+    // }
 
     // --- JSX レンダリング本体 ---
     return (
-        <div className={`container mx-auto p-4 space-y-6 ${pageBgColor} transition-colors duration-300 rounded-lg shadow-md`}>
+        <div className={`container mx-auto p-4 space-y-6 bg-white rounded-lg shadow-md`}> 
             {/* ================== ヘッダーエリア ================== */}
             <GameHeader
                 roomId={roomId}
@@ -486,12 +483,11 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
                         selectedAttributes={selectedAttributes}
                         onAttributeChange={handleAttributeFilterChange}
                         onClearFilters={handleClearFilters}
-                        onSelectAllFilters={handleSelectAllFilters}
                     />
 
 
                     {/* Weapon Grid 本体 */}
-                    <div className={`p-3 rounded-lg shadow-sm ${gridBgColor} transition-colors duration-300`}>
+                    <div className={`p-3 rounded-lg shadow-sm`}> 
                     <WeaponGridDisplay
                         gameState={gameState}
                         displayWeapons={displayWeapons} // 計算済みの表示用武器リスト
@@ -571,10 +567,11 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
         items: (T extends typeof RANDOM_CHOICE ? never : T)[];
         onSelect: (item: T) => void;
         title: string;
-        randomOption?: typeof RANDOM_CHOICE; // ランダム選択肢を追加
+        randomOption?: typeof RANDOM_CHOICE;
+        isStageModal?: boolean;
     }
 
-    function SelectionModal<T extends SelectableItem>({ isOpen, onClose, items, onSelect, title, randomOption }: SelectionModalProps<T>) {
+    function SelectionModal<T extends SelectableItem>({ isOpen, onClose, items, onSelect, title, randomOption, isStageModal = false }: SelectionModalProps<T>) {
         if (!isOpen) return null;
 
         const handleSelect = (item: T) => {
@@ -584,12 +581,11 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
 
         return (
             // オーバーレイ (半透明黒背景)
-            <div className="fixed inset-0 bg-black bg-opacity-80 flex justify-center items-center z-50 p-4"> {/* ★ bg-opacity-80 追加 */}
+            <div className="fixed inset-0 bg-black/80 flex justify-center items-center z-50 p-4"> {/* ★ bg-opacity-80 追加 */}
                 {/* モーダル本体 */}
                 <div className="bg-white rounded-lg shadow-xl p-6 max-w-3xl w-full max-h-[80vh] overflow-y-auto">
                     <div className="flex justify-between items-center mb-4">
-                        {/* ★ タイトル文字色変更 */}
-                        <h3 className="text-xl font-semibold text-gray-800">{title}</h3>
+                        <h3 className="text-xl font-semibold text-gray-800 font-bold">{title}</h3>
                         <button onClick={onClose} className="text-gray-500 hover:text-gray-700 text-2xl">×</button>
                     </div>
                     {/* 選択肢グリッド */}
@@ -601,9 +597,8 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
                                 onClick={() => handleSelect(randomOption as T)}
                                 className="flex flex-col items-center p-2 border rounded-md hover:bg-gray-100 hover:shadow-sm transition-all"
                             >
-                                <Image src={randomOption.imageUrl} alt={randomOption.name} width={80} height={45} className="object-cover mb-1 border" />
-                                {/* ★ 文字色変更 */}
-                                <span className="text-xs text-center text-gray-800">{randomOption.name}</span>
+                                <Image src={randomOption.imageUrl} alt={randomOption.name} width={isStageModal ? 160 : 120} height={isStageModal ? 90 : 67} className="object-cover mb-1 border" />
+                                <span className="text-xs text-center text-gray-800 font-bold">{randomOption.name}</span>
                             </button>
                         )}
                         {/* 通常の選択肢 */}
@@ -613,9 +608,9 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
                                 onClick={() => handleSelect(item)}
                                 className="flex flex-col items-center p-2 border rounded-md hover:bg-gray-100 hover:shadow-sm transition-all"
                             >
-                                <Image src={item.imageUrl} alt={item.name} width={80} height={45} className="object-cover mb-1 border" />
+                                <Image src={item.imageUrl} alt={item.name} width={isStageModal ? 160 : 120} height={isStageModal ? 90 : 67} className="object-cover mb-1 border" />
                                 {/* ★ 文字色変更 */}
-                                <span className="text-xs text-center text-gray-800">{item.name}</span>
+                                <span className="text-xs text-center text-gray-800 font-bold block h-8 flex items-center justify-center">{item.name}</span>
                             </button>
                         ))}
                     </div>
