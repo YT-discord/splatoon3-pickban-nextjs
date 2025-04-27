@@ -4,8 +4,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 import RoomSelector from '../components/RoomSelector';
 import WeaponGrid from '../components/WeaponGrid';
-import type { MasterWeapon } from '../../../common/types/game';
 import type { DefaultEventsMap } from '@socket.io/component-emitter';
+import type { MasterWeapon, GameState } from '../../../common/types/game';
 
 type UserStatus = 'connecting' | 'loading_master' | 'selecting_room' | 'in_room' | 'error';
 
@@ -21,6 +21,7 @@ export default function Home() {
   const [masterWeapons, setMasterWeapons] = useState<MasterWeapon[] | null>(null);
   const [mySocketId, setMySocketId] = useState<string | null>(null);
   const [isConnected, setIsConnected] = useState(false);
+  const [gameStateForBodyClass, setGameStateForBodyClass] = useState<GameState | null>(null);
 
   // ★ userStatus の変化を監視する useEffect
   useEffect(() => {
@@ -149,8 +150,34 @@ export default function Home() {
           userStatus: userStatus,
       });
   }
-    // ★ 依存配列を再確認
+
   }, [isConnected, userStatus, masterWeapons]);
+
+  const handleGameStateUpdate = useCallback((newGameState: GameState | null) => {
+    setGameStateForBodyClass(newGameState); // 内部 state を更新
+}, []);
+
+    // gameStateForBodyClass が変更されたら body クラスを更新する Effect ★★★★★
+    useEffect(() => {
+      // console.log('[Body Class Effect] gameState changed:', gameStateForBodyClass); // デバッグ用
+      const body = document.body;
+      // 既存のフェーズ/ターンクラスを一旦削除
+      body.classList.remove('phase-ban', 'phase-pick', 'turn-alpha', 'turn-bravo');
+
+      if (!gameStateForBodyClass) return; // gameState がなければ何もしない
+
+      // 新しいクラスを追加
+      if (gameStateForBodyClass.phase === 'ban') {
+          body.classList.add('phase-ban');
+      } else if (gameStateForBodyClass.phase === 'pick') {
+          body.classList.add('phase-pick'); // pick 自体のクラスも追加 (任意)
+          if (gameStateForBodyClass.currentTurn === 'alpha') {
+              body.classList.add('turn-alpha');
+          } else if (gameStateForBodyClass.currentTurn === 'bravo') {
+              body.classList.add('turn-bravo');
+          }
+      }
+  }, [gameStateForBodyClass]); // gameStateForBodyClass の変更を監視
 
   // --- ルーム参加成功/失敗ハンドラー (ログ追加) ---
   useEffect(() => {
@@ -209,6 +236,7 @@ export default function Home() {
             userName={userName}
             myActualSocketId={mySocketId}
             onLeaveRoom={handleLeaveRoom}
+            onGameStateUpdate={handleGameStateUpdate}
           />;
         } else {
           // エラーメッセージを少し具体的に

@@ -30,21 +30,21 @@ const ObserverPanel: React.FC<ObserverPanelProps> = ({
                       観戦に参加 {myTeam === 'observer' ? '(選択中)' : ''}
                   </button>
              </div>
-             <ul className="space-y-0.5 text-sm">
-             {observers.map(user => {
-                     // ★★★★★ 追加: ホストかどうかの判定 ★★★★★
-                     const isHost = user.id === gameState.hostId;
-                     return (
-                         <li key={user.id} className={`flex items-center ${user.name === userName ? 'font-bold' : ''} text-gray-700`}>
-                             <span className="inline-block w-2 h-2 bg-gray-500 rounded-full mr-1.5"></span>
-                             {user.name}
-                             {/* ★★★★★ 追加: ホスト表示 ★★★★★ */}
-                             {isHost && <span className="text-xs text-gray-500 ml-1">(ホスト)</span>}
-                         </li>
-                     );
-                 })}
-                  {observers.length === 0 && <li className="text-gray-500 italic text-xs">観戦者はいません</li>}
-             </ul>
+             <div className="max-h-20 overflow-y-auto pr-2"> {/* ★ pr-2 でスクロールバー分のスペース確保 */}
+                 <ul className="space-y-0.5 text-sm">
+                     {observers.map(user => {
+                         const isHost = user.id === gameState.hostId;
+                         return (
+                             <li key={user.id} className={`flex items-center ${user.name === userName ? 'font-bold' : ''} text-gray-700`}>
+                                 <span className="inline-block w-2 h-2 bg-gray-500 rounded-full mr-1.5"></span>
+                                 <span className="truncate">{user.name}</span> {/* ★ 名前が長い場合に省略 */}
+                                 {isHost && <span className="text-xs text-gray-500 ml-1 flex-shrink-0">(ホスト)</span>} {/* ★ flex-shrink-0 追加 */}
+                             </li>
+                         );
+                     })}
+                      {observers.length === 0 && <li className="text-gray-500 italic text-xs">観戦者はいません</li>}
+                 </ul>
+             </div>
         </div>
     );
 };

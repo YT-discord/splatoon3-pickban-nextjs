@@ -123,37 +123,43 @@ const GameHeader: React.FC<GameHeaderProps> = ({
             {/* 左ブロック: ルーム情報 */}
             <div className="flex items-center gap-3">
 
-                <Image
+            <Image
                     src={getRoomIconPath(roomId)}
                     alt={`${roomId} icon`}
-                    width={40} // サイズは調整
+                    width={40}
                     height={40}
-                    className="rounded" // 任意
+                    className="rounded flex-shrink-0"
                 />
-                {/* 編集モードの UI */}
-                <div className="flex-grow">
+                <div className="flex-grow min-w-0"> 
+                    {/* 固定の部屋ID表示 */}
+                    <div className="text-xs text-black truncate" title={roomId}>
+                        {roomId} {/* アイコンと連動する元のID */}
+                    </div>
+                    {/* 編集可能なルーム名表示/編集 */}
                     {!isEditingName ? (
-                        <>
+                        // 表示モード
+                        <div className="flex items-center gap-1"> {/* ★ gap-1 追加 */}
                             <div className="font-semibold text-lg text-gray-800 truncate" title={gameState.roomName}>
                                 {gameState.roomName}
                             </div>
-                            {amIHost && ( // ホストのみ編集ボタン表示
-                                <button onClick={startEditingName} className="p-1 text-gray-500 hover:text-gray-700" title="ルーム名編集">
+                            {/* 鉛筆マーク (ルーム名の右) */}
+                            {amIHost && (
+                                <button onClick={startEditingName} className="p-0.5 text-gray-500 hover:text-gray-700 flex-shrink-0" title="ルーム名編集"> {/* ★ p-0.5, flex-shrink-0 */}
                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                                     </svg>
                                 </button>
                             )}
-                            <p className="text-sm text-gray-600">({gameState.userCount}人参加)</p>
-                        </>
+                        </div>
                     ) : (
                         // 編集モード
+                        <div className="w-full mt-1">
                         <div className="flex items-center gap-1 w-full">
                             <input
                                 type="text"
                                 value={editingName}
                                 onChange={handleNameChange}
-                                className={`flex-grow px-2 py-1 border rounded text-sm text-gray-800 placeholder-gray-500 ${editError ? 'border-red-500' : 'border-gray-300'}`}
+                                className={`flex-grow px-2 py-1 border rounded text-sm text-gray-800  bg-white placeholder-gray-500 ${editError ? 'border-red-500' : 'border-gray-300'}`}
                                 maxLength={10}
                                 autoFocus
                             />
@@ -167,9 +173,11 @@ const GameHeader: React.FC<GameHeaderProps> = ({
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                                 </svg>
                             </button>
+                            </div>
                             {editError && <p className="text-red-500 text-xs mt-1">{editError}</p>}
                         </div>
                     )}
+                    <p className="text-sm text-gray-600 mt-0.5">({gameState.userCount}人参加)</p> {/* ★ mt調整 */}
                 </div>
             </div>
 

@@ -16,6 +16,22 @@ export const PICK_PHASE_TURN_DURATION = 10;
 export const USE_FAST_TIMER = process.env.FAST_TIMER === 'true';
 export const FAST_TIMER_MULTIPLIER = 5; // 例: 1/5 の時間にする
 
+export const SUB_WEAPONS: string[] = [
+    "スプラッシュボム", "キューバンボム", "クイックボム", "カーリングボム",
+    "ロボットボム", "タンサンボム", "トーピード", "スプリンクラー",
+    "スプラッシュシールド", "ジャンプビーコン", "ラインマーカー", "ポイントセンサー",
+    "トラップ", "ポイズンミスト"
+    // "スプリングボム" など特殊なものがあれば追加
+].sort((a, b) => a.localeCompare(b, 'ja')); // 五十音順ソート
+
+export const SPECIAL_WEAPONS: string[] = [
+    "グレートバリア", "ホップソナー", "カニタンク", "トリプルトルネード",
+    "サメライド", "ナイスダマ", "ウルトラショット", "テイオウイカ",
+    "エナジースタンド", "デコイチラシ", "キューインキ", "アメフラシ",
+    "メガホンレーザー5.1ch", "ジェットパック", "ウルトラハンコ", "マルチミサイル",
+    "ショクワンダー", "スミナガシート", "ウルトラチャクチ"
+].sort((a, b) => a.localeCompare(b, 'ja')); // 五十音順ソート
+
 export const ROOM_IDS: string[] = [
     "アイロニック",
     "アナアキ",

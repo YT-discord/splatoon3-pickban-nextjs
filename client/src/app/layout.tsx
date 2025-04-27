@@ -40,9 +40,9 @@ export default function RootLayout({
             },
           }}
         />
-        <header className="bg-gray-800 text-white shadow-md">
+        <header className="bg-gray-900 text-white shadow-md header-clipped">
           <div className="container mx-auto px-4 py-3">
-            <h1 className="text-xl font-bold">Splatoon3 PICK/BAN Application</h1>
+            <h1 className="text-xl font-bold">Splatoon3 PICK/BAN</h1>
           </div>
         </header>
         <main className="container mx-auto p-4"> {/* ★ main に変更し、padding調整 */}

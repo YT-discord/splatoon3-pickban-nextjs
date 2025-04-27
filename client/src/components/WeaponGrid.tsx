@@ -3,8 +3,8 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import Image from 'next/image';
 import type { Socket } from 'socket.io-client';
-import type { GameState, RoomUser, RoomWeaponState, MasterWeapon, Team, Stage, Rule, /*DisplayWeapon*/ } from '../../../common/types/game';
-import { MAX_BANS_PER_TEAM,  STAGES_DATA, RULES_DATA, WEAPON_ATTRIBUTES, /*TOTAL_PICK_TURNS, MAX_PICKS_PER_TEAM*/ } from '../../../common/types/constants';
+import type { GameState, RoomUser, RoomWeaponState, MasterWeapon, Team, Stage, Rule } from '../../../common/types/game';
+import { MAX_BANS_PER_TEAM, STAGES_DATA, RULES_DATA, WEAPON_ATTRIBUTES } from '../../../common/types/constants';
 import toast from 'react-hot-toast';
 
 import GameHeader from './GameHeader';
@@ -16,7 +16,7 @@ import WeaponGridDisplay from './WeaponGridDisplay';
 // ★ ランダム選択肢の定義
 export const RANDOM_CHOICE = { id: 'random', name: 'ランダム', imageUrl: '/images/icons/random.png' };
 export const RANDOM_CHOICE_ID = -1; // ランダム選択用の特別なID
-export const RANDOM_CHOICE_ITEM = { id: RANDOM_CHOICE_ID, name: 'ランダム', attribute: 'special', imageUrl: '/images/icons/random.png' };
+const RANDOM_CHOICE_ITEM = { id: RANDOM_CHOICE_ID, name: 'ランダム', attribute: 'special', imageUrl: '/images/icons/random.png', subWeapon: '', specialWeapon: '' };
 
 
 interface WeaponGridProps {
@@ -26,6 +26,7 @@ interface WeaponGridProps {
     userName: string;
     myActualSocketId: string;
     onLeaveRoom: () => void;
+    onGameStateUpdate: (gameState: GameState | null) => void;
 }
 
 export interface DisplayWeapon extends MasterWeapon {
@@ -37,7 +38,9 @@ export interface DisplayWeapon extends MasterWeapon {
 
 export type WeaponAttribute = typeof WEAPON_ATTRIBUTES[number];
 
-export default function WeaponGrid({ socket, roomId, masterWeapons, userName, myActualSocketId, onLeaveRoom }: WeaponGridProps) {
+export type FilterType = 'attribute' | 'subWeapon' | 'specialWeapon';
+
+export default function WeaponGrid({ socket, roomId, masterWeapons, userName, myActualSocketId, onLeaveRoom, onGameStateUpdate }: WeaponGridProps) {
     const [gameState, setGameState] = useState<GameState | null>(null);
     const [weaponStates, setWeaponStates] = useState<Record<number, RoomWeaponState>>({});
     const [myTeam, setMyTeam] = useState<Team | 'observer'>('observer');
@@ -48,10 +51,37 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
     const [isStageModalOpen, setIsStageModalOpen] = useState(false);
     const [isRuleModalOpen, setIsRuleModalOpen] = useState(false);
     const [selectedAttributes, setSelectedAttributes] = useState<WeaponAttribute[]>([]);
+    const [selectedSubWeapons, setSelectedSubWeapons] = useState<string[]>([]);
+    const [selectedSpecialWeapons, setSelectedSpecialWeapons] = useState<string[]>([]);
+    const [filterSectionOpen, setFilterSectionOpen] = useState<Record<FilterType, boolean>>({
+        attribute: true, // 初期状態は属性のみ開く
+        subWeapon: false,
+        specialWeapon: false,
+    });
 
     // --- 表示用武器リスト生成 (Memoized) ---
     const displayWeapons: DisplayWeapon[] = useMemo(() => {
+        // ★★★★★ 変更点: 属性、サブ、スペシャルのAND条件でフィルター ★★★★★
         let filteredWeapons = [...masterWeapons];
+
+        // 属性フィルター
+        if (selectedAttributes.length > 0) {
+            filteredWeapons = filteredWeapons.filter(weapon =>
+                selectedAttributes.includes(weapon.attribute as WeaponAttribute)
+            );
+        }
+        // サブウェポンフィルター
+        if (selectedSubWeapons.length > 0) {
+            filteredWeapons = filteredWeapons.filter(weapon =>
+                selectedSubWeapons.includes(weapon.subWeapon) // 表示名で比較
+            );
+        }
+        // スペシャルウェポンフィルター
+        if (selectedSpecialWeapons.length > 0) {
+            filteredWeapons = filteredWeapons.filter(weapon =>
+                selectedSpecialWeapons.includes(weapon.specialWeapon) // 表示名で比較
+            );
+        }
 
         if (selectedAttributes.length > 0) {
             filteredWeapons = filteredWeapons.filter(weapon =>
@@ -78,12 +108,16 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
                 selectedBy: null,
                 bannedBy: [],
                 isLoading: loadingWeaponId === RANDOM_CHOICE_ID,
+                subWeapon: '',
+                specialWeapon: '',
+                subWeaponImageName: '',
+                specialWeaponImageName: ''
             };
             currentDisplayWeapons.unshift(randomItemWithState);
         }
 
         return currentDisplayWeapons;
-    }, [masterWeapons, weaponStates, loadingWeaponId, gameState, myTeam, selectedAttributes]);
+    },  [masterWeapons, weaponStates, loadingWeaponId, gameState, myTeam, selectedAttributes, selectedSubWeapons, selectedSpecialWeapons]);
 
     // 参加者リストをチームごとに分類
     const alphaTeamUsers = useMemo(() => roomUsers.filter(u => u.team === 'alpha'), [roomUsers]);
@@ -99,7 +133,6 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
                 selectedBy: state.selectedBy,
                 bannedBy: state.bannedBy,
                 imageUrl: `/images/weapons/${encodeURIComponent(master.name)}.png`,
-                // isLoading はここでは不要だが、DisplayWeapon 型に合わせるため false を入れておく
                 isLoading: false, // または loadingWeaponId === master.id
             } as DisplayWeapon; // 型アサーション
         });
@@ -117,6 +150,38 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
     const handleError = useCallback((message: string) => {
         console.error('Handled Error:', message);
         toast.error(message);
+    }, []);
+
+    const handleFilterChange = useCallback((type: FilterType, value: string) => {
+        switch (type) {
+            case 'attribute':
+                setSelectedAttributes(prev =>
+                    prev.includes(value as WeaponAttribute) ? prev.filter(a => a !== value) : [...prev, value as WeaponAttribute]
+                );
+                break;
+            case 'subWeapon':
+                setSelectedSubWeapons(prev =>
+                    prev.includes(value) ? prev.filter(a => a !== value) : [...prev, value]
+                );
+                break;
+            case 'specialWeapon':
+                setSelectedSpecialWeapons(prev =>
+                    prev.includes(value) ? prev.filter(a => a !== value) : [...prev, value]
+                );
+                break;
+        }
+    }, []);
+
+    const handleClearFilterSection = useCallback((type: FilterType) => {
+        switch (type) {
+            case 'attribute': setSelectedAttributes([]); break;
+            case 'subWeapon': setSelectedSubWeapons([]); break;
+            case 'specialWeapon': setSelectedSpecialWeapons([]); break;
+        }
+    }, []);
+
+    const toggleFilterSection = useCallback((type: FilterType) => {
+        setFilterSectionOpen(prev => ({ ...prev, [type]: !prev[type] }));
     }, []);
 
     // --- WebSocketイベントリスナー設定 ---
@@ -295,18 +360,11 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
             socket.off('system message', handleSystemMessage);
             socket.off('host changed', handleHostChanged);
         };
-    }, [socket, roomId, userName, masterWeapons, loadingWeaponId]);
+    }, [socket, roomId, userName, masterWeapons, loadingWeaponId, onGameStateUpdate]);
 
-    const handleAttributeFilterChange = useCallback((attribute: WeaponAttribute) => {
-        setSelectedAttributes(prev =>
-            prev.includes(attribute)
-                ? prev.filter(a => a !== attribute)
-                : [...prev, attribute]
-        );
-    }, []);
-    const handleClearFilters = useCallback(() => {
-        setSelectedAttributes([]);
-    }, []);
+    useEffect(() => {
+        onGameStateUpdate(gameState);
+    }, [gameState, onGameStateUpdate]);
 
     // --- 武器選択/禁止処理 ---
     const handleWeaponClick = (weaponId: number) => {
@@ -425,26 +483,18 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
         );
     }
 
-    // // ページ全体と中央カラム(グリッド部)の背景色クラスを決定
-    // let pageBgColor = 'bg-white'; // デフォルトのページ背景
-    // let gridBgColor = 'bg-white'; // デフォルトのグリッド背景
-
-    // if (gameState.phase === 'ban') {
-    //     pageBgColor = 'bg-purple-100'; // BANフェーズのページ背景
-    //     gridBgColor = 'bg-purple-200'; // BANフェーズのグリッド背景 (濃く)
-    // } else if (gameState.phase === 'pick' && gameState.currentTurn) {
-    //     if (gameState.currentTurn === 'alpha') {
-    //         pageBgColor = 'bg-blue-100'; // アルファターンのページ背景
-    //         gridBgColor = 'bg-blue-200'; // アルファターンのグリッド背景 (濃く)
-    //     } else if (gameState.currentTurn === 'bravo') {
-    //         pageBgColor = 'bg-red-100'; // ブラボーターンのページ背景
-    //         gridBgColor = 'bg-red-200'; // ブラボーターンのグリッド背景 (濃く)
-    //     }
-    // }
+    let overlayClassName = ''; // デフォルトはクラスなし
+    if (gameState.phase === 'ban') {
+        overlayClassName = 'overlay-ban';
+    } else if (gameState.phase === 'pick' && gameState.currentTurn === 'alpha') {
+        overlayClassName = 'overlay-alpha';
+    } else if (gameState.phase === 'pick' && gameState.currentTurn === 'bravo') {
+        overlayClassName = 'overlay-bravo';
+    }
 
     // --- JSX レンダリング本体 ---
     return (
-        <div className={`container mx-auto p-4 space-y-6 bg-white rounded-lg shadow-md`}> 
+        <div className={`container mx-auto p-4 space-y-6 bg-white rounded-lg shadow-md weapon-grid-overlay-container ${overlayClassName}`}>
             {/* ================== ヘッダーエリア ================== */}
             <GameHeader
                 roomId={roomId}
@@ -479,24 +529,28 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
 
                 {/* ----- 中央カラム: 武器グリッド ----- */}
                 <div className="lg:col-span-6 lg:max-h-[calc(75vh-250px)] lg:overflow-y-auto flex flex-col gap-4">
-                    <WeaponFilter
+                <WeaponFilter
                         selectedAttributes={selectedAttributes}
-                        onAttributeChange={handleAttributeFilterChange}
-                        onClearFilters={handleClearFilters}
+                        selectedSubWeapons={selectedSubWeapons}
+                        selectedSpecialWeapons={selectedSpecialWeapons}
+                        filterSectionOpen={filterSectionOpen}
+                        onFilterChange={handleFilterChange}
+                        onClearFilterSection={handleClearFilterSection}
+                        onToggleSection={toggleFilterSection}
                     />
 
 
                     {/* Weapon Grid 本体 */}
-                    <div className={`p-3 rounded-lg shadow-sm`}> 
-                    <WeaponGridDisplay
-                        gameState={gameState}
-                        displayWeapons={displayWeapons} // 計算済みの表示用武器リスト
-                        myTeam={myTeam}
-                        onWeaponClick={handleWeaponClick} // 武器クリックハンドラを渡す
-                    />
+                    <div className={`p-3 rounded-lg shadow-sm`}>
+                        <WeaponGridDisplay
+                            gameState={gameState}
+                            displayWeapons={displayWeapons} // 計算済みの表示用武器リスト
+                            myTeam={myTeam}
+                            onWeaponClick={handleWeaponClick} // 武器クリックハンドラを渡す
+                        />
                     </div>
                 </div>
-                
+
 
                 {/* ----- 右カラム: ブラボーチーム ----- */}
                 <TeamPanel

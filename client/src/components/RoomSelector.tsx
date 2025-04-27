@@ -1,9 +1,10 @@
-// reactnext/client/src/app/components/RoomSelector.tsx (修正後)
 'use client';
 
-import { useState, useEffect, useCallback } from 'react'; // ★ useCallback をインポート
+import { useState, useEffect, useCallback } from 'react';
 import { Socket } from 'socket.io-client';
 import Image from 'next/image';
+
+const LOCAL_STORAGE_KEY_USERNAME = 'banpick_userName';
 
 // ルーム情報の型定義
 interface RoomInfo {
@@ -31,7 +32,7 @@ const getPhaseDisplayName = (phase: string): string => {
 };
 
 const getRoomIconPath = (roomId: string): string => {
-  return `/images/icons/${roomId}.png`; // ★ roomId を直接使用
+  return `/images/icons/${roomId}.png`;
 };
 
 const validateName = (name: string): string | null => {
@@ -48,6 +49,16 @@ export default function RoomSelector({ socket, setUserNameForParent }: RoomSelec
   const [userName, setUserName] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(true); // ★ 初期値を true に変更
   const [error, setError] = useState<string | null>(null);
+
+  // --- 名前の読み込み Effect ---
+  useEffect(() => {
+    const savedName = localStorage.getItem(LOCAL_STORAGE_KEY_USERNAME);
+    if (savedName) {
+        console.log(`[RoomSelector] Found saved name: ${savedName}`);
+        setUserName(savedName);
+    }
+    // setIsLoading(true); // isLoading は初回 fetchRooms 内で管理
+}, []); // 空の依存配列で初回マウント時のみ実行
 
   // --- ルームリスト取得 Effect ---
   useEffect(() => {
@@ -116,12 +127,6 @@ export default function RoomSelector({ socket, setUserNameForParent }: RoomSelec
     // ★ 依存配列から selectedRoomId を削除 (初回取得のみ実行)
   }, []); // 空の依存配列: 初回マウント時のみ実行
 
-  const handleUserNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newName = e.target.value;
-    setUserName(newName);
-    // setError(validateName(newName)); // 入力中にエラーを出す場合
-  };
-
   // --- 入室処理関数 (useCallbackで最適化) ---
   const handleJoinRoom = useCallback((roomIdToJoin: string) => { // ★ 引数で roomId を受け取るように変更
     const nameValidationError = validateName(userName);
@@ -142,6 +147,16 @@ export default function RoomSelector({ socket, setUserNameForParent }: RoomSelec
     if (roomToJoin.userCount >= roomToJoin.maxUsers) { setError('このルームは満員です。'); return; } // 満員チェックは維持
 
     setError(null); // エラークリア
+
+    try {
+      localStorage.setItem(LOCAL_STORAGE_KEY_USERNAME, nameToJoin);
+      console.log(`[RoomSelector] Saved name to localStorage: ${nameToJoin}`);
+  } catch (storageError) {
+      // localStorage が使えない環境 (プライベートモードなど) のエラー処理 (任意)
+      console.warn('[RoomSelector] Failed to save name to localStorage:', storageError);
+  }
+
+
     console.log(`Attempting to join room ${roomIdToJoin} as ${nameToJoin}`);
     socket.emit('join room', { roomId: roomIdToJoin, name: nameToJoin });
     setUserNameForParent(nameToJoin);
@@ -161,27 +176,27 @@ export default function RoomSelector({ socket, setUserNameForParent }: RoomSelec
 
   return (
     <div className="container mx-auto p-6 max-w-2xl">
-      <h1 className="text-3xl font-bold mb-6 text-center">ルーム選択</h1>
+      <h1 className="text-3xl font-bold mb-6 text-center text-white">ルーム選択</h1>
 
       {/* 名前入力フィールド */}
       <div className="mb-6">
-        <label htmlFor="userName" className="block text-lg font-medium text-gray-700 mb-2">
+        <label htmlFor="userName" className="block text-lg font-medium text-white mb-2">
           プレイヤー名
         </label>
         <input
           type="text"
           id="userName"
           value={userName}
-          onChange={handleUserNameChange}
+          onChange={(e) => setUserName(e.target.value)}
           placeholder="名前を入力 (10文字以内)"
-          className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-500"
+          className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-500 bg-white"
           maxLength={10}
         />
       </div>
 
       {/* ルームリスト表示 */}
       <div className="space-y-3 mb-6">
-        <h2 className="text-xl font-semibold mb-2">参加するルームを選択してください</h2>
+        <h2 className="text-xl font-semibold mb-2 text-white">参加するルームを選択してください</h2>
         {rooms.length > 0 ? (
           rooms.map((room) => {
             const isFull = room.userCount >= room.maxUsers;
@@ -210,12 +225,19 @@ export default function RoomSelector({ socket, setUserNameForParent }: RoomSelec
                     height={32}
                     className="rounded" // 任意
                   />
-                  <div className="flex items-baseline gap-2 mb-1">
-                    <span className="font-semibold text-lg text-gray-800">{room.roomId} :</span>
-                    <span className="font-medium text-base text-gray-800 truncate" title={room.roomName}>{room.roomName}</span>
+                  <div className="flex-grow min-w-0">
+                  <div className="text-xs text-gray-500 truncate" title={room.roomId}>
+                                      {room.roomId}
+                                  </div>
+                                  {/* ルーム名表示 */}
+                                  {/* <div className="flex items-center gap-1"> */} {/* ← gap は不要かも */}
+                                      {/* ★★★★★ GameHeader と同じクラスを適用 ★★★★★ */}
+                                      <div className="font-semibold text-lg text-gray-800 truncate" title={room.roomName}>
+                                          {room.roomName}
+                                      </div>
                   </div>
                   {/* 状態と人数 */}
-                  <div className="flex items-center gap-2 text-sm">
+                  <div className="flex items-center gap-2 text-sm mt-0.5">
                     <span className="text-gray-600">{phaseDisplayName}</span> {/* ★ 日本語フェーズ名 */}
                     <span className={`font-medium ${isFull ? 'text-red-600' : 'text-green-700'}`}>
                       {room.userCount} / {room.maxUsers} 人 {isFull ? '(満員)' : ''}

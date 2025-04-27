@@ -1,5 +1,4 @@
-// src/components/WeaponGridDisplay.tsx
-import React from 'react';
+import React, { memo } from 'react';
 import Image from 'next/image';
 import type { GameState, Team } from '../../../common/types/game';
 import type { DisplayWeapon } from './WeaponGrid';
@@ -77,24 +76,52 @@ const renderWeaponItem = (
         } else { overallOpacity = 'opacity-75'; }
     }
 
+    const subWeaponImageUrl = !isRandomChoice ? `/images/subweapon/${encodeURIComponent(weapon.subWeaponImageName)}.webp` : '';
+    const specialWeaponImageUrl = !isRandomChoice ? `/images/specialweapon/${encodeURIComponent(weapon.specialWeaponImageName)}.webp` : '';
+
     return (
         <div
             key={`weapon-grid-${weapon.id}`}
-            className={`relative p-2 rounded-lg border transition-all duration-150 ${bgColor} ${borderColor} ${overallOpacity} ${ring} ${cursor} ${hoverEffect}`}
-            onClick={() => !isDisabled && onWeaponClick(weapon.id)} // Props の関数を呼び出し
-            title={weapon.name + (isDisabled ? ' (操作不可)' : '')}
+            className={`relative pt-6 pb-1 px-1 rounded-lg border transition-all duration-150 ${bgColor} ${borderColor} ${overallOpacity} ${ring} ${cursor} ${hoverEffect}`}
+            onClick={() => !isDisabled && onWeaponClick(weapon.id)}
+            title={`${weapon.name}\nサブ: ${weapon.subWeapon}\nスペシャル: ${weapon.specialWeapon}${isDisabled ? ' (操作不可)' : ''}`}
         >
-            <div className="absolute top-0 left-0 px-1 py-0.5 bg-black bg-opacity-60 text-white text-[8px] rounded-br-md leading-none truncate max-w-[80%]">
-                {weapon.name}
-            </div>
             <Image
                 src={weapon.imageUrl}
                 alt={weapon.name}
-                width={100}
-                height={100}
-                className={`mx-auto transition-opacity duration-150 ${imageOpacity}`}
+                width={100} height={100}
+                className={`mx-auto transition-opacity duration-150 ${imageOpacity}`} // ★ mtなどのマージンは不要
                 priority={weapon.id <= 12}
             />
+            {!isRandomChoice && (
+                 // ★ top-0 に変更、左右中央寄せ、間隔を gap-2 に変更
+                 <div className="absolute top-0 left-0 right-0 flex justify-center items-center gap-2 pt-0.5"> {/* ★ top-0, gap-2, pt-0.5 に変更 */}
+                     {/* サブウェポン */}
+                      {/* ★ 背景色(bg-gray-200)と角丸(rounded)を追加 */}
+                     <div className="relative w-5 h-5 bg-gray-200 rounded">
+                         <Image
+                             src={subWeaponImageUrl}
+                             alt={weapon.subWeapon}
+                             layout="fill"
+                             objectFit="contain"
+                             title={`サブ: ${weapon.subWeapon}`}
+                             className="p-0.5" // ★ 内側に少しパディング (任意)
+                         />
+                     </div>
+                     {/* スペシャルウェポン */}
+                      {/* ★ 背景色(bg-gray-200)と角丸(rounded)を追加 */}
+                     <div className="relative w-5 h-5 bg-gray-200 rounded">
+                         <Image
+                             src={specialWeaponImageUrl}
+                             alt={weapon.specialWeapon}
+                             layout="fill"
+                             objectFit="contain"
+                             title={`スペシャル: ${weapon.specialWeapon}`}
+                             className="p-0.5" // ★ 内側に少しパディング (任意)
+                         />
+                     </div>
+                 </div>
+             )}
             {banMark}
             {weapon.isLoading && (
                 <div className="absolute inset-0 bg-white bg-opacity-50 flex items-center justify-center rounded-lg">
@@ -114,7 +141,7 @@ const renderWeaponItem = (
 };
 
 
-const WeaponGridDisplay: React.FC<WeaponGridDisplayProps> = ({
+const WeaponGridDisplayComponent: React.FC<WeaponGridDisplayProps> = ({
     gameState,
     displayWeapons,
     myTeam,
@@ -156,4 +183,10 @@ const WeaponGridDisplay: React.FC<WeaponGridDisplayProps> = ({
     );
 };
 
-export default WeaponGridDisplay;
+// ★★★★★ 変更点: displayName を設定 ★★★★★
+WeaponGridDisplayComponent.displayName = 'WeaponGridDisplay';
+
+// ★★★★★ 変更点: memo でラップして default export ★★★★★
+const MemoizedWeaponGridDisplay = memo(WeaponGridDisplayComponent);
+
+export default MemoizedWeaponGridDisplay; // ★ メモ化されたコンポーネントをエクスポート

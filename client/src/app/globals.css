@@ -1,26 +1,89 @@
-@import "tailwindcss";
+@import 'tailwindcss';
+/* client/src/app/globals.css */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+html, body {
+  min-height: 100vh; /* 画面全体の高さを確保 */
+  margin: 0; /* デフォルトマージンをリセット */
+  padding: 0; /* デフォルトパディングをリセット */
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* ★★★★★ 常に縦スクロールバーを表示する設定 ★★★★★ */
+html {
+  overflow-y: scroll;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  /* ★ ベースとなる背景色 (フォールバック用) */
+  background-color: #1a1a1a; /* 暗めの色 */
+
+  --gradient-color-start: rgba(50, 50, 50, 0.5); /* 例: やや明るめのグレー、透明度 50% */
+  --gradient-color-mid: rgba(30, 30, 30, 0.2);   /* 例: 暗めのグレー、透明度 20% */
+
+  /* ★ デフォルト状態の背景: グラデーション + 画像 */
+  background-image:
+    /* デフォルトのグラデーション (黒の半透明、下から上へ) */
+    linear-gradient(to top, var(--gradient-color-start) 0%, var(--gradient-color-mid) 25%, rgba(0, 0, 0, 0) 50%),
+    /* 背景画像 */
+    url('/images/background.png');
+
+  /* 各背景レイヤーに対する設定 */
+  background-size:
+    auto, /* グラデーションはサイズ指定不要 */
+    cover; /* 画像はカバー */
+  background-position:
+    center, /* グラデーションは中央 */
+    center center; /* 画像は中央 */
+  background-repeat:
+    no-repeat, /* グラデーションは繰り返さない */
+    no-repeat; /* 画像も繰り返さない */
+  background-attachment:
+    fixed, /* グラデーションも固定 */
+    fixed; /* 画像も固定 */
+
+  /* ★ 状態に応じたグラデーションの色を変えるための CSS 変数定義 */
+  --gradient-color-start: rgba(0, 0, 0, 0.6); /* デフォルト: 黒 */
+  --gradient-color-mid: rgba(0, 0, 0, 0.4);   /* デフォルト: 黒 */
+
+  /* ★ background-image の変化をアニメーションさせる */
+   transition: background-image 0.4s ease-in-out;
+   /* CSS 変数の transition は background-image の再定義で上書きされる可能性があるため、
+      background-image 自体の transition を使う方が確実かもしれません */
 }
+
+/* ★★★★★ フェーズ/ターンに応じたグラデーション色変更 (CSS 変数のみ変更) ★★★★★ */
+body.phase-ban {
+  --gradient-color-start: rgba(180, 80, 220, 0.6);  /* BAN: 明るい紫 (下側) */
+  --gradient-color-mid: rgba(120, 40, 160, 0.3);  /* BAN: 濃い紫 (中間、より薄く) */
+}
+body.phase-pick.turn-alpha {
+  --gradient-color-start: rgba(80, 150, 255, 0.6); /* Alpha: 明るい青 (下側) */
+  --gradient-color-mid: rgba(40, 100, 180, 0.3); /* Alpha: 濃い青 (中間、より薄く) */
+}
+body.phase-pick.turn-bravo {
+  --gradient-color-start: rgba(255, 80, 80, 0.6);   /* Bravo: 明るい赤 (下側) */
+  --gradient-color-mid: rgba(180, 40, 60, 0.3);   /* Bravo: 濃い赤 (中間、より薄く) */
+}
+
+/* ★★★★★ 状態変化時に background-image を再定義し、CSS 変数を適用 ★★★★★ */
+/* これにより、常にグラデーションと画像の両方が適用される */
+body.phase-ban,
+body.phase-pick.turn-alpha,
+body.phase-pick.turn-bravo {
+   background-image:
+    linear-gradient(to top, var(--gradient-color-start) 0%, var(--gradient-color-mid) 25%, rgba(0, 0, 0, 0) 50%),
+    /* 背景画像 (再度指定) */
+    url('/images/background.png');
+}
+
+
+/* ★★★★★ ヘッダー用カスタムクラス (クリップパス) ★★★★★ */
+@layer components {
+  .header-clipped {
+    clip-path: polygon(0 0, 28% 0, 25% 100%, 0 100%);
+  }
+}
+
+/* 他に必要なグローバルスタイルがあればここに追加 */

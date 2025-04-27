@@ -88,6 +88,10 @@ export interface ConnectedUserInfo {
       name: string;
       imageUrl: string; // ファイル名のみ想定
       attribute: string;
+      subWeapon: string;   // 例: スプラッシュボム
+      specialWeapon: string; // 例: グレートバリア
+      subWeaponImageName: string; // 例: splash_bomb
+      specialWeaponImageName: string; // 例: great_barrier
   }
 
   // クライアント側で使う武器情報の型 (マスター情報 + 状態)
