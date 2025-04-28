@@ -7,6 +7,8 @@ export const MAX_BANS_PER_TEAM = 3;
 export const MAX_PICKS_PER_TEAM = 4; // = totalPickTurns / 2
 export const TOTAL_PICK_TURNS = MAX_PICKS_PER_TEAM * 2; // 8
 export const MAX_USERS_PER_TEAM = 4;
+export const RANDOM_CHOICE_ID = -1;
+export const RANDOM_CHOICE_ITEM = { id: RANDOM_CHOICE_ID, name: 'ランダム', attribute: 'special', imageUrl: '/images/icons/random.png', subWeapon: '', specialWeapon: '' };
 
 // 時間設定 (秒)
 export const BAN_PHASE_DURATION = 30;

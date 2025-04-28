@@ -10,7 +10,7 @@ interface GameHeaderProps {
     roomId: string;
     gameState: GameState | null; // GameState全体を渡すか、必要な情報だけにするか検討
     myTeam: Team | 'observer'; // 自分のチーム
-    myActualSocketId: string;
+    // myActualSocketId: string;
     socket: Socket | null;
     selectedStage: Stage | typeof RANDOM_CHOICE | null;
     selectedRule: Rule | typeof RANDOM_CHOICE | null;
@@ -19,6 +19,7 @@ interface GameHeaderProps {
     onResetGame: () => void;
     onOpenStageModal: () => void;
     onOpenRuleModal: () => void;
+    amIHost: boolean;
 }
 
 const validateRoomName = (name: string): string | null => {
@@ -32,7 +33,7 @@ const GameHeader: React.FC<GameHeaderProps> = ({
     roomId,
     gameState,
     // myTeam,
-    myActualSocketId,
+    // myActualSocketId,
     socket,
     selectedStage,
     selectedRule,
@@ -41,6 +42,7 @@ const GameHeader: React.FC<GameHeaderProps> = ({
     onResetGame,
     onOpenStageModal,
     onOpenRuleModal,
+    amIHost
 }) => {
 
     const [isEditingName, setIsEditingName] = useState(false);
@@ -49,7 +51,7 @@ const GameHeader: React.FC<GameHeaderProps> = ({
 
     const handleSaveName = useCallback(() => {
         // gameState が null の可能性もあるのでチェックを追加
-        if (!socket || !gameState || gameState.hostId !== myActualSocketId) return;
+        if (!socket || !gameState ) return;
         const validationError = validateRoomName(editingName);
         if (validationError) {
             setEditError(validationError); // エラーメッセージを表示
@@ -64,7 +66,7 @@ const GameHeader: React.FC<GameHeaderProps> = ({
         }
         setIsEditingName(false);
         // ★ 依存配列に gameState?.roomName, myActualSocketId を追加
-    }, [socket, editingName, gameState?.roomName, myActualSocketId]); // ★ 修正
+    }, [socket, editingName, gameState?.roomName]); // ★ 修正
 
     const handleCancelEditName = useCallback(() => {
         // gameState が null の可能性を考慮
@@ -83,11 +85,11 @@ const GameHeader: React.FC<GameHeaderProps> = ({
 
     const startEditingName = useCallback(() => {
         // gameState が null の可能性を考慮
-        if (!gameState || gameState.hostId !== myActualSocketId) return;
+        if (!gameState) return;
         // setEditingName は useEffect で行うのでここでは不要
         setIsEditingName(true);
         // ★ 依存配列に gameState?.hostId, myActualSocketId を追加
-    }, [gameState?.hostId, myActualSocketId]); // ★ 修正
+    }, [gameState?.hostId]); // ★ 修正
 
     const getRoomIconPath = (roomId: string): string => {
         return `/images/icons/${roomId}.png`; // ★ roomId を直接使用
@@ -97,9 +99,6 @@ const GameHeader: React.FC<GameHeaderProps> = ({
     if (!gameState) {
         return <div className="p-4 text-center">ヘッダー情報読み込み中...</div>;
     }
-
-    // amIHost の判定 (トップレベルに近い方が良いが、gameState が必要なのでここ)
-    const amIHost = gameState.hostId !== null && gameState.hostId === myActualSocketId;
 
     const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setEditingName(e.target.value);

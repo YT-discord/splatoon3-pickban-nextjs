@@ -29,14 +29,15 @@ const FilterSection: React.FC<FilterSectionProps> = ({
     type, title, items, selectedItems, isOpen, onToggle, onItemChange, onClear
 }) => (
     <div className="border-b border-gray-200 last:border-b-0">
-        {/* ヘッダー (クリックで開閉) */}
-        <button
-            onClick={() => onToggle(type)}
-            className="w-full flex justify-between items-center py-2 px-1 text-left hover:bg-gray-100"
+        <div
+            onClick={() => onToggle(type)} // ★ セクション開閉は div で行う
+            className="w-full flex justify-between items-center py-2 px-1 text-left hover:bg-gray-100 cursor-pointer"
         >
+            {/* タイトル (クリックしても開閉) */}
             <span className="text-sm font-semibold text-gray-700">
                 {isOpen ? '▼' : '▶'} {title}
             </span>
+            {/* 右側の要素 (選択数と解除ボタン) */}
             <div className="flex items-center gap-2">
                  {/* 選択数表示 */}
                  {selectedItems.length > 0 && (
@@ -44,16 +45,19 @@ const FilterSection: React.FC<FilterSectionProps> = ({
                          {selectedItems.length} 件選択中
                      </span>
                  )}
-                {/* 選択解除ボタン */}
+                {/* ★★★★★ 解除ボタン (ネストされていない) ★★★★★ */}
                 <button
-                    onClick={(e) => { e.stopPropagation(); onClear(type); }}
-                    className="text-xs px-2 py-1 border rounded bg-white text-gray-600 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                    onClick={(e) => {
+                        e.stopPropagation(); // ★ 親 div の onClick を防ぐ
+                        onClear(type);
+                    }}
+                    className="text-xs px-2 py-1 border rounded bg-white text-gray-600 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed" // ★ hover スタイル調整
                     disabled={selectedItems.length === 0}
                 >
                     解除
                 </button>
             </div>
-        </button>
+        </div>
         {/* コンテンツ (開いているときだけ表示) */}
         {isOpen && (
             <div className="pt-2 pb-3 px-1 flex flex-wrap gap-1.5">
@@ -90,11 +94,11 @@ const WeaponFilter: React.FC<WeaponFilterProps> = ({
     onToggleSection,
 }) => {
     return (
-        // ★★★★★ 変更点: アコーディオン形式のUI ★★★★★
-        <div className="mb-4 bg-white rounded border"> {/* 背景を白に */}
+        // アコーディオン形式のUI
+        <div className="mb-4 bg-white rounded border">
             <FilterSection
                 type="attribute"
-                title="属性"
+                title="ブキ種"
                 items={WEAPON_ATTRIBUTES}
                 selectedItems={selectedAttributes}
                 isOpen={filterSectionOpen.attribute}

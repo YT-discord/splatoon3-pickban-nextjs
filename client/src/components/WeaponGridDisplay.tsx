@@ -1,179 +1,214 @@
-import React, { memo } from 'react';
-import Image from 'next/image';
-import type { GameState, Team } from '../../../common/types/game';
+import React, { memo, useMemo } from 'react';
+import { FixedSizeGrid, GridChildComponentProps } from 'react-window';
+import type { GameState, Team, MasterWeapon, RoomWeaponState } from '../../../common/types/game';
 import type { DisplayWeapon } from './WeaponGrid';
-import { MAX_BANS_PER_TEAM, MAX_PICKS_PER_TEAM } from '../../../common/types/constants';
-import { RANDOM_CHOICE_ID } from '../components/WeaponGrid'
+import { MAX_BANS_PER_TEAM, MAX_PICKS_PER_TEAM, RANDOM_CHOICE_ID, RANDOM_CHOICE_ITEM } from '../../../common/types/constants';
+import WeaponItem from './WeaponItem'; 
+import AutoSizer from 'react-virtualized-auto-sizer'; 
 
 interface WeaponGridDisplayProps {
-    gameState: GameState; // フェーズやターン判定に必要
-    displayWeapons: DisplayWeapon[]; // 表示する武器の配列
-    myTeam: Team | 'observer'; // 自分のチーム（クリック可否判定に使用）
-    onWeaponClick: (weaponId: number) => void; // 武器クリック時のコールバック
+    phase: GameState['phase'];
+    currentTurn: GameState['currentTurn'];
+    banPhaseState: GameState['banPhaseState'];
+    pickPhaseState: GameState['pickPhaseState'];
+    displayWeaponIds: number[];
+    masterWeapons: MasterWeapon[];
+    weaponStates: Record<number, RoomWeaponState>;
+    loadingWeaponId: number | null;
+    myTeam: Team | 'observer';
+    amIHost: boolean;
+    myBanCount: number;
+    myPickCount: number;
+    onWeaponClick: (weaponId: number) => void;
 }
 
-const renderWeaponItem = (
-    weapon: DisplayWeapon,
-    gameState: GameState,
-    myTeam: Team | 'observer',
-    onWeaponClick: (weaponId: number) => void
-) => {
-    const isSelectedByAlpha = weapon.selectedBy === 'alpha';
-    const isSelectedByBravo = weapon.selectedBy === 'bravo';
-    const isBannedByAlpha = weapon.bannedBy.includes('alpha');
-    const isBannedByBravo = weapon.bannedBy.includes('bravo');
-    const isBanned = isBannedByAlpha || isBannedByBravo;
-    const isMyTeamPlayer = myTeam === 'alpha' || myTeam === 'bravo';
-    const isRandomChoice = weapon.id === RANDOM_CHOICE_ID;
+interface CellData {
+    weaponIds: number[];
+    masterWeaponsMap: Map<number, MasterWeapon>; // Map の方が効率的
+    weaponStates: Record<number, RoomWeaponState>;
+    loadingWeaponId: number | null;
+    // columnCount: number;
+    phase: GameState['phase'];
+    currentTurn: GameState['currentTurn'];
+    myTeam: Team | 'observer';
+    myBanCount: number;
+    onWeaponClick: (weaponId: number) => void;
+    gridWidth: number;
+    itemWidth: number;
+}
 
-    // --- クリック可否判定 ---
-    let canClick = false;
-    const isMyTurn = gameState.currentTurn === myTeam;
+interface CellProps extends GridChildComponentProps {
+    data: CellData;
+}
 
-    if (isRandomChoice) {
-        if (gameState.phase === 'pick' && isMyTurn && isMyTeamPlayer) {
-            canClick = true;
-        }
-    } else if (gameState.phase === 'pick' && isMyTeamPlayer && isMyTurn && !weapon.selectedBy && !isBanned) {
-        canClick = true;
-    } else if (gameState.phase === 'ban' && isMyTeamPlayer) {
-        if (myTeam === 'alpha' || myTeam === 'bravo') {
-            const currentBans = gameState.banPhaseState?.bans[myTeam] ?? 0;
-            const maxBans = gameState.banPhaseState?.maxBansPerTeam ?? MAX_BANS_PER_TEAM;
-            if (!weapon.selectedBy && !weapon.bannedBy.includes(myTeam) && currentBans < maxBans) {
-                canClick = true;
-            }
-        }
-    }
-    // isLoading は DisplayWeapon に必須で含まれる想定
-    const isDisabled = weapon.isLoading || !canClick;
+const Cell: React.FC<CellProps> = memo(({ columnIndex, rowIndex, style, data }) => {
+    const {
+        weaponIds, masterWeaponsMap, weaponStates, loadingWeaponId, /*columnCount,*/
+        phase, currentTurn, myTeam, myBanCount, onWeaponClick,
+        gridWidth, itemWidth
+    } = data;
 
-    // --- スタイル決定 ---
-    let bgColor = 'bg-white', borderColor = 'border-gray-200', imageOpacity = 'opacity-100', overallOpacity = 'opacity-100', ring = '', hoverEffect = 'hover:bg-blue-50 hover:border-blue-300', banMark = null, cursor = 'cursor-pointer';
+    const columnCount = Math.max(1, Math.floor(gridWidth / itemWidth));
+    const index = rowIndex * columnCount + columnIndex;
+    const weaponId = weaponIds[index];
 
-    if (isRandomChoice) {
-        bgColor = 'bg-purple-50';
-        borderColor = 'border-purple-300';
-        if (!isDisabled) hoverEffect = 'hover:bg-purple-100 hover:border-purple-400';
+    // 範囲外またはIDがなければ何も描画しない
+    if (weaponId === undefined) {
+        return <div style={style}></div>;
     }
 
-    if (isSelectedByAlpha) { bgColor = 'bg-blue-100'; borderColor = 'border-blue-400'; ring = 'ring-2 ring-offset-1 ring-blue-500'; hoverEffect = ''; cursor = 'cursor-not-allowed'; }
-    else if (isSelectedByBravo) { bgColor = 'bg-red-100'; borderColor = 'border-red-400'; ring = 'ring-2 ring-offset-1 ring-red-500'; hoverEffect = ''; cursor = 'cursor-not-allowed'; }
-    else if (gameState.phase === 'ban' && isMyTeamPlayer && weapon.bannedBy.includes(myTeam)) {
-        bgColor = 'bg-yellow-100'; borderColor = 'border-yellow-400'; imageOpacity = 'opacity-50'; overallOpacity = 'opacity-90'; hoverEffect = ''; cursor = 'cursor-not-allowed';
-        const banColor = myTeam === 'alpha' ? 'text-blue-600' : 'text-red-600';
-        banMark = (<div className={`absolute inset-0 flex items-center justify-center rounded-lg pointer-events-none`}><svg className={`w-10 h-10 ${banColor} opacity-75`} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg></div>);
-    } else if (isBanned && (gameState.phase === 'pick' || gameState.phase === 'pick_complete' || myTeam === 'observer')) {
-        bgColor = 'bg-gray-200'; borderColor = 'border-gray-300'; imageOpacity = 'opacity-40'; overallOpacity = 'opacity-70'; hoverEffect = ''; cursor = 'cursor-not-allowed';
-        const banColorConst = isBannedByAlpha ? 'text-blue-600' : isBannedByBravo ? 'text-red-600' : 'text-gray-700';
-        banMark = (<div className={`absolute inset-0 flex items-center justify-center rounded-lg pointer-events-none`}><svg className={`w-10 h-10 ${banColorConst} opacity-75`} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg></div>);
-    } else if (isDisabled) {
-        cursor = 'cursor-not-allowed'; hoverEffect = '';
-        if (weapon.isLoading) {
-            overallOpacity = 'opacity-50';
-        } else if (myTeam === 'observer' || gameState.phase === 'waiting' || gameState.phase === 'pick_complete') {
-            if (!isRandomChoice) { bgColor = 'bg-gray-50'; overallOpacity = 'opacity-70'; }
-        } else { overallOpacity = 'opacity-75'; }
+    const masterData = masterWeaponsMap.get(weaponId);
+    const stateData = weaponStates[weaponId] ?? { id: weaponId, selectedBy: null, bannedBy: [] };
+
+    if (!masterData) {
+        return <div style={style}>Error: Master data missing</div>;
     }
 
-    const subWeaponImageUrl = !isRandomChoice ? `/images/subweapon/${encodeURIComponent(weapon.subWeaponImageName)}.webp` : '';
-    const specialWeaponImageUrl = !isRandomChoice ? `/images/specialweapon/${encodeURIComponent(weapon.specialWeaponImageName)}.webp` : '';
+    // WeaponItem に渡す weapon prop を組み立てる
+    const weaponProp: DisplayWeapon = {
+        ...masterData,
+        selectedBy: stateData.selectedBy,
+        bannedBy: stateData.bannedBy,
+        imageUrl: weaponId === RANDOM_CHOICE_ID
+            ? RANDOM_CHOICE_ITEM.imageUrl
+            : `/images/weapons/${encodeURIComponent(masterData.name)}.webp`,
+        isLoading: loadingWeaponId === weaponId,
+    };
 
+    // style を適用した div で WeaponItem をラップ
     return (
-        <div
-            key={`weapon-grid-${weapon.id}`}
-            className={`relative pt-6 pb-1 px-1 rounded-lg border transition-all duration-150 ${bgColor} ${borderColor} ${overallOpacity} ${ring} ${cursor} ${hoverEffect}`}
-            onClick={() => !isDisabled && onWeaponClick(weapon.id)}
-            title={`${weapon.name}\nサブ: ${weapon.subWeapon}\nスペシャル: ${weapon.specialWeapon}${isDisabled ? ' (操作不可)' : ''}`}
-        >
-            <Image
-                src={weapon.imageUrl}
-                alt={weapon.name}
-                width={100} height={100}
-                className={`mx-auto transition-opacity duration-150 ${imageOpacity}`} // ★ mtなどのマージンは不要
-                priority={weapon.id <= 12}
-            />
-            {!isRandomChoice && (
-                 // ★ top-0 に変更、左右中央寄せ、間隔を gap-2 に変更
-                 <div className="absolute top-0 left-0 right-0 flex justify-center items-center gap-2 pt-0.5"> {/* ★ top-0, gap-2, pt-0.5 に変更 */}
-                     {/* サブウェポン */}
-                      {/* ★ 背景色(bg-gray-200)と角丸(rounded)を追加 */}
-                     <div className="relative w-5 h-5 bg-gray-200 rounded">
-                         <Image
-                             src={subWeaponImageUrl}
-                             alt={weapon.subWeapon}
-                             layout="fill"
-                             objectFit="contain"
-                             title={`サブ: ${weapon.subWeapon}`}
-                             className="p-0.5" // ★ 内側に少しパディング (任意)
-                         />
-                     </div>
-                     {/* スペシャルウェポン */}
-                      {/* ★ 背景色(bg-gray-200)と角丸(rounded)を追加 */}
-                     <div className="relative w-5 h-5 bg-gray-200 rounded">
-                         <Image
-                             src={specialWeaponImageUrl}
-                             alt={weapon.specialWeapon}
-                             layout="fill"
-                             objectFit="contain"
-                             title={`スペシャル: ${weapon.specialWeapon}`}
-                             className="p-0.5" // ★ 内側に少しパディング (任意)
-                         />
-                     </div>
-                 </div>
-             )}
-            {banMark}
-            {weapon.isLoading && (
-                <div className="absolute inset-0 bg-white bg-opacity-50 flex items-center justify-center rounded-lg">
-                    <svg className="animate-spin h-8 w-8 text-gray-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                </div>
-            )}
-            {isRandomChoice && (
-                <span className="block text-center text-xs font-medium text-purple-800 mt-1">ランダム</span>
-            )}
-            {!isRandomChoice && isMyTeamPlayer && !isDisabled && gameState.phase === 'pick' && (<div className="absolute bottom-1 right-1 px-1.5 py-0.5 text-xs bg-green-200 text-green-800 rounded font-semibold animate-pulse">Pick!</div>)}
-            {!isRandomChoice && isMyTeamPlayer && !isDisabled && gameState.phase === 'ban' && (<div className="absolute bottom-1 right-1 px-1.5 py-0.5 text-xs bg-yellow-200 text-yellow-800 rounded font-semibold animate-pulse">Ban!</div>)}
+        // ★ style を適用: position, top, left, width, height が含まれる
+        <div style={style}>
+            {/* ★ パディングなどを Cell 側で調整するか、WeaponItem側で行うか選択 */}
+            {/* 例: Cell に padding を追加 */}
+            <div className="p-1 h-full"> {/* 例: 各セル内にパディング */}
+                <WeaponItem
+                    // key は不要
+                    weapon={weaponProp}
+                    phase={phase}
+                    currentTurn={currentTurn}
+                    myTeam={myTeam}
+                    banCount={myBanCount}
+                    onWeaponClick={onWeaponClick}
+                />
+            </div>
         </div>
     );
-};
+});
+Cell.displayName = 'GridCell';
 
 
+// メインコンポーネント
 const WeaponGridDisplayComponent: React.FC<WeaponGridDisplayProps> = ({
-    gameState,
-    displayWeapons,
+    phase, // 分解された props を受け取る
+    currentTurn,
+    banPhaseState,
+    pickPhaseState,
+    displayWeaponIds,
+    masterWeapons,
+    weaponStates,
+    loadingWeaponId,
     myTeam,
+    // amIHost, // amIHost は Cell では使わないので itemData に含めない
+    myBanCount,
+    // myPickCount, // myPickCount も Cell では使わない
     onWeaponClick,
 }) => {
+    console.log('[WeaponGridDisplay] Rendering');
+
+    // ★★★★★ グリッドの計算 (固定値 - 要調整) ★★★★★
+    // const columnCount = 6; // 1行あたりのアイテム数
+    // const rowCount = Math.ceil(displayWeaponIds.length / columnCount);
+    const itemWidth = 110; // アイテムの想定幅 (ボーダーやマージン含む)
+    const itemHeight = 135; // アイテムの想定高さ (ボーダーやマージン含む)
+    // const gridWidth = 720;  // グリッド全体の幅 (columnWidth * columnCount + スクロールバー幅考慮)
+    // const gridHeight = 500; // グリッド全体の高さ (固定、画面サイズに応じて調整推奨)
+
+    // ★ masterWeapons を Map に変換 (useMemo)
+    const masterWeaponsMap = useMemo(() => {
+        const map = new Map<number, MasterWeapon>();
+        masterWeapons.forEach(mw => map.set(mw.id, mw));
+        map.set(RANDOM_CHOICE_ID, RANDOM_CHOICE_ITEM as MasterWeapon);
+        return map;
+    }, [masterWeapons]);
+
+    // ★ itemData を useMemo でメモ化
+    const itemDataForGrid = useMemo<Omit<CellData, 'columnCount' | 'gridWidth' | 'itemWidth'>>(() => ({
+        weaponIds: displayWeaponIds,
+        masterWeaponsMap,
+        weaponStates,
+        loadingWeaponId,
+        phase,
+        currentTurn,
+        myTeam,
+        myBanCount,
+        onWeaponClick,
+    }), [displayWeaponIds, masterWeaponsMap, weaponStates, loadingWeaponId,
+        phase, currentTurn, myTeam, myBanCount, onWeaponClick]);
+
+
+
     return (
         <>
-            {(gameState.phase === 'ban' || gameState.phase === 'pick') && (
-                <div className="overflow-x-auto border-t border-gray-200 mt-4 pt-4">
-                    <h3 className="text-lg font-semibold mb-3 text-gray-800">
-                        {gameState.phase === 'ban' ? 'BANする武器を選択してください' : 'PICKする武器を選んでください'}
-                        {/* BAN/PICK カウント表示 */}
+            {(phase === 'ban' || phase === 'pick') && (
+                <div className="border-t border-gray-200 mt-2 pt-3 h-full flex flex-col">
+                <h3 className="text-lg font-semibold mb-2 text-gray-800 whitespace-normal px-1 pt-3"> 
+                        {/* フェーズに応じたテキスト */}
+                        {phase === 'ban' ? 'BANする武器を選択してください' : 'PICKする武器を選んでください'}
+                        {/* プレイヤーの場合のみBAN/PICK数を表示 */}
                         {myTeam !== 'observer' && (
-                            ` (${gameState.phase === 'ban'
-                                ? `${gameState.banPhaseState?.bans[myTeam] ?? 0}/${MAX_BANS_PER_TEAM}`
-                                : `${gameState.pickPhaseState?.picks[myTeam] ?? 0}/${MAX_PICKS_PER_TEAM}`
+                            // 三項演算子でBAN/PICKを切り替え
+                            ` (${phase === 'ban'
+                                // BAN数の表示 (?. と ?? を使って安全にアクセス)
+                                ? `${banPhaseState?.bans[myTeam] ?? 0}/${MAX_BANS_PER_TEAM}`
+                                // PICK数の表示
+                                : `${pickPhaseState?.picks[myTeam] ?? 0}/${MAX_PICKS_PER_TEAM}`
                             })`
-                        )}
-                    </h3>
-                    {displayWeapons.length > 0 ? (
-                        <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-5 xl:grid-cols-6 gap-2">
-                            {displayWeapons.map(weapon => renderWeaponItem(weapon, gameState, myTeam, onWeaponClick))}
-                        </div>
-                    ) : (<p className="text-center text-gray-500 py-4">表示対象の武器がありません。</p>)}
+                        )}</h3>
+                {displayWeaponIds.length > 0 ? (
+                    // ★★★★★ AutoSizer でラップ ★★★★★
+                    <div className="flex-grow min-h-0"> 
+                    <AutoSizer>
+                    {({ height, width }) => { // ★ width はここで取得
+                    if (width === 0 || height === 0) return null; 
+                        const columnCount = Math.max(1, Math.floor(width / itemWidth));
+                        const rowCount = Math.ceil(displayWeaponIds.length / columnCount);
+                        const calculatedColumnWidth = Math.max(itemWidth, width / columnCount);
+
+                        // ★★★★★ 変更点: Cell に渡す itemData をここで結合 ★★★★★
+                        const finalItemData: CellData = {
+                            ...itemDataForGrid, // メモ化された基本データ
+                            gridWidth: width,   // AutoSizer からの幅
+                            itemWidth: itemWidth, // 定数
+                            // columnCount は Cell 内で計算するので不要
+                        };
+
+                        return (
+                            <FixedSizeGrid
+                                columnCount={columnCount}
+                                columnWidth={calculatedColumnWidth}
+                                height={height}
+                                rowCount={rowCount}
+                                rowHeight={itemHeight}
+                                width={width}
+                                itemData={finalItemData} // ★ 結合したデータを渡す
+                                className="weapon-grid-virtualized"
+                            >
+                                {Cell}
+                            </FixedSizeGrid>
+                        );
+                    }}
+                </AutoSizer>
                 </div>
-            )}
-            {gameState.phase === 'pick_complete' && (
+                ) : (<p className="text-center ...">表示対象の武器がありません。</p>)}
+            </div>
+        )}
+            {phase === 'pick_complete' && (
                 <div className="text-center py-10">
                     <h3 className="text-2xl font-bold text-green-600">PICK完了！</h3>
                 </div>
             )}
-            {gameState.phase === 'waiting' && (
+            {phase === 'waiting' && (
                 <div className="text-center py-10">
                     <h3 className="text-xl font-semibold text-gray-700">ゲーム開始待機中...</h3>
                     <p className="text-gray-500">チームを選択し、ホストの「ゲーム開始」をお待ちください。</p>
@@ -183,10 +218,7 @@ const WeaponGridDisplayComponent: React.FC<WeaponGridDisplayProps> = ({
     );
 };
 
-// ★★★★★ 変更点: displayName を設定 ★★★★★
 WeaponGridDisplayComponent.displayName = 'WeaponGridDisplay';
-
-// ★★★★★ 変更点: memo でラップして default export ★★★★★
 const MemoizedWeaponGridDisplay = memo(WeaponGridDisplayComponent);
 
 export default MemoizedWeaponGridDisplay; // ★ メモ化されたコンポーネントをエクスポート
