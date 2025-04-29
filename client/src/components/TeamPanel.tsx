@@ -1,7 +1,7 @@
 import React from 'react';
 import Image from 'next/image';
 import type { GameState, Team, RoomUser } from '../../../common/types/game';
-import type { DisplayWeapon } from './WeaponGrid'; 
+import type { DisplayWeapon } from './WeaponGrid';
 import { MAX_PICKS_PER_TEAM, MAX_BANS_PER_TEAM, RANDOM_CHOICE_ID } from '../../../common/types/constants';
 
 interface TeamPanelProps {
@@ -78,29 +78,30 @@ const TeamPanel: React.FC<TeamPanelProps> = ({
     };
 
     return (
-        <div className={`lg:col-span-3 border rounded-lg p-3 ${panelBgColor} shadow-sm space-y-3 flex flex-col h-full`}>
+        // ルート要素: h-full で高さを親に合わせる
+        <div className={`lg:col-span-2 border rounded-lg p-3 ${panelBgColor} shadow-sm space-y-3 flex flex-col h-full`}> {/* 例: col-span-2 */}
             {/* チーム選択ボタン */}
             <button
                 onClick={() => onSelectTeam(team)}
                 disabled={gameState.phase !== 'waiting' || myTeam === team}
-                className={finalButtonStyle} // ★ 結合したスタイルを適用
+                className={finalButtonStyle}
             >
                 {teamDisplayName}に参加 {myTeam === team ? '(選択中)' : ''}
             </button>
             {/* メンバーリスト */}
-            <div>
-                {/* ★ ヘッダー色、テキスト色を適用 */}
+            {/* flex-grow で可能な限りのスペースを占める */}
+            <div> {/* flex-grow は削除、代わりにリスト部分に高さ制限とスクロール */}
                 <h4 className={`font-semibold ${panelHeaderColor} mb-1`}>メンバー ({teamUsers.length})</h4>
-                <div className="max-h-40 overflow-y-auto pr-1">
+                {/* スクロール可能なコンテナ */}
+                <div className="max-h-40 overflow-y-auto pr-1"> {/* 例: 最大高さ設定 */}
                     <ul className="space-y-0.5 text-sm">
                         {teamUsers.map(user => {
-                            // ★★★★★ 追加: ホストかどうかの判定 ★★★★★
                             const isHost = user.id === gameState.hostId;
                             return (
                                 <li key={user.id} className={`flex items-center ${user.name === userName ? 'font-bold' : ''} ${panelTextColor}`}>
                                     <span className={`inline-block w-2 h-2 ${userDotColor} rounded-full mr-1.5`}></span>
-                                    {user.name}
-                                    {isHost && <span className="text-xs text-gray-500 ml-1">(ホスト)</span>}
+                                    <span className="truncate">{user.name}</span>
+                                    {isHost && <span className="text-xs text-gray-500 ml-1 flex-shrink-0">(ホスト)</span>}
                                 </li>
                             );
                         })}
@@ -108,70 +109,85 @@ const TeamPanel: React.FC<TeamPanelProps> = ({
                     </ul>
                 </div>
             </div>
-            {/* PICK 表示 */}
+            {/* PICK 表示 (2列グリッド) */}
             <div className="pt-2">
-                <h4 className={`text-md ...`}>PICK ({pickCount}/{MAX_PICKS_PER_TEAM})</h4>
-                <div className="flex flex-wrap gap-1 min-h-[60px] items-center">
-                    {pickedWeapons.length > 0 ? pickedWeapons.map((weapon) => {
-                        // ★★★★★ 追加: Picked アイコンにもサブ・スペ表示 ★★★★★
+                <h4 className={`text-md font-medium mb-1 ${panelTextColor}`}>PICK ({pickCount}/{MAX_PICKS_PER_TEAM})</h4>
+                <div className="grid grid-cols-2 gap-1 min-h-[110px] items-center"> {/* 2列グリッド、最小高さ、中央揃え */}
+                    {pickedWeapons.map((weapon) => {
                         const subIconPath = getSubSpIconPath('sub', weapon.subWeaponImageName);
                         const spIconPath = getSubSpIconPath('special', weapon.specialWeaponImageName);
                         return (
-                            // ★ relative 追加、padding調整
-                            <div key={`team-${team}-pick-${weapon.id}`} className={`relative border ${itemBorderColor} rounded p-0.5 bg-white`} title={`PICK: ${weapon.name}`}> {/* ★ p-1 -> p-0.5 */}
-                                <Image src={weapon.imageUrl} alt={weapon.name} width={73} height={73} />
-                                {/* サブ・スペ アイコン (WeaponItemとスタイルを合わせる) */}
-                                <div className="absolute top-0.5 left-0.5 flex items-center gap-0.5"> {/* ★ top/left 調整 */}
+                            <div key={`team-${team}-pick-${weapon.id}`} className={`relative border ${itemBorderColor} rounded p-0.5 bg-white flex justify-center items-center`}>
+                                <Image src={weapon.imageUrl} alt={weapon.name} width={50} height={50} />
+                                {/* サブ・スペ アイコン */}
+                                <div className="absolute top-0.5 left-0.5 flex items-center gap-0.5">
                                     {subIconPath && (
-                                        <div className="relative w-3.5 h-3.5 bg-gray-200/80 rounded-sm"> {/* ★ サイズ・丸み調整 */}
+                                        <div className="relative w-3.5 h-3.5 bg-gray-200/80 rounded-sm">
                                             <Image src={subIconPath} alt={weapon.subWeapon} layout="fill" objectFit="contain" title={`サブ: ${weapon.subWeapon}`} />
                                         </div>
                                     )}
                                     {spIconPath && (
-                                         <div className="relative w-3.5 h-3.5 bg-gray-200/80 rounded-sm"> {/* ★ サイズ・丸み調整 */}
+                                        <div className="relative w-3.5 h-3.5 bg-gray-200/80 rounded-sm">
                                             <Image src={spIconPath} alt={weapon.specialWeapon} layout="fill" objectFit="contain" title={`スペシャル: ${weapon.specialWeapon}`} />
                                         </div>
                                     )}
                                 </div>
                             </div>
                         );
-                    }) : <p className="text-xs text-gray-500 w-full text-center">{gameState.phase === 'waiting' ? '待機中' : '-'}</p>}
+                    })}
+                    {/* 空欄表示 */}
+                    {Array.from({ length: MAX_PICKS_PER_TEAM - pickedWeapons.length }).map((_, index) => (
+                        <div key={`pick-placeholder-${index}`} className="border border-dashed border-gray-300 rounded bg-gray-100/50 h-[74px] flex-shrink-0"></div>
+                    ))}
+                    {/* Pickが0件の場合のテキスト表示 */}
+                    {pickedWeapons.length === 0 && (
+                        <p className="text-xs text-gray-500 col-span-2 text-center">{gameState.phase === 'waiting' ? '待機中' : '-'}</p>
+                    )}
                 </div>
             </div>
-            {/* BAN 表示 */}
+            {/* BAN 表示 (Flexbox wrap) */}
             <div className="pt-2">
-                <h4 className={`text-md ...`}>BAN ({banCount}/{MAX_BANS_PER_TEAM})</h4>
-                <div className="flex flex-wrap gap-1 min-h-[60px] items-center">
-                    {bannedWeapons.map((weapon) => {
-                         if (!shouldShowBan(weapon)) return null;
-                         // ★★★★★ 追加: Banned アイコンにもサブ・スペ表示 ★★★★★
-                         const subIconPath = getSubSpIconPath('sub', weapon.subWeaponImageName);
-                         const spIconPath = getSubSpIconPath('special', weapon.specialWeaponImageName);
-                         return (
-                            // ★ relative 追加、padding調整
-                            <div key={`team-${team}-ban-${weapon.id}`} className="relative border border-gray-400 rounded p-0.5 bg-gray-200" title={`BAN: ${weapon.name}`}> {/* ★ p-1 -> p-0.5 */}
-                                <Image src={weapon.imageUrl} alt={weapon.name} width={73} height={73} className="opacity-70" />
+                <h4 className={`text-md font-medium mb-1 ${panelTextColor}`}>BAN ({banCount}/{MAX_BANS_PER_TEAM})</h4>
+                <div className="grid grid-cols-3 gap-1 min-h-[60px] items-center">
+                    {bannedWeapons.map((weapon) => { // ★ 最大3つまで表示想定
+                        if (!shouldShowBan(weapon)) return null; // 表示すべきでない場合は表示しない
+                        const subIconPath = getSubSpIconPath('sub', weapon.subWeaponImageName);
+                        const spIconPath = getSubSpIconPath('special', weapon.specialWeaponImageName);
+                        return (
+                            <div key={`team-${team}-ban-${weapon.id}`} className="relative border border-gray-400 rounded p-0.5 bg-gray-200 flex justify-center items-center"> {/* ★ 中央揃え */}
+                                <Image src={weapon.imageUrl} alt={weapon.name} width={50} height={50} className="opacity-70" />
+                                {/* BANマーク */}
                                 <div className="absolute inset-0 flex items-center justify-center">
-                                    {/* ★ SVG 色を適用 */}
                                     <svg className={`w-6 h-6 ${banSvgColor}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg>
                                 </div>
-                                <div className="absolute top-0.5 left-0.5 flex items-center gap-0.5 opacity-70"> {/* ★ top/left 調整, opacity 追加 */}
+                                {/* サブ・スペ アイコン */}
+                                <div className="absolute top-0.5 left-0.5 flex items-center gap-0.5 opacity-70">
                                     {subIconPath && (
-                                        <div className="relative w-3.5 h-3.5 bg-gray-500/60 rounded-sm"> {/* ★ サイズ・色・丸み調整 */}
+                                        <div className="relative w-3.5 h-3.5 bg-gray-500/60 rounded-sm">
                                             <Image src={subIconPath} alt={weapon.subWeapon} layout="fill" objectFit="contain" title={`サブ: ${weapon.subWeapon}`} />
                                         </div>
                                     )}
                                     {spIconPath && (
-                                         <div className="relative w-3.5 h-3.5 bg-gray-500/60 rounded-sm"> {/* ★ サイズ・色・丸み調整 */}
+                                        <div className="relative w-3.5 h-3.5 bg-gray-500/60 rounded-sm">
                                             <Image src={spIconPath} alt={weapon.specialWeapon} layout="fill" objectFit="contain" title={`スペシャル: ${weapon.specialWeapon}`} />
                                         </div>
                                     )}
                                 </div>
                             </div>
-                         );
-                     })}
-                    {!hasVisibleBans && <p className="text-xs text-gray-500 w-full text-center">{gameState.phase === 'waiting' ? '待機中' : '-'}</p>}
-                    {opponentHasBansInBanPhase && <p className="text-xs text-gray-400 italic w-full text-center mt-1">（相手のBANはPickフェーズで公開）</p>}
+                        );
+                    })}
+                    {(() => {
+                         const visibleBanCount = bannedWeapons.filter(shouldShowBan).length;
+                         return Array.from({ length: MAX_BANS_PER_TEAM - visibleBanCount }).map((_, index) => (
+                             <div key={`ban-placeholder-${index}`} className="border border-dashed border-gray-300 rounded bg-gray-100/50 h-[64px] flex-shrink-0"></div>
+                         ));
+                     })()}
+                     {/* BANが0件の場合のテキスト表示 (任意) */}
+                     {!hasVisibleBans && (
+                        <p className="text-xs text-gray-500 col-span-3 text-center">{gameState.phase === 'waiting' ? '待機中' : '-'}</p>
+                     )}
+                     {/* 相手のBANが非表示の場合 */}
+                     {opponentHasBansInBanPhase && <p className="text-xs text-gray-400 italic col-span-3 text-center mt-1">（相手のBANはPickフェーズで公開）</p>}
                 </div>
             </div>
         </div>

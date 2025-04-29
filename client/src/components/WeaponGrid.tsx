@@ -51,11 +51,6 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
     const [selectedAttributes, setSelectedAttributes] = useState<WeaponAttribute[]>([]);
     const [selectedSubWeapons, setSelectedSubWeapons] = useState<string[]>([]);
     const [selectedSpecialWeapons, setSelectedSpecialWeapons] = useState<string[]>([]);
-    const [filterSectionOpen, setFilterSectionOpen] = useState<Record<FilterType, boolean>>({
-        attribute: false, // 初期状態は属性のみ開く
-        subWeapon: false,
-        specialWeapon: false,
-    });
 
     // ★ amIHost の計算 (GameHeader から移動 or 再計算)
     const amIHost = gameState !== null && gameState?.hostId !== null && gameState.hostId === myActualSocketId ;
@@ -161,10 +156,6 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
             case 'subWeapon': setSelectedSubWeapons([]); break;
             case 'specialWeapon': setSelectedSpecialWeapons([]); break;
         }
-    }, []);
-
-    const toggleFilterSection = useCallback((type: FilterType) => {
-        setFilterSectionOpen(prev => ({ ...prev, [type]: !prev[type] }));
     }, []);
 
     // --- WebSocketイベントリスナー設定 ---
@@ -476,15 +467,6 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
         );
     }
 
-    // let overlayClassName = ''; // デフォルトはクラスなし
-    // if (gameState.phase === 'ban') {
-    //     overlayClassName = 'overlay-ban';
-    // } else if (gameState.phase === 'pick' && gameState.currentTurn === 'alpha') {
-    //     overlayClassName = 'overlay-alpha';
-    // } else if (gameState.phase === 'pick' && gameState.currentTurn === 'bravo') {
-    //     overlayClassName = 'overlay-bravo';
-    // }
-
     // --- JSX レンダリング本体 ---
     return (
         <div className={`container mx-auto p-4 space-y-6 bg-white rounded-lg shadow-md flex flex-col min-h-[calc(100vh-100px)]`}>
@@ -508,7 +490,7 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
 
             {/* ================== メインエリア (3カラム) ================== */}
             {/* lg以上で3カラム、それ未満は1カラム */}
-            <div className="grid grid-cols-1 lg:grid-cols-13 gap-4 items-stretch flex-grow ">
+            <div className="grid grid-cols-1 lg:grid-cols-11 gap-4 items-stretch flex-grow ">
                 <TeamPanel
                     team="alpha"
                     teamDisplayName="アルファ"
@@ -527,10 +509,8 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
                         selectedAttributes={selectedAttributes}
                         selectedSubWeapons={selectedSubWeapons}
                         selectedSpecialWeapons={selectedSpecialWeapons}
-                        filterSectionOpen={filterSectionOpen}
                         onFilterChange={handleFilterChange}
                         onClearFilterSection={handleClearFilterSection}
-                        onToggleSection={toggleFilterSection}
                     />
 
 

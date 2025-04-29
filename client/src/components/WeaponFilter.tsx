@@ -1,3 +1,4 @@
+// client/src/components/WeaponFilter.tsx
 import React from 'react';
 import Image from 'next/image';
 import type { WeaponAttribute, FilterType } from './WeaponGrid';
@@ -5,15 +6,13 @@ import { WEAPON_ATTRIBUTES, SUB_WEAPONS, SPECIAL_WEAPONS } from '../../../common
 
 const getFilterIconPath = (type: FilterType, itemName: string): string => {
     let folder: string;
-    const extension = 'webp'; // 拡張子は .webp に統一
-
+    const extension = 'webp';
     switch (type) {
         case 'attribute': folder = 'attributes'; break;
         case 'subWeapon': folder = 'subweapon'; break;
         case 'specialWeapon': folder = 'specialweapon'; break;
-        default: folder = 'unknown'; // 不明なタイプの場合
+        default: folder = 'unknown';
     }
-    // 日本語名を直接エンコードしてパスに使用
     return `/images/${folder}/${encodeURIComponent(itemName)}.${extension}`;
 };
 
@@ -21,131 +20,81 @@ interface WeaponFilterProps {
     selectedAttributes: WeaponAttribute[];
     selectedSubWeapons: string[];
     selectedSpecialWeapons: string[];
-    filterSectionOpen: Record<FilterType, boolean>; // 開閉状態
-    onFilterChange: (type: FilterType, value: string) => void; // 汎用ハンドラ
-    onClearFilterSection: (type: FilterType) => void; // セクションクリア
-    onToggleSection: (type: FilterType) => void; // セクション開閉
+    onFilterChange: (type: FilterType, value: string) => void;
+    onClearFilterSection: (type: FilterType) => void;
 }
 
-interface FilterSectionProps {
-    type: FilterType;
-    title: string;
-    items: readonly string[] | string[]; // 属性/サブ/スペリスト (日本語名)
-    selectedItems: string[];
-    isOpen: boolean;
-    onToggle: (type: FilterType) => void;
-    onItemChange: (type: FilterType, value: string) => void;
-    onClear: (type: FilterType) => void;
-}
-
-const FilterSection: React.FC<FilterSectionProps> = ({
-    type, title, items, selectedItems, isOpen, onToggle, onItemChange, onClear
-}) => (
-    <div className="border-b border-gray-200 last:border-b-0">
-        <div
-            onClick={() => onToggle(type)} // ★ セクション開閉は div で行う
-            className="w-full flex justify-between items-center py-2 px-1 text-left hover:bg-gray-100 cursor-pointer"
-        >
-            {/* タイトル (クリックしても開閉) */}
-            <span className="text-sm font-semibold text-gray-700">
-                {isOpen ? '▼' : '▶'} {title}
-            </span>
-            {/* 右側の要素 (選択数と解除ボタン) */}
-            <div className="flex items-center gap-2">
-                 {/* 選択数表示 */}
-                 {selectedItems.length > 0 && (
-                     <span className="text-xs px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded">
-                         {selectedItems.length} 件選択中
-                     </span>
-                 )}
-                {/* ★★★★★ 解除ボタン (ネストされていない) ★★★★★ */}
-                <button
-                    onClick={(e) => {
-                        e.stopPropagation(); // ★ 親 div の onClick を防ぐ
-                        onClear(type);
-                    }}
-                    className="text-xs px-2 py-1 border rounded bg-white text-gray-600 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed" // ★ hover スタイル調整
-                    disabled={selectedItems.length === 0}
-                >
-                    解除
-                </button>
-            </div>
+const WeaponFilter: React.FC<WeaponFilterProps> = ({
+    selectedAttributes,
+    selectedSubWeapons,
+    selectedSpecialWeapons,
+    onFilterChange,
+    onClearFilterSection,
+}) => {
+    // 各フィルター行をレンダリングするヘルパー関数
+    const renderFilterRow = (
+        type: FilterType,
+        title: string,
+        items: readonly string[] | string[],
+        selectedItems: string[],
+        onItemChange: (type: FilterType, value: string) => void,
+        onClear: (type: FilterType) => void
+    ) => (
+        <div className="flex items-start gap-2 py-1.5 border-b border-gray-100 last:border-b-0 px-2">
+        {/* ラベル */}
+        <div className="w-20 flex-shrink-0 pt-1 text-right pr-2">
+            <span className="text-xs font-semibold text-gray-600">{title}:</span>
         </div>
-        {/* コンテンツ (開いているときだけ表示) */}
-        {isOpen && (
-            <div className="pt-2 pb-3 px-1 flex flex-wrap gap-2">
-                {items.map(item => { // ★ item は日本語名
-                    const isSelected = selectedItems.includes(item);
-                    // ★ 簡略化された関数でパス取得
-                    const iconPath = getFilterIconPath(type, item);
 
-                    // アイコンパス生成に失敗した場合 (基本ないはずだが念のため)
-                    if (!iconPath) return null;
-                    return (
-                        <button
-                            key={item}
-                            onClick={() => onItemChange(type, item)}
-                            title={item} // 日本語名を表示
-                            className={`p-1 border rounded-md ... ${isSelected
-                                    ? 'bg-blue-500 text-white border-blue-600 font-semibold'
-                                    : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-100'
+        <div className="border-l border-gray-200 h-auto self-stretch"></div>
+
+        {/* アイコンボタンリスト (flex-grow で残りのスペースを占める) */}
+        <div className="flex flex-wrap gap-1 flex-grow min-w-0">
+            {items.map(item => {
+                const isSelected = selectedItems.includes(item);
+                const iconPath = getFilterIconPath(type, item);
+                if (!iconPath) return null;
+                return (
+                    <button
+                        key={item}
+                        onClick={() => onItemChange(type, item)}
+                        title={item}
+                        className={`p-0.5 border rounded-md transition-all duration-150 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-400
+                            ${isSelected
+                                ? 'bg-blue-500 text-white border-blue-600 font-semibold'
+                                : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-100'
                             }`}
-                        >
-                            <Image
-                                src={iconPath} // ★ 生成されたパスを使用
-                                alt={item}     // 日本語名を alt に
-                                width={24}
-                                height={24}
-                                className="block"
-                            />
-                        </button>
-                    );
-                })}
-                 {items.length === 0 && <p className="text-xs text-gray-500">該当なし</p>}
-            </div>
-        )}
+                    >
+                                <Image
+                                    src={iconPath}
+                                    alt={item}
+                                    width={21} height={21}
+                                    className="block"
+                                />
+                    </button>
+                );
+            })}
+            {items.length === 0 && <p className="text-xs text-gray-500">該当なし</p>}
+        </div>
+             <div className="flex-shrink-0 pt-1 ml-auto pl-2">
+             <button
+                onClick={() => onClear(type)}
+                className="text-xs px-1.5 py-0.5 border rounded bg-white text-gray-500 hover:bg-gray-100 disabled:opacity-50 disabled:text-gray-400"
+                disabled={selectedItems.length === 0}
+             >
+                解除
+            </button>
+         </div>
     </div>
 );
 
-
-const WeaponFilter: React.FC<WeaponFilterProps> = ({
-    selectedAttributes, selectedSubWeapons, selectedSpecialWeapons, filterSectionOpen,
-    onFilterChange, onClearFilterSection, onToggleSection,
-}) => {
-    return (
-        <div className="mb-4 bg-white rounded border">
-            <FilterSection
-                type="attribute"
-                title="ブキ種"
-                items={WEAPON_ATTRIBUTES}
-                selectedItems={selectedAttributes}
-                isOpen={filterSectionOpen.attribute}
-                onToggle={onToggleSection}
-                onItemChange={onFilterChange}
-                onClear={onClearFilterSection}
-            />
-            <FilterSection
-                type="subWeapon"
-                title="サブウェポン"
-                items={SUB_WEAPONS}
-                selectedItems={selectedSubWeapons}
-                isOpen={filterSectionOpen.subWeapon}
-                onToggle={onToggleSection}
-                onItemChange={onFilterChange}
-                onClear={onClearFilterSection}
-            />
-             <FilterSection
-                type="specialWeapon"
-                title="スペシャルウェポン"
-                items={SPECIAL_WEAPONS}
-                selectedItems={selectedSpecialWeapons}
-                isOpen={filterSectionOpen.specialWeapon}
-                onToggle={onToggleSection}
-                onItemChange={onFilterChange}
-                onClear={onClearFilterSection}
-            />
-        </div>
-    );
+return (
+    <div className="mb-2 bg-white rounded border p-1">
+        {renderFilterRow('attribute', 'ブキ種', WEAPON_ATTRIBUTES, selectedAttributes, onFilterChange, onClearFilterSection)}
+        {renderFilterRow('subWeapon', 'サブ', SUB_WEAPONS, selectedSubWeapons, onFilterChange, onClearFilterSection)}
+        {renderFilterRow('specialWeapon', 'スペシャル', SPECIAL_WEAPONS, selectedSpecialWeapons, onFilterChange, onClearFilterSection)}
+    </div>
+);
 };
 
 export default WeaponFilter;
