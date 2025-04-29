@@ -119,8 +119,8 @@ const WeaponGridDisplayComponent: React.FC<WeaponGridDisplayProps> = ({
     // ★★★★★ グリッドの計算 (固定値 - 要調整) ★★★★★
     // const columnCount = 6; // 1行あたりのアイテム数
     // const rowCount = Math.ceil(displayWeaponIds.length / columnCount);
-    const itemWidth = 110; // アイテムの想定幅 (ボーダーやマージン含む)
-    const itemHeight = 135; // アイテムの想定高さ (ボーダーやマージン含む)
+    const itemWidth = 90; // アイテムの想定幅 (ボーダーやマージン含む)
+    const itemHeight = 90; // アイテムの想定高さ (ボーダーやマージン含む)
     // const gridWidth = 720;  // グリッド全体の幅 (columnWidth * columnCount + スクロールバー幅考慮)
     // const gridHeight = 500; // グリッド全体の高さ (固定、画面サイズに応じて調整推奨)
 

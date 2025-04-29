@@ -131,16 +131,16 @@ const WeaponItemComponent: React.FC<WeaponItemProps> = memo(({
             <Image
                 src={weapon.imageUrl}
                 alt={weapon.name}
-                width={100} height={100}
+                width={96} height={96}
                 className={`mx-auto transition-opacity duration-150 ${imageOpacity}`}
                 priority={weapon.id <= 12} // 画像の優先度読み込み設定 (任意)
             />
 
             {/* サブ・スペシャルアイコン表示エリア (アイコン上部) */}
             {!isRandomChoice && (
-                <div className="absolute top-1 left-1 flex items-center gap-0.5">
+                <div className="absolute top-1 left-1 flex items-center gap-1">
                     {/* サブウェポン */}
-                    <div className="relative w-4 h-4 bg-gray-200/80 rounded">
+                    <div className="relative w-6 h-6 bg-gray-200/80 rounded">
                         <Image
                             src={subWeaponImageUrl}
                             alt={weapon.subWeapon}
@@ -151,7 +151,7 @@ const WeaponItemComponent: React.FC<WeaponItemProps> = memo(({
                         />
                     </div>
                     {/* スペシャルウェポン */}
-                    <div className="relative w-4 h-4 bg-gray-200/80 rounded">
+                    <div className="relative w-6 h-6 bg-gray-200/80 rounded">
                         <Image
                             src={specialWeaponImageUrl}
                             alt={weapon.specialWeapon}

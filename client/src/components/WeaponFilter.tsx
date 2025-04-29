@@ -1,8 +1,21 @@
-// src/components/WeaponFilter.tsx
 import React from 'react';
+import Image from 'next/image';
 import type { WeaponAttribute, FilterType } from './WeaponGrid';
 import { WEAPON_ATTRIBUTES, SUB_WEAPONS, SPECIAL_WEAPONS } from '../../../common/types/constants';
 
+const getFilterIconPath = (type: FilterType, itemName: string): string => {
+    let folder: string;
+    const extension = 'webp'; // 拡張子は .webp に統一
+
+    switch (type) {
+        case 'attribute': folder = 'attributes'; break;
+        case 'subWeapon': folder = 'subweapon'; break;
+        case 'specialWeapon': folder = 'specialweapon'; break;
+        default: folder = 'unknown'; // 不明なタイプの場合
+    }
+    // 日本語名を直接エンコードしてパスに使用
+    return `/images/${folder}/${encodeURIComponent(itemName)}.${extension}`;
+};
 
 interface WeaponFilterProps {
     selectedAttributes: WeaponAttribute[];
@@ -17,7 +30,7 @@ interface WeaponFilterProps {
 interface FilterSectionProps {
     type: FilterType;
     title: string;
-    items: readonly string[] | string[]; // 属性orサブorスペリスト
+    items: readonly string[] | string[]; // 属性/サブ/スペリスト (日本語名)
     selectedItems: string[];
     isOpen: boolean;
     onToggle: (type: FilterType) => void;
@@ -60,20 +73,31 @@ const FilterSection: React.FC<FilterSectionProps> = ({
         </div>
         {/* コンテンツ (開いているときだけ表示) */}
         {isOpen && (
-            <div className="pt-2 pb-3 px-1 flex flex-wrap gap-1.5">
-                {items.map(item => {
+            <div className="pt-2 pb-3 px-1 flex flex-wrap gap-2">
+                {items.map(item => { // ★ item は日本語名
                     const isSelected = selectedItems.includes(item);
+                    // ★ 簡略化された関数でパス取得
+                    const iconPath = getFilterIconPath(type, item);
+
+                    // アイコンパス生成に失敗した場合 (基本ないはずだが念のため)
+                    if (!iconPath) return null;
                     return (
                         <button
                             key={item}
                             onClick={() => onItemChange(type, item)}
-                            className={`px-2 py-0.5 text-xs rounded border transition-colors ${
-                                isSelected
+                            title={item} // 日本語名を表示
+                            className={`p-1 border rounded-md ... ${isSelected
                                     ? 'bg-blue-500 text-white border-blue-600 font-semibold'
                                     : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-100'
                             }`}
                         >
-                            {item}
+                            <Image
+                                src={iconPath} // ★ 生成されたパスを使用
+                                alt={item}     // 日本語名を alt に
+                                width={24}
+                                height={24}
+                                className="block"
+                            />
                         </button>
                     );
                 })}
@@ -85,16 +109,10 @@ const FilterSection: React.FC<FilterSectionProps> = ({
 
 
 const WeaponFilter: React.FC<WeaponFilterProps> = ({
-    selectedAttributes,
-    selectedSubWeapons,
-    selectedSpecialWeapons,
-    filterSectionOpen,
-    onFilterChange,
-    onClearFilterSection,
-    onToggleSection,
+    selectedAttributes, selectedSubWeapons, selectedSpecialWeapons, filterSectionOpen,
+    onFilterChange, onClearFilterSection, onToggleSection,
 }) => {
     return (
-        // アコーディオン形式のUI
         <div className="mb-4 bg-white rounded border">
             <FilterSection
                 type="attribute"

@@ -508,7 +508,7 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
 
             {/* ================== メインエリア (3カラム) ================== */}
             {/* lg以上で3カラム、それ未満は1カラム */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch flex-grow ">
+            <div className="grid grid-cols-1 lg:grid-cols-13 gap-4 items-stretch flex-grow ">
                 <TeamPanel
                     team="alpha"
                     teamDisplayName="アルファ"
@@ -522,7 +522,7 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
                 />
 
                 {/* ----- 中央カラム: 武器グリッド ----- */}
-                <div className="lg:col-span-6 flex flex-col gap-2 overflow-hidden min-h-0">
+                <div className="lg:col-span-7 flex flex-col gap-2 overflow-hidden min-h-0">
                 <WeaponFilter
                         selectedAttributes={selectedAttributes}
                         selectedSubWeapons={selectedSubWeapons}
