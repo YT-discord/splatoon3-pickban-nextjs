@@ -1,6 +1,6 @@
 import React, { memo, useMemo } from 'react';
 import { FixedSizeGrid, GridChildComponentProps } from 'react-window';
-import type { GameState, Team, MasterWeapon, RoomWeaponState } from '../../../common/types/game';
+import type { GameState, Team, MasterWeapon, RoomWeaponState, BanPhaseState, PickPhaseState } from '../../../common/types/game';
 import type { DisplayWeapon } from './WeaponGrid';
 import { MAX_BANS_PER_TEAM, MAX_PICKS_PER_TEAM, RANDOM_CHOICE_ID, RANDOM_CHOICE_ITEM } from '../../../common/types/constants';
 import WeaponItem from './WeaponItem';
@@ -9,8 +9,8 @@ import AutoSizer from 'react-virtualized-auto-sizer';
 interface WeaponGridDisplayProps {
     phase: GameState['phase'];
     currentTurn: GameState['currentTurn'];
-    banPhaseState: GameState['banPhaseState'];
-    pickPhaseState: GameState['pickPhaseState'];
+    banPhaseState: BanPhaseState | undefined;
+    pickPhaseState: PickPhaseState | undefined;
     displayWeaponIds: number[];
     masterWeapons: MasterWeapon[];
     weaponStates: Record<number, RoomWeaponState>;
@@ -100,7 +100,7 @@ Cell.displayName = 'GridCell';
 
 // メインコンポーネント
 const WeaponGridDisplayComponent: React.FC<WeaponGridDisplayProps> = ({
-    phase, // 分解された props を受け取る
+    phase,
     currentTurn,
     banPhaseState,
     pickPhaseState,
@@ -109,18 +109,18 @@ const WeaponGridDisplayComponent: React.FC<WeaponGridDisplayProps> = ({
     weaponStates,
     loadingWeaponId,
     myTeam,
-    // amIHost, // amIHost は Cell では使わないので itemData に含めない
+    // amIHost, // Cell に渡さない
     myBanCount,
-    // myPickCount, // myPickCount も Cell では使わない
+    // myPickCount, // Cell に渡さない
     onWeaponClick,
 }) => {
-    console.log('[WeaponGridDisplay] Rendering');
+    console.log('[WeaponGridDisplay] Rendering, Phase:', phase);
 
     // ★★★★★ グリッドの計算 (固定値 - 要調整) ★★★★★
     // const columnCount = 6; // 1行あたりのアイテム数
     // const rowCount = Math.ceil(displayWeaponIds.length / columnCount);
-    const itemWidth = 95; // アイテムの想定幅 (ボーダーやマージン含む)
-    const itemHeight = 95; // アイテムの想定高さ (ボーダーやマージン含む)
+    const itemWidth = 110; // アイテムの想定幅 (ボーダーやマージン含む)
+    const itemHeight = 110; // アイテムの想定高さ (ボーダーやマージン含む)
     // const gridWidth = 720;  // グリッド全体の幅 (columnWidth * columnCount + スクロールバー幅考慮)
     // const gridHeight = 500; // グリッド全体の高さ (固定、画面サイズに応じて調整推奨)
 
@@ -148,65 +148,78 @@ const WeaponGridDisplayComponent: React.FC<WeaponGridDisplayProps> = ({
 
 
 
-    return (
-        <div className="border-t border-black h-full flex flex-col">
-            <h3 className="text-lg font-semibold mb-2 text-gray-800 whitespace-normal px-1 pt-3">
-                {/* フェーズに応じたテキスト */}
-                {phase === 'ban' ? 'BANする武器を選択してください' : 'PICKする武器を選んでください'}
-                {/* プレイヤーの場合のみBAN/PICK数を表示 */}
-                {myTeam !== 'observer' && (
-                    // 三項演算子でBAN/PICKを切り替え
-                    ` (${phase === 'ban'
-                        // BAN数の表示 (?. と ?? を使って安全にアクセス)
-                        ? `${banPhaseState?.bans[myTeam] ?? 0}/${MAX_BANS_PER_TEAM}`
-                        // PICK数の表示
-                        : `${pickPhaseState?.picks[myTeam] ?? 0}/${MAX_PICKS_PER_TEAM}`
-                    })`
-                )}</h3>
-            {displayWeaponIds.length > 0 ? (
-                <div className="h-full border border-black rounded-md overflow-hidden">
-                    <AutoSizer>
-                        {({ height, width }) => { // ★ width はここで取得
-                            if (width === 0 || height === 0) return null;
-                            const columnCount = Math.max(1, Math.floor(width / itemWidth));
-                            const calculatedColumnWidth = (width / columnCount) - 2;
-                            const rowCount = Math.ceil(displayWeaponIds.length / columnCount);
-
-                            // ★★★★★ 変更点: Cell に渡す itemData をここで結合 ★★★★★
-                            const finalItemData: CellData = {
-                                ...itemDataForGrid, // メモ化された基本データ
-                                gridWidth: width,   // AutoSizer からの幅
-                                itemWidth: itemWidth, // 定数
-                                // columnCount は Cell 内で計算するので不要
-                            };
-
-                            return (
-                                <FixedSizeGrid
-                                    columnCount={columnCount}
-                                    // ★ 計算した列幅を使用
-                                    columnWidth={calculatedColumnWidth}
-                                    height={height}
-                                    rowCount={rowCount}
-                                    rowHeight={itemHeight}
-                                    width={width}
-                                    itemData={finalItemData}
-                                    className="weapon-grid-virtualized"
-                                    // ★ overscanCount を調整 (任意)
-                                    overscanColumnCount={1} // 左右に少しだけ余分にレンダリング
-                                    overscanRowCount={1} // 上下に少しだけ余分にレンダリング
-                                >
-                                    {Cell}
-                                </FixedSizeGrid>
-                            );
-                        }}
-                    </AutoSizer>
+        return (
+            <div className="h-full flex flex-col ">
+                {/* --- 上部メッセージエリア --- */}
+                {phase === 'waiting' && (
+                    <div className="text-center py-0 px-2 flex-shrink-0">
+                        <p className="text-gray-500 mt-1">チームを選択して、ホストのゲーム開始をお待ちください。</p>
+                    </div>
+                )}
+                {(phase === 'ban' || phase === 'pick') && (
+                    <h3 className="text-lg font-semibold mb-2 text-gray-800 whitespace-normal px-1 pt-3 flex-shrink-0"> {/* ★ flex-shrink-0 */}
+                        {phase === 'ban' ? 'BANする武器を選択してください' : 'PICKする武器を選んでください'}
+                        {myTeam !== 'observer' && (
+                            ` (${phase === 'ban'
+                                ? `${banPhaseState?.bans[myTeam] ?? 0}/${MAX_BANS_PER_TEAM}`
+                                : `${pickPhaseState?.picks[myTeam] ?? 0}/${MAX_PICKS_PER_TEAM}`
+                            })`
+                        )}
+                    </h3>
+                )}
+                {phase === 'pick_complete' && (
+                     <div className="text-center py-4 px-2 flex-shrink-0"> {/* ★ flex-shrink-0 */}
+                        <p className="text-gray-500 mt-1">試合を開始してください。結果をリセットするときはホストのルームリセットをお待ちください。</p>
+                    </div>
+                )}
+    
+                {/* --- グリッド表示エリア (常に表示、残りの高さを占める) --- */}
+                <div className="flex-grow min-h-0">
+                    {displayWeaponIds.length > 0 ? (
+                        <div className={`h-full border border-balack rounded-md overflow-hidden ${phase !== 'ban' && phase !== 'pick' ? 'opacity-50' : ''}`}> {/* ★ 条件付き opacity */}
+                            <AutoSizer>
+                                {({ height, width }) => {
+                                    if (width === 0 || height === 0) return null;
+                                    const columnCount = Math.max(1, Math.floor(width / itemWidth));
+                                    const rowCount = Math.ceil(displayWeaponIds.length / columnCount);
+                                    const calculatedColumnWidth = (width / columnCount) - 2; // ★ 横スクロール対策 (微調整)
+                                    const finalItemData: CellData = {
+                                        ...itemDataForGrid,
+                                        gridWidth: width,
+                                        itemWidth: itemWidth,
+                                        // ★ phase, currentTurn なども itemData に含める
+                                        phase: phase,
+                                        currentTurn: currentTurn,
+                                        myTeam: myTeam,
+                                        myBanCount: myBanCount,
+                                        onWeaponClick: onWeaponClick,
+                                        loadingWeaponId: loadingWeaponId,
+                                        weaponStates: weaponStates, // ★ weaponStates も必要
+                                    };
+                                    return (
+                                        <FixedSizeGrid
+                                            columnCount={columnCount}
+                                            columnWidth={calculatedColumnWidth}
+                                            height={height}
+                                            rowCount={rowCount}
+                                            rowHeight={itemHeight}
+                                            width={width}
+                                            itemData={finalItemData}
+                                            className="weapon-grid-virtualized"
+                                        >
+                                            {Cell}
+                                        </FixedSizeGrid>
+                                    );
+                                }}
+                            </AutoSizer>
+                        </div>
+                    ) : (<p className="text-center text-gray-500 py-4">表示対象の武器がありません。</p>)}
                 </div>
-            ) : (<p className="text-center ...">表示対象の武器がありません。</p>)}
-        </div>
-    )
-}
-
-WeaponGridDisplayComponent.displayName = 'WeaponGridDisplay';
-const MemoizedWeaponGridDisplay = memo(WeaponGridDisplayComponent);
-
-export default MemoizedWeaponGridDisplay; // ★ メモ化されたコンポーネントをエクスポート
+            </div> // ルート要素の閉じタグ
+        );
+    };
+    
+    // メモ化とエクスポート
+    WeaponGridDisplayComponent.displayName = 'WeaponGridDisplay';
+    const MemoizedWeaponGridDisplay = memo(WeaponGridDisplayComponent);
+    export default MemoizedWeaponGridDisplay;

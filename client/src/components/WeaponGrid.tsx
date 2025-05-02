@@ -490,7 +490,7 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
 
             {/* ================== メインエリア (3カラム) ================== */}
             {/* lg以上で3カラム、それ未満は1カラム */}
-            <div className="grid grid-cols-1 lg:grid-cols-11 gap-4 items-stretch flex-grow ">
+            <div className="grid grid-cols-1 lg:grid-cols-11 gap-4 items-stretch flex-grow mb-2 ">
                 <TeamPanel
                     team="alpha"
                     teamDisplayName="アルファ"
@@ -515,7 +515,7 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
 
 
                     {/* Weapon Grid 本体 */}
-                    <div className={`rounded-lg shadow-sm relative mt-2 h-[34vh]`}>
+                    <div className={`rounded-lg shadow-sm relative mt-2 h-full`}>
                         <WeaponGridDisplay
                             phase={gameState.phase}
                             currentTurn={gameState.currentTurn}

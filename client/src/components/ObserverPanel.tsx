@@ -17,7 +17,7 @@ const ObserverPanel: React.FC<ObserverPanelProps> = ({
     onSelectTeam,
 }) => {
     return (
-        <div className="border rounded-lg p-3 bg-gray-50 shadow-sm mt-6">
+        <div className="border rounded-lg p-3 bg-gray-50 shadow-sm mt-2">
              <div className="flex justify-between items-center mb-2">
                  <h4 className="font-semibold text-gray-800">観戦者 ({observers.length})</h4>
                   <button
