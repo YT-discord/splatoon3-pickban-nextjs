@@ -78,8 +78,7 @@ const TeamPanel: React.FC<TeamPanelProps> = ({
     };
 
     return (
-        // ルート要素: h-full で高さを親に合わせる
-        <div className={`lg:col-span-2 border rounded-lg p-3 ${panelBgColor} shadow-sm space-y-3 flex flex-col h-full`}> {/* 例: col-span-2 */}
+        <div className={`lg:col-span-2 border rounded-lg p-3 ${panelBgColor} shadow-sm space-y-3 flex flex-col h-full`}>
             {/* チーム選択ボタン */}
             <button
                 onClick={() => onSelectTeam(team)}
@@ -89,11 +88,10 @@ const TeamPanel: React.FC<TeamPanelProps> = ({
                 {teamDisplayName}に参加 {myTeam === team ? '(選択中)' : ''}
             </button>
             {/* メンバーリスト */}
-            {/* flex-grow で可能な限りのスペースを占める */}
-            <div> {/* flex-grow は削除、代わりにリスト部分に高さ制限とスクロール */}
+            <div>
                 <h4 className={`font-semibold ${panelHeaderColor} mb-1`}>メンバー ({teamUsers.length})</h4>
                 {/* スクロール可能なコンテナ */}
-                <div className="max-h-40 overflow-y-auto pr-1"> {/* 例: 最大高さ設定 */}
+                <div className="max-h-40 overflow-y-auto pr-1 min-h-20"> {/* 例: 最大高さ設定 */}
                     <ul className="space-y-0.5 text-sm">
                         {teamUsers.map(user => {
                             const isHost = user.id === gameState.hostId;
@@ -112,22 +110,24 @@ const TeamPanel: React.FC<TeamPanelProps> = ({
             {/* PICK 表示 (2列グリッド) */}
             <div className="pt-2">
                 <h4 className={`text-md font-medium mb-1 ${panelTextColor}`}>PICK ({pickCount}/{MAX_PICKS_PER_TEAM})</h4>
-                <div className="grid grid-cols-2 gap-1 min-h-[110px] items-center"> {/* 2列グリッド、最小高さ、中央揃え */}
+                <div className="grid grid-cols-2 gap-1 items-center"> {/* 2列グリッド、最小高さ、中央揃え */}
                     {pickedWeapons.map((weapon) => {
                         const subIconPath = getSubSpIconPath('sub', weapon.subWeaponImageName);
                         const spIconPath = getSubSpIconPath('special', weapon.specialWeaponImageName);
                         return (
-                            <div key={`team-${team}-pick-${weapon.id}`} className={`relative border ${itemBorderColor} rounded p-0.5 bg-white flex justify-center items-center`}>
-                                <Image src={weapon.imageUrl} alt={weapon.name} width={50} height={50} />
+                            <div key={`team-${team}-pick-${weapon.id}`} className={`relative border ${itemBorderColor} rounded p-0.5 bg-white flex justify-center items-center h-[54px]`}>
+                                <Image src={weapon.imageUrl} alt={weapon.name} width={48} height={48} style={{ objectFit: 'contain' }} />
                                 {/* サブ・スペ アイコン */}
                                 <div className="absolute top-0.5 left-0.5 flex items-center gap-0.5">
                                     {subIconPath && (
-                                        <div className="relative w-3.5 h-3.5 bg-gray-200/80 rounded-sm">
+                                        // <div className="relative w-3.5 h-3.5 bg-gray-200/80 rounded-sm">
+                                        <div className="relative w-3.5 h-3.5 bg-gray-100 rounded-sm overflow-hidden">
                                             <Image src={subIconPath} alt={weapon.subWeapon} layout="fill" objectFit="contain" title={`サブ: ${weapon.subWeapon}`} />
                                         </div>
                                     )}
                                     {spIconPath && (
-                                        <div className="relative w-3.5 h-3.5 bg-gray-200/80 rounded-sm">
+                                        // <div className="relative w-3.5 h-3.5 bg-gray-200/80 rounded-sm">
+                                        <div className="relative w-3.5 h-3.5 bg-gray-100 rounded-sm overflow-hidden">
                                             <Image src={spIconPath} alt={weapon.specialWeapon} layout="fill" objectFit="contain" title={`スペシャル: ${weapon.specialWeapon}`} />
                                         </div>
                                     )}
@@ -148,14 +148,14 @@ const TeamPanel: React.FC<TeamPanelProps> = ({
             {/* BAN 表示 (Flexbox wrap) */}
             <div className="pt-2">
                 <h4 className={`text-md font-medium mb-1 ${panelTextColor}`}>BAN ({banCount}/{MAX_BANS_PER_TEAM})</h4>
-                <div className="grid grid-cols-3 gap-1 min-h-[60px] items-center">
+                <div className="grid grid-cols-3 gap-1 items-center">
                     {bannedWeapons.map((weapon) => { // ★ 最大3つまで表示想定
                         if (!shouldShowBan(weapon)) return null; // 表示すべきでない場合は表示しない
                         const subIconPath = getSubSpIconPath('sub', weapon.subWeaponImageName);
                         const spIconPath = getSubSpIconPath('special', weapon.specialWeaponImageName);
                         return (
-                            <div key={`team-${team}-ban-${weapon.id}`} className="relative border border-gray-400 rounded p-0.5 bg-gray-200 flex justify-center items-center"> {/* ★ 中央揃え */}
-                                <Image src={weapon.imageUrl} alt={weapon.name} width={50} height={50} className="opacity-70" />
+                            <div key={`team-${team}-ban-${weapon.id}`} className="relative border border-gray-400 rounded p-0.5 bg-gray-200 flex justify-center items-center h-[64px]"> {/* ★ 中央揃え */}
+                                <Image src={weapon.imageUrl} alt={weapon.name} width={58} height={58} className="opacity-70 style={{ objectFit: 'contain' }}" />
                                 {/* BANマーク */}
                                 <div className="absolute inset-0 flex items-center justify-center">
                                     <svg className={`w-6 h-6 ${banSvgColor}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg>

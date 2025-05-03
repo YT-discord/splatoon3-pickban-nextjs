@@ -122,25 +122,41 @@ const WeaponItemComponent: React.FC<WeaponItemProps> = memo(({
 
     return (
         <div
-            // key は map 側で設定
-            className={`relative p-1 rounded-lg border transition-all duration-150 ${bgColor} ${borderColor} ${overallOpacity} ${ring} ${cursor} ${hoverEffect}`}
+            className={`relative p-1 rounded-lg border transition-all duration-150 ${bgColor} ${borderColor} ${overallOpacity} ${ring} ${cursor} ${hoverEffect} h-full w-full`}
             onClick={() => !isDisabled && onWeaponClick(weapon.id)}
             title={`${weapon.name}\nサブ: ${weapon.subWeapon}\nスペシャル: ${weapon.specialWeapon}${isDisabled ? ' (操作不可)' : ''}`}
         >
             {/* メイン武器アイコン */}
-            <Image
+            {isRandomChoice ? (
+                <Image
                 src={weapon.imageUrl}
                 alt={weapon.name}
-                width={96} height={96}
+                // ★★★ ダミーの width と height を指定 ★★★
+                width={100}
+                height={100}
+                style={{
+                    width: '100%', // ★ 親要素の幅に合わせる
+                    height: 'auto',  // ★ 高さは自動調整
+                    objectFit: 'contain', // ★ 念のため contain を指定 (なくても効く場合あり)
+                    maxWidth: '96px', // ★ 例: 最大幅を 96px に制限 (任意)
+                    maxHeight: '96px',// ★ 例: 最大高さを 96px に制限 (任意)
+                }}
+                    className={`mx-auto transition-opacity duration-150 ${imageOpacity}`}
+                />
+            ):(
+                <Image
+                src={weapon.imageUrl}
+                alt={weapon.name}
+                fill // ★ fill prop を使用
+                style={{ objectFit: 'contain' }} // ★ contain でアスペクト比維持
                 className={`mx-auto transition-opacity duration-150 ${imageOpacity}`}
-                priority={weapon.id <= 12} // 画像の優先度読み込み設定 (任意)
             />
-
+            )}
             {/* サブ・スペシャルアイコン表示エリア (アイコン上部) */}
             {!isRandomChoice && (
-                <div className="absolute top-1 left-1 flex items-center gap-1">
+                <div className="absolute top-1 left-1 flex items-center gap-1 z-10">
                     {/* サブウェポン */}
-                    <div className="relative w-6 h-6 bg-gray-200/80 rounded">
+                    <div className="relative w-6 h-6 bg-gray-100 rounded-sm overflow-hidden">
                         <Image
                             src={subWeaponImageUrl}
                             alt={weapon.subWeapon}
@@ -151,7 +167,7 @@ const WeaponItemComponent: React.FC<WeaponItemProps> = memo(({
                         />
                     </div>
                     {/* スペシャルウェポン */}
-                    <div className="relative w-6 h-6 bg-gray-200/80 rounded">
+                    <div className="relative w-6 h-6 bg-gray-100 rounded-sm overflow-hidden">
                         <Image
                             src={specialWeaponImageUrl}
                             alt={weapon.specialWeapon}
@@ -181,9 +197,6 @@ const WeaponItemComponent: React.FC<WeaponItemProps> = memo(({
                     ランダム
                 </span>
             )}
-            {/* ターン表示 */}
-            {/* {!isRandomChoice && isMyTeamPlayer && !isDisabled && phase === 'pick' && (<div className="absolute bottom-1 right-1 px-1.5 py-0.5 text-xs bg-green-200 text-green-800 rounded font-semibold animate-pulse">Pick!</div> )} */}
-            {/* {!isRandomChoice && isMyTeamPlayer && !isDisabled && phase === 'ban' && (<div className="absolute bottom-1 right-1 px-1.5 py-0.5 text-xs bg-yellow-200 text-yellow-800 rounded font-semibold animate-pulse">Ban!</div> )} */}
         </div>
     );
 });
