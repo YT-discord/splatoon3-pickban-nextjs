@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import Image from 'next/image';
 import type { Socket } from 'socket.io-client';
 import type { GameState, RoomUser, RoomWeaponState, MasterWeapon, Team, Stage, Rule } from '../../../common/types/game';
-import { MAX_BANS_PER_TEAM, STAGES_DATA, RULES_DATA, WEAPON_ATTRIBUTES, RANDOM_CHOICE_ID } from '../../../common/types/constants';
+import { MAX_BANS_PER_TEAM, STAGES_DATA, RULES_DATA, WEAPON_ATTRIBUTES, RANDOM_CHOICE_ID, RANDOM_RULE_CHOICE, RANDOM_STAGE_CHOICE } from '../../../common/types/constants';
 import toast from 'react-hot-toast';
 
 import GameHeader from './GameHeader';
@@ -469,7 +469,7 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
 
     // --- JSX レンダリング本体 ---
     return (
-        <div className={`container mx-auto p-4 space-y-6 bg-white rounded-lg shadow-md flex flex-col min-h-[calc(100vh-100px)]`}>
+        <div className={`container mx-auto p-4 space-y-3 bg-white rounded-lg shadow-md flex flex-col min-h-[calc(100vh-100px)]`}>
             {/* ================== ヘッダーエリア ================== */}
             <GameHeader
                 roomId={roomId}
@@ -595,16 +595,16 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
     );
 
     // ★★★ 選択肢の型定義 (ステージまたはルール) ★★★
-    type SelectableItem = Stage | Rule | typeof RANDOM_CHOICE;
+    type SelectableItem = Stage | Rule | typeof RANDOM_STAGE_CHOICE | typeof RANDOM_RULE_CHOICE;
 
     // ★★★ 汎用選択モーダルコンポーネント (簡易版) ★★★
     interface SelectionModalProps<T extends SelectableItem> {
         isOpen: boolean;
         onClose: () => void;
         items: (T extends typeof RANDOM_CHOICE ? never : T)[];
-        onSelect: (item: T) => void;
+        onSelect: (item: T | typeof RANDOM_STAGE_CHOICE | typeof RANDOM_RULE_CHOICE) => void;
         title: string;
-        randomOption?: typeof RANDOM_CHOICE;
+        randomOption?: typeof RANDOM_STAGE_CHOICE | typeof RANDOM_RULE_CHOICE;
         isStageModal?: boolean;
     }
 

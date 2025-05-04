@@ -115,18 +115,20 @@ const TeamPanel: React.FC<TeamPanelProps> = ({
                         const subIconPath = getSubSpIconPath('sub', weapon.subWeaponImageName);
                         const spIconPath = getSubSpIconPath('special', weapon.specialWeaponImageName);
                         return (
-                            <div key={`team-${team}-pick-${weapon.id}`} className={`relative border ${itemBorderColor} rounded p-0.5 bg-white flex justify-center items-center h-[54px]`}>
-                                <Image src={weapon.imageUrl} alt={weapon.name} width={48} height={48} style={{ objectFit: 'contain' }} />
+                            <div key={`team-${team}-pick-${weapon.id}`} className={`relative border ${itemBorderColor} rounded p-0.5 bg-white flex justify-center items-center h-[74px]`}>
+                                <Image src={weapon.imageUrl} alt={weapon.name} width={100} height={100} style={{
+                                    width: 'auto', // ★ 親要素の幅に合わせる
+                                    height: '100%',  // ★ 高さは自動調整
+                                    objectFit: 'contain', // ★ 念のため contain を指定 (なくても効く場合あり)
+                                }} />
                                 {/* サブ・スペ アイコン */}
                                 <div className="absolute top-0.5 left-0.5 flex items-center gap-0.5">
                                     {subIconPath && (
-                                        // <div className="relative w-3.5 h-3.5 bg-gray-200/80 rounded-sm">
                                         <div className="relative w-3.5 h-3.5 bg-gray-100 rounded-sm overflow-hidden">
                                             <Image src={subIconPath} alt={weapon.subWeapon} layout="fill" objectFit="contain" title={`サブ: ${weapon.subWeapon}`} />
                                         </div>
                                     )}
                                     {spIconPath && (
-                                        // <div className="relative w-3.5 h-3.5 bg-gray-200/80 rounded-sm">
                                         <div className="relative w-3.5 h-3.5 bg-gray-100 rounded-sm overflow-hidden">
                                             <Image src={spIconPath} alt={weapon.specialWeapon} layout="fill" objectFit="contain" title={`スペシャル: ${weapon.specialWeapon}`} />
                                         </div>
@@ -177,17 +179,17 @@ const TeamPanel: React.FC<TeamPanelProps> = ({
                         );
                     })}
                     {(() => {
-                         const visibleBanCount = bannedWeapons.filter(shouldShowBan).length;
-                         return Array.from({ length: MAX_BANS_PER_TEAM - visibleBanCount }).map((_, index) => (
-                             <div key={`ban-placeholder-${index}`} className="border border-dashed border-gray-300 rounded bg-gray-100/50 h-[64px] flex-shrink-0"></div>
-                         ));
-                     })()}
-                     {/* BANが0件の場合のテキスト表示 (任意) */}
-                     {!hasVisibleBans && (
+                        const visibleBanCount = bannedWeapons.filter(shouldShowBan).length;
+                        return Array.from({ length: MAX_BANS_PER_TEAM - visibleBanCount }).map((_, index) => (
+                            <div key={`ban-placeholder-${index}`} className="border border-dashed border-gray-300 rounded bg-gray-100/50 h-[64px] flex-shrink-0"></div>
+                        ));
+                    })()}
+                    {/* BANが0件の場合のテキスト表示 (任意) */}
+                    {!hasVisibleBans && (
                         <p className="text-xs text-gray-500 col-span-3 text-center">{gameState.phase === 'waiting' ? '待機中' : '-'}</p>
-                     )}
-                     {/* 相手のBANが非表示の場合 */}
-                     {opponentHasBansInBanPhase && <p className="text-xs text-gray-400 italic col-span-3 text-center mt-1">（相手のBANはPickフェーズで公開）</p>}
+                    )}
+                    {/* 相手のBANが非表示の場合 */}
+                    {opponentHasBansInBanPhase && <p className="text-xs text-gray-400 italic col-span-3 text-center mt-1">（相手のBANはPickフェーズで公開）</p>}
                 </div>
             </div>
         </div>

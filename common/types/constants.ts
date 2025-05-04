@@ -8,7 +8,29 @@ export const MAX_PICKS_PER_TEAM = 4; // = totalPickTurns / 2
 export const TOTAL_PICK_TURNS = MAX_PICKS_PER_TEAM * 2; // 8
 export const MAX_USERS_PER_TEAM = 4;
 export const RANDOM_CHOICE_ID = -1;
-export const RANDOM_CHOICE_ITEM = { id: RANDOM_CHOICE_ID, name: 'ランダム', attribute: 'special', imageUrl: '/images/icons/random.png', subWeapon: '', specialWeapon: '' };
+export const RANDOM_CHOICE_ITEM = { id: RANDOM_CHOICE_ID, name: 'ランダム', attribute: 'special', imageUrl: '/images/weapons/random.png', subWeapon: '', specialWeapon: '' };
+
+// ステージ選択用
+export const RANDOM_STAGE_CHOICE = {
+    id: 'random', // id は 'random' 文字列のまま
+    name: 'ランダム',
+    imageUrl: '/images/stages/random_stage.png' // ★ ステージ用アイコンパス
+};
+// ルール選択用
+export const RANDOM_RULE_CHOICE = {
+    id: 'random', // id は 'random' 文字列のまま
+    name: 'ランダム',
+    imageUrl: '/images/icons/random.png' // ★ ルール用アイコンパス
+};
+// 武器グリッド用
+export const RANDOM_WEAPON_ID = -1; // 武器用IDは数値
+export const RANDOM_WEAPON_CHOICE_ITEM = { // ★ 名前変更推奨
+    id: RANDOM_WEAPON_ID,
+    name: 'ランダム',
+    attribute: 'special',
+    imageUrl: '/images/weapons/random.png', // ★ 武器用アイコンパス
+    subWeapon: '', specialWeapon: '', subWeaponImageName: '', specialWeaponImageName: ''
+};
 
 // 時間設定 (秒)
 export const BAN_PHASE_DURATION = 30;

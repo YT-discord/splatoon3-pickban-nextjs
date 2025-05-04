@@ -86,9 +86,9 @@ const WeaponItemComponent: React.FC<WeaponItemProps> = memo(({
 
     // ランダム選択肢のスタイル
     if (isRandomChoice) {
-        bgColor = 'bg-purple-50';
-        borderColor = 'border-purple-300';
-        if (!isDisabled) hoverEffect = 'hover:bg-purple-100 hover:border-purple-400';
+        bgColor = 'bg-green-50';
+        borderColor = 'border-green-300';
+        if (!isDisabled) hoverEffect = 'hover:bg-green-100 hover:border-green-400';
     }
 
     // 選択済みスタイル
@@ -138,10 +138,8 @@ const WeaponItemComponent: React.FC<WeaponItemProps> = memo(({
                     width: '100%', // ★ 親要素の幅に合わせる
                     height: 'auto',  // ★ 高さは自動調整
                     objectFit: 'contain', // ★ 念のため contain を指定 (なくても効く場合あり)
-                    maxWidth: '96px', // ★ 例: 最大幅を 96px に制限 (任意)
-                    maxHeight: '96px',// ★ 例: 最大高さを 96px に制限 (任意)
                 }}
-                    className={`mx-auto transition-opacity duration-150 ${imageOpacity}`}
+                    className={`mx-auto transition-opacity duration-150 ${imageOpacity} rounded-sm overflow-hidden `}
                 />
             ):(
                 <Image
@@ -190,12 +188,6 @@ const WeaponItemComponent: React.FC<WeaponItemProps> = memo(({
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
                 </div>
-            )}
-
-            {isRandomChoice && (
-                <span className="block text-center text-xs font-medium text-purple-800 mt-1">
-                    ランダム
-                </span>
             )}
         </div>
     );

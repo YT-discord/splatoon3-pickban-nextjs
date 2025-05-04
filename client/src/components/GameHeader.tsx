@@ -2,8 +2,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import Image from 'next/image';
 import type { GameState, Team, Stage, Rule } from '../../../common/types/game';
 import type { Socket } from 'socket.io-client';
-import { RANDOM_CHOICE } from './WeaponGrid'; // WeaponGrid からインポート (後で場所を検討)
-import { BAN_PHASE_DURATION, PICK_PHASE_TURN_DURATION } from '../../../common/types/constants';
+import { BAN_PHASE_DURATION, PICK_PHASE_TURN_DURATION, RANDOM_RULE_CHOICE, RANDOM_STAGE_CHOICE } from '../../../common/types/constants';
 import CircularTimer from './CircularTimer';
 
 interface GameHeaderProps {
@@ -12,8 +11,8 @@ interface GameHeaderProps {
     myTeam: Team | 'observer'; // 自分のチーム
     // myActualSocketId: string;
     socket: Socket | null;
-    selectedStage: Stage | typeof RANDOM_CHOICE | null;
-    selectedRule: Rule | typeof RANDOM_CHOICE | null;
+    selectedStage: Stage | typeof RANDOM_STAGE_CHOICE  | null;
+    selectedRule: Rule | typeof RANDOM_RULE_CHOICE  | null;
     onLeaveRoom: () => void;
     onStartGame: () => void;
     onResetGame: () => void;
@@ -118,7 +117,7 @@ const GameHeader: React.FC<GameHeaderProps> = ({
     const timerDuration = getTimerDuration();
 
     return (
-        <div className={`grid grid-cols-1 md:grid-cols-3 gap-4 items-center p-4 ${headerBgColor} ...`}>
+        <div className={`grid grid-cols-1 md:grid-cols-3 gap-4 items-center p-3 ${headerBgColor} ...`}>
             {/* 左ブロック: ルーム情報 */}
             <div className="flex items-center gap-3">
 
@@ -137,7 +136,7 @@ const GameHeader: React.FC<GameHeaderProps> = ({
                     {/* 編集可能なルーム名表示/編集 */}
                     {!isEditingName ? (
                         // 表示モード
-                        <div className="flex items-center gap-1"> {/* ★ gap-1 追加 */}
+                        <div className="flex items-center gap-1">
                             <div className="font-semibold text-lg text-gray-800 truncate" title={gameState.roomName}>
                                 {gameState.roomName}
                             </div>
@@ -176,7 +175,7 @@ const GameHeader: React.FC<GameHeaderProps> = ({
                             {editError && <p className="text-red-500 text-xs mt-1">{editError}</p>}
                         </div>
                     )}
-                    <p className="text-sm text-gray-600 mt-0.5">({gameState.userCount}人参加)</p> {/* ★ mt調整 */}
+                    <p className="text-sm text-gray-600 mt-0.5">({gameState.userCount}人参加)</p> 
                 </div>
             </div>
 
@@ -189,8 +188,7 @@ const GameHeader: React.FC<GameHeaderProps> = ({
                     {/* ----- タイマー表示枠 (常に表示) ----- */}
                     <div className="flex flex-col items-center text-xs border rounded p-1 bg-white shadow-sm w-[80px]">
                         <span className="font-medium text-gray-600 mb-1">残り時間</span>
-                        {/* ★★★★★ 変更点: タイマーコンテナの中身を条件分岐 ★★★★★ */}
-                        <div className="flex items-center justify-center w-full h-[60px]"> {/* ★ 高さ固定 */}
+                        <div className="flex items-center justify-center w-full h-[60px]">
                             {(gameState.phase === 'ban' || gameState.phase === 'pick') && gameState.timeLeft != null && timerDuration > 0 ? (
                                 // BAN/PICK 中はタイマー表示
                                 <CircularTimer
@@ -290,7 +288,6 @@ const GameHeader: React.FC<GameHeaderProps> = ({
                     ゲーム開始 (ホストのみ)
                 </button>
 
-                {/* ★★★★★ 変更点: リセットボタン (常に表示) ★★★★★ */}
                 <button
                     onClick={onResetGame}
                     // disabled 条件: ホストでない または 待機中でない (リセットは待機中にはできない)
@@ -300,10 +297,8 @@ const GameHeader: React.FC<GameHeaderProps> = ({
                             ? 'bg-yellow-500 text-white hover:bg-yellow-600' // ホストかつ待機中でない: 黄色
                             : 'bg-gray-300 text-gray-500 cursor-not-allowed' // それ以外: グレーアウト
                         }`}
-                    // title は disabled の理由を示す
                     title={!amIHost ? 'ホストのみリセットできます' : (gameState.phase === 'waiting' ? '待機中はリセットできません' : '')}
                 >
-                    {/* ★★★★★ 変更点: 文言を常に表示 ★★★★★ */}
                     ルームリセット (ホストのみ)
                 </button>
 
