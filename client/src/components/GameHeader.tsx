@@ -142,7 +142,7 @@ const GameHeader: React.FC<GameHeaderProps> = ({
     const timerDuration = getTimerDuration();
 
     return (
-        <div className={`grid grid-cols-1 md:grid-cols-3 gap-4 items-center p-3 ${headerBgColor} ...`}>
+        <div className={`grid grid-cols-1 md:grid-cols-3 gap-4 items-stretch p-1 ${headerBgColor} rounded-lg shadow mb-6 transition-colors duration-300`}>
             {/* 左ブロック: ルーム情報 */}
             <div className="flex items-center gap-3">
 
@@ -205,15 +205,15 @@ const GameHeader: React.FC<GameHeaderProps> = ({
             </div>
 
             {/* ================= 中央ブロック: ゲームステータス & タイマー/ルール/ステージ ================= */}
-            <div className="text-center space-y-1 flex flex-col items-center">
+            <div className="text-center space-y-1 flex flex-col items-center flex-grow">
 
                 {/* タイマー、ルール、ステージの横並びコンテナ */}
-                <div className="flex justify-center items-start gap-3 mt-2 w-full">
+                <div className="flex justify-center items-stretch gap-3 mt-1 w-full h-full">
 
                     {/* ----- タイマー表示枠 (常に表示) ----- */}
-                    <div className="flex flex-col items-center text-xs border rounded p-1 bg-white shadow-sm w-[33%]">
+                    <div className="flex flex-col items-center text-xs border rounded p-1 bg-white shadow-sm w-[33%] h-full">
                         <span className="font-medium text-gray-600 mb-1">残り時間</span>
-                        <div className="flex items-center justify-center w-full h-[60px]">
+                        <div className="flex items-center justify-center w-full flex-grow min-h-0">
                             {(gameState.phase === 'ban' || gameState.phase === 'pick') && gameState.timeLeft != null && timerDuration > 0 ? (
                                 // BAN/PICK 中はタイマー表示
                                 <CircularTimer
@@ -241,9 +241,9 @@ const GameHeader: React.FC<GameHeaderProps> = ({
 
 
                     {/* ----- ルール表示 ----- */}
-                    <div className="flex flex-col items-center text-xs border rounded p-1 bg-white shadow-sm w-[33%]">
+                    <div className="flex flex-col items-center text-xs border rounded p-1 bg-white shadow-sm w-[33%] h-full">
                         <span className="font-medium text-gray-600 mb-1">ルール</span>
-                        <div className="flex items-center justify-center w-full h-[60px] bg-gray-100 rounded-sm overflow-hidden relative"> {/* relative 追加 */}
+                        <div className="flex items-center justify-center w-full h-[60px] bg-gray-100 rounded-sm overflow-hidden relative  flex-grow min-h-0"> {/* relative 追加 */}
                             {selectedRule ? (
                                 <>
                                     {/* ランダムルールアイコン表示 */}
@@ -268,7 +268,7 @@ const GameHeader: React.FC<GameHeaderProps> = ({
                         {/* 名前表示 */}
                         <div className="h-8 mt-1 flex items-center justify-center"> {/* ★ 名前表示用スペース */}
                             {selectedRule && (
-                                <p className="text-[10px] font-semibold text-gray-800 leading-tight text-center break-words"> {/* ★ スタイル調整 */}
+                                <p className="text-[15px] font-semibold text-gray-800 leading-tight text-center break-words"> {/* ★ スタイル調整 */}
                                     {selectedRule.name}
                                 </p>
                             )}
@@ -284,9 +284,9 @@ const GameHeader: React.FC<GameHeaderProps> = ({
                     </div>
 
                     {/* ----- ステージ表示 ----- */}
-                    <div className="flex flex-col items-center text-xs border rounded p-1 bg-white shadow-sm w-[33%]">
+                    <div className="flex flex-col items-center text-xs border rounded p-1 bg-white shadow-sm w-[33%] h-full">
                         <span className="font-medium text-gray-600 mb-1">ステージ</span>
-                        <div className="flex items-center justify-center w-full h-[60px] bg-gray-100 rounded-sm overflow-hidden relative">
+                        <div className="flex items-center justify-center w-full h-[60px] bg-gray-100 rounded-sm overflow-hidden relative  flex-grow min-h-0">
                             {selectedStage ? (
                                 <>
                                     {/* ランダムステージアイコン表示 */}
@@ -303,7 +303,14 @@ const GameHeader: React.FC<GameHeaderProps> = ({
                                         </>
                                     ) : (
                                         // 通常のステージ画像
-                                        <Image src={selectedStage.imageUrl} alt={selectedStage.name} width={80} height={60} style={{ height: 'auto', objectFit: 'contain', maxWidth: '100%', maxHeight: '100%' }} />
+                                        <Image 
+                                        src={selectedStage.imageUrl}
+                                        alt={selectedStage.name}
+                                        //  width={80} height={60}
+                                        // style={{ height: 'auto', objectFit: 'contain', maxWidth: '100%', maxHeight: '100%' }}
+                                        fill
+                                                style={{ objectFit: 'cover' }}
+                                        />
                                     )}
                                 </>
                             ) : (<span className="text-gray-500 text-xs">未選択</span>)}
@@ -311,7 +318,7 @@ const GameHeader: React.FC<GameHeaderProps> = ({
                         {/* 名前表示 */}
                         <div className="h-8 mt-1 flex items-center justify-center"> {/* ★ 名前表示用スペース */}
                             {selectedStage && (
-                                <p className="text-[10px] font-semibold text-gray-800 leading-tight text-center break-words"> {/* ★ スタイル調整 */}
+                                <p className={`font-semibold text-gray-800 leading-tight text-center break-words ${selectedStage.name.length <= 7 ? 'text-[15px]' : 'text-[10px]'}`}>
                                     {selectedStage.name}
                                 </p>
                             )}
