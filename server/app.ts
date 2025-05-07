@@ -396,20 +396,30 @@ io.on('connection', (socket: Socket) => {
                 return;
             }
 
-            // ステージがランダムなら抽選
-            if (roomState.selectedStageId === 'random') {
-                const randomIndex = Math.floor(Math.random() * STAGES_DATA.length);
-                roomState.selectedStageId = STAGES_DATA[randomIndex].id;
-                console.log(`[Start Game ${roomId}] Random stage selected: ${STAGES_DATA[randomIndex].name} (ID: ${roomState.selectedStageId})`);
+            // ステージ決定
+            const determinedStageId = GameLogic.determineStartingStage(roomId);
+            if (determinedStageId === 'error') {
+                socket.emit('action failed', { reason: 'ランダム選択対象ステージがありません。対象を1つ以上選択してください。' });
+                return;
             }
-            // ルールがランダムなら抽選
-            if (roomState.selectedRuleId === 'random') {
-                const randomIndex = Math.floor(Math.random() * RULES_DATA.length);
-                roomState.selectedRuleId = RULES_DATA[randomIndex].id;
-                console.log(`[Start Game ${roomId}] Random rule selected: ${RULES_DATA[randomIndex].name} (ID: ${roomState.selectedRuleId})`);
+            if (determinedStageId === null) { // 未選択またはエラー
+                socket.emit('action failed', { reason: 'ステージが選択されていません。' }); // またはデフォルトを設定？
+                return;
             }
+            // 決定したステージIDを roomState に反映 (determineStartingStage が数値 ID を返すので)
+            roomState.selectedStageId = determinedStageId;
+            const determinedRuleId = GameLogic.determineStartingRule(roomId);
+            if (determinedRuleId === 'error') {
+                socket.emit('action failed', { reason: 'ランダム選択対象ルールがありません。対象を1つ以上選択してください。' });
+                return;
+           }
+            if (determinedRuleId === null) {
+                socket.emit('action failed', { reason: 'ルールが選択されていません。' });
+                return;
+           }
+           roomState.selectedRuleId = determinedRuleId;
 
-            console.log(`[Start Game ${roomId}] Starting ban phase...`);
+            console.log(`[Start Game ${roomId}] Starting ban phase with Stage ID: ${roomState.selectedStageId}, Rule ID: ${roomState.selectedRuleId}`);
             // roomState の更新は GameLogic 内で行う想定に変更しても良い
             roomState.phase = 'ban';
             roomState.currentTurn = null;
@@ -633,6 +643,53 @@ io.on('connection', (socket: Socket) => {
             socket.emit('action failed', { reason: 'ランダム選択処理中にエラーが発生しました' });
         }
     });
+
+        socket.on('update random stage pool', (data: { stageId: number }) => {
+            const userInfo = connectedUsersGlobal.get(socketId);
+            if (!userInfo || !userInfo.roomId || !userInfo.name) return;
+            const roomId = userInfo.roomId;
+            const roomState = gameRooms.get(roomId);
+    
+            // データ、ホスト権限、フェーズをチェック
+            if (!data || typeof data.stageId !== 'number') {
+                socket.emit('action failed', { reason: '無効なステージIDです' });
+                return;
+            }
+            if (!roomState || roomState.hostId !== socketId) {
+                socket.emit('action failed', { reason: 'ホストのみが対象ステージを変更できます' });
+                return;
+            }
+            if (roomState.phase !== 'waiting') {
+                 socket.emit('action failed', { reason: '待機中のみ変更できます' });
+                return;
+            }
+            // ステージIDが存在するかチェック (任意)
+            if (!STAGES_DATA.some(stage => stage.id === data.stageId)) {
+                 socket.emit('action failed', { reason: '存在しないステージIDです' });
+                 return;
+            }
+    
+            console.log(`[Update Random Pool ${roomId}] Request from host ${userInfo.name} to toggle stageId: ${data.stageId}`);
+            const success = GameLogic.updateRandomStagePool(roomId, data.stageId);
+            // 成功した場合、gameLogic 内で room state update が emit される
+            if (!success) {
+                socket.emit('action failed', { reason: 'プール更新処理に失敗しました' });
+            }
+        });
+
+        socket.on('update random rule pool', (data: { ruleId: number }) => {
+            const userInfo = connectedUsersGlobal.get(socketId);
+            if (!userInfo || !userInfo.roomId || !userInfo.name) return;
+            const roomId = userInfo.roomId;
+            const roomState = gameRooms.get(roomId);
+            // ... (ホストチェック、フェーズチェック) ...
+            if (!data || typeof data.ruleId !== 'number' || !RULES_DATA.some(r => r.id === data.ruleId)) {
+                 socket.emit('action failed', { reason: '無効または存在しないルールIDです' });
+                 return;
+            }
+            console.log(`[Update Random Pool ${roomId}] Request from host ${userInfo.name} to toggle ruleId: ${data.ruleId}`);
+            GameLogic.updateRandomRulePool(roomId, data.ruleId);
+        });
 
     // --- 切断処理 ---
     socket.on('disconnect', (reason: string) => {

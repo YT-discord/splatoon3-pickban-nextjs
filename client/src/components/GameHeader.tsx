@@ -2,7 +2,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import Image from 'next/image';
 import type { GameState, Team, Stage, Rule } from '../../../common/types/game';
 import type { Socket } from 'socket.io-client';
-import { BAN_PHASE_DURATION, PICK_PHASE_TURN_DURATION, RANDOM_RULE_CHOICE, RANDOM_STAGE_CHOICE } from '../../../common/types/constants';
+import { BAN_PHASE_DURATION, PICK_PHASE_TURN_DURATION, RANDOM_RULE_CHOICE, RANDOM_STAGE_CHOICE, STAGES_DATA, RULES_DATA } from '../../../common/types/constants';
 import CircularTimer from './CircularTimer';
 
 interface GameHeaderProps {
@@ -11,14 +11,16 @@ interface GameHeaderProps {
     myTeam: Team | 'observer'; // 自分のチーム
     // myActualSocketId: string;
     socket: Socket | null;
-    selectedStage: Stage | typeof RANDOM_STAGE_CHOICE  | null;
-    selectedRule: Rule | typeof RANDOM_RULE_CHOICE  | null;
+    selectedStage: Stage | typeof RANDOM_STAGE_CHOICE | null;
+    selectedRule: Rule | typeof RANDOM_RULE_CHOICE | null;
     onLeaveRoom: () => void;
     onStartGame: () => void;
     onResetGame: () => void;
     onOpenStageModal: () => void;
     onOpenRuleModal: () => void;
     amIHost: boolean;
+    randomStagePoolCount: number;
+    randomRulePoolCount: number;
 }
 
 const validateRoomName = (name: string): string | null => {
@@ -28,6 +30,27 @@ const validateRoomName = (name: string): string | null => {
     return null;
 };
 
+const getRandomStageDisplayImagePath = (count: number, total: number): string => {
+    if (count === total) {
+        return '/images/stages/omakase/24.png'; // 全選択状態のアイコン
+    } else if (count > 0) {
+        // 数字付きのアイコンを返す (例: random_stage_10.png)
+        // 適切な画像がない場合はデフォルトや汎用アイコンを返す
+        // ここでは仮に汎用アイコン + 数字表示とする
+        return `/images/stages/omakase/${count}.png`; // カスタム選択状態アイコン
+    } else {
+        return '/images/icons/random_stage_empty.png'; // 対象が0の場合のアイコン
+    }
+};
+
+const getRandomRuleDisplayImagePath = (count: number, total: number): string => {
+    if (count === total) return '/images/rules/omakase/5.png';
+    if (count === 0) return '/images/rules/omakase/random_rule_empty.png';
+    // ★ 対象数が1つの場合のアイコン
+    if (count === 1) return '/images/rules/omakase/random_rule_one.png'; // or カスタムアイコン
+    return `/images/rules/omakase/${count}.png`; // カスタム選択状態アイコン
+};
+
 const GameHeader: React.FC<GameHeaderProps> = ({
     roomId,
     gameState,
@@ -35,6 +58,8 @@ const GameHeader: React.FC<GameHeaderProps> = ({
     // myActualSocketId,
     socket,
     selectedStage,
+    randomStagePoolCount,
+    randomRulePoolCount,
     selectedRule,
     onLeaveRoom,
     onStartGame,
@@ -50,7 +75,7 @@ const GameHeader: React.FC<GameHeaderProps> = ({
 
     const handleSaveName = useCallback(() => {
         // gameState が null の可能性もあるのでチェックを追加
-        if (!socket || !gameState ) return;
+        if (!socket || !gameState) return;
         const validationError = validateRoomName(editingName);
         if (validationError) {
             setEditError(validationError); // エラーメッセージを表示
@@ -121,14 +146,14 @@ const GameHeader: React.FC<GameHeaderProps> = ({
             {/* 左ブロック: ルーム情報 */}
             <div className="flex items-center gap-3">
 
-            <Image
+                <Image
                     src={getRoomIconPath(roomId)}
                     alt={`${roomId} icon`}
                     width={40}
                     height={40}
                     className="rounded flex-shrink-0"
                 />
-                <div className="flex-grow min-w-0"> 
+                <div className="flex-grow min-w-0">
                     {/* 固定の部屋ID表示 */}
                     <div className="text-xs text-black truncate" title={roomId}>
                         {roomId} {/* アイコンと連動する元のID */}
@@ -144,7 +169,7 @@ const GameHeader: React.FC<GameHeaderProps> = ({
                             {amIHost && (
                                 <button onClick={startEditingName} className="p-0.5 text-gray-500 hover:text-gray-700 flex-shrink-0" title="ルーム名編集"> {/* ★ p-0.5, flex-shrink-0 */}
                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                      <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                                     </svg>
                                 </button>
                             )}
@@ -152,30 +177,30 @@ const GameHeader: React.FC<GameHeaderProps> = ({
                     ) : (
                         // 編集モード
                         <div className="w-full mt-1">
-                        <div className="flex items-center gap-1 w-full">
-                            <input
-                                type="text"
-                                value={editingName}
-                                onChange={handleNameChange}
-                                className={`flex-grow px-2 py-1 border rounded text-sm text-gray-800  bg-white placeholder-gray-500 ${editError ? 'border-red-500' : 'border-gray-300'}`}
-                                maxLength={10}
-                                autoFocus
-                            />
-                            <button onClick={handleSaveName} className="p-1 text-green-600 hover:text-green-800" title="保存">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                                </svg>
-                            </button>
-                            <button onClick={handleCancelEditName} className="p-1 text-red-600 hover:text-red-800" title="キャンセル">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                                </svg>
-                            </button>
+                            <div className="flex items-center gap-1 w-full">
+                                <input
+                                    type="text"
+                                    value={editingName}
+                                    onChange={handleNameChange}
+                                    className={`flex-grow px-2 py-1 border rounded text-sm text-gray-800  bg-white placeholder-gray-500 ${editError ? 'border-red-500' : 'border-gray-300'}`}
+                                    maxLength={10}
+                                    autoFocus
+                                />
+                                <button onClick={handleSaveName} className="p-1 text-green-600 hover:text-green-800" title="保存">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                    </svg>
+                                </button>
+                                <button onClick={handleCancelEditName} className="p-1 text-red-600 hover:text-red-800" title="キャンセル">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                </button>
                             </div>
                             {editError && <p className="text-red-500 text-xs mt-1">{editError}</p>}
                         </div>
                     )}
-                    <p className="text-sm text-gray-600 mt-0.5">({gameState.userCount}人参加)</p> 
+                    <p className="text-sm text-gray-600 mt-0.5">({gameState.userCount}人参加)</p>
                 </div>
             </div>
 
@@ -186,7 +211,7 @@ const GameHeader: React.FC<GameHeaderProps> = ({
                 <div className="flex justify-center items-start gap-3 mt-2 w-full">
 
                     {/* ----- タイマー表示枠 (常に表示) ----- */}
-                    <div className="flex flex-col items-center text-xs border rounded p-1 bg-white shadow-sm w-[80px]">
+                    <div className="flex flex-col items-center text-xs border rounded p-1 bg-white shadow-sm w-[33%]">
                         <span className="font-medium text-gray-600 mb-1">残り時間</span>
                         <div className="flex items-center justify-center w-full h-[60px]">
                             {(gameState.phase === 'ban' || gameState.phase === 'pick') && gameState.timeLeft != null && timerDuration > 0 ? (
@@ -203,7 +228,7 @@ const GameHeader: React.FC<GameHeaderProps> = ({
                             ) : gameState.phase === 'pick_complete' ? (
                                 // Pick完了時はチェックマークなど (任意)
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                                 </svg>
                             ) : (
                                 // それ以外 (エラーなど) は空白 or 何か表示
@@ -211,56 +236,106 @@ const GameHeader: React.FC<GameHeaderProps> = ({
                             )}
                         </div>
                         {/* ダミーのボタンエリア (高さを揃えるため) */}
-                         <div className="h-[26px] mt-1"></div>
+                        <div className="h-[26px] mt-1"></div>
                     </div>
-                    
+
 
                     {/* ----- ルール表示 ----- */}
-                    <div className="flex flex-col items-center text-xs border rounded p-1 bg-white shadow-sm w-[80px]">
+                    <div className="flex flex-col items-center text-xs border rounded p-1 bg-white shadow-sm w-[33%]">
                         <span className="font-medium text-gray-600 mb-1">ルール</span>
-                        {/* 画像コンテナ */}
-                        <div className="flex items-center justify-center w-full h-[60px] mb-1 bg-gray-100 rounded-sm overflow-hidden">
+                        <div className="flex items-center justify-center w-full h-[60px] bg-gray-100 rounded-sm overflow-hidden relative"> {/* relative 追加 */}
                             {selectedRule ? (
-                                <Image src={selectedRule.imageUrl} alt={selectedRule.name} width={80} height={60} className="object-contain max-w-full max-h-full" />
+                                <>
+                                    {/* ランダムルールアイコン表示 */}
+                                    {selectedRule.id === 'random' ? (
+                                        <>
+                                            <Image
+                                                src={getRandomRuleDisplayImagePath(randomRulePoolCount, RULES_DATA.length)}
+                                                alt={`ランダム (対象: ${randomRulePoolCount})`}
+                                                // width={80} height={60}
+                                                // style={{ height: 'auto', objectFit: 'contain', maxWidth: '100%', maxHeight: '100%' }}
+                                                fill
+                                                style={{ objectFit: 'cover' }}
+                                            />
+                                        </>
+                                    ) : (
+                                        // 通常のルール画像
+                                        <Image src={selectedRule.imageUrl} alt={selectedRule.name} width={80} height={60} style={{ height: 'auto', objectFit: 'contain', maxWidth: '100%', maxHeight: '100%' }} />
+                                    )}
+                                </>
                             ) : (<span className="text-gray-500 text-xs">未選択</span>)}
                         </div>
-                        {/* 変更ボタン */}
+                        {/* 名前表示 */}
+                        <div className="h-8 mt-1 flex items-center justify-center"> {/* ★ 名前表示用スペース */}
+                            {selectedRule && (
+                                <p className="text-[10px] font-semibold text-gray-800 leading-tight text-center break-words"> {/* ★ スタイル調整 */}
+                                    {selectedRule.name}
+                                </p>
+                            )}
+                        </div>
+                        {/* 変更/確認ボタン */}
                         <button
                             onClick={onOpenRuleModal}
-                            disabled={!amIHost || gameState.phase !== 'waiting'}
-                            className={`mt-1 px-2 py-0.5 text-xs rounded ${(!amIHost || gameState.phase !== 'waiting') ? 'bg-gray-200 text-gray-500 cursor-not-allowed' : 'bg-gray-300 hover:bg-gray-400'}`}
-                            title={!amIHost ? "ホストのみ変更可" : (gameState.phase !== 'waiting' ? "待機中のみ変更可" : "ルール変更")}
-                        >変更</button>
+                            className={`mt-1 px-2 py-0.5 text-xs rounded ${gameState.phase !== 'waiting' && !amIHost ? 'bg-gray-200 text-gray-500 cursor-not-allowed' : 'bg-gray-300 hover:bg-gray-400'}`}
+                            title={gameState.phase !== 'waiting' ? "待機中のみ変更/確認可" : (amIHost ? "対象ルール変更" : "対象ルール確認")}
+                        >
+                            {amIHost && gameState.phase === 'waiting' ? '変更' : '確認'}
+                        </button>
                     </div>
 
                     {/* ----- ステージ表示 ----- */}
-                     <div className="flex flex-col items-center text-xs border rounded p-1 bg-white shadow-sm w-[80px]">
+                    <div className="flex flex-col items-center text-xs border rounded p-1 bg-white shadow-sm w-[33%]">
                         <span className="font-medium text-gray-600 mb-1">ステージ</span>
-                         {/* 画像コンテナ */}
-                        <div className="flex items-center justify-center w-full h-[60px] mb-1 bg-gray-100 rounded-sm overflow-hidden">
+                        <div className="flex items-center justify-center w-full h-[60px] bg-gray-100 rounded-sm overflow-hidden relative">
                             {selectedStage ? (
-                                <Image src={selectedStage.imageUrl} alt={selectedStage.name} width={80} height={60} className="object-contain max-w-full max-h-full" />
+                                <>
+                                    {/* ランダムステージアイコン表示 */}
+                                    {selectedStage.id === 'random' ? (
+                                        <>
+                                            <Image
+                                                src={getRandomStageDisplayImagePath(randomStagePoolCount, STAGES_DATA.length)}
+                                                alt={`ランダム (対象: ${randomStagePoolCount})`}
+                                                // width={80} height={60}
+                                                // style={{ height: 'auto', objectFit: 'contain', maxWidth: '100%', maxHeight: '100%' }}
+                                                fill
+                                                style={{ objectFit: 'cover' }}
+                                            />
+                                        </>
+                                    ) : (
+                                        // 通常のステージ画像
+                                        <Image src={selectedStage.imageUrl} alt={selectedStage.name} width={80} height={60} style={{ height: 'auto', objectFit: 'contain', maxWidth: '100%', maxHeight: '100%' }} />
+                                    )}
+                                </>
                             ) : (<span className="text-gray-500 text-xs">未選択</span>)}
                         </div>
-                         {/* 変更ボタン */}
+                        {/* 名前表示 */}
+                        <div className="h-8 mt-1 flex items-center justify-center"> {/* ★ 名前表示用スペース */}
+                            {selectedStage && (
+                                <p className="text-[10px] font-semibold text-gray-800 leading-tight text-center break-words"> {/* ★ スタイル調整 */}
+                                    {selectedStage.name}
+                                </p>
+                            )}
+                        </div>
+                        {/* 変更/確認ボタン */}
                         <button
                             onClick={onOpenStageModal}
-                            disabled={!amIHost || gameState.phase !== 'waiting'}
-                            className={`mt-1 px-2 py-0.5 text-xs rounded ${(!amIHost || gameState.phase !== 'waiting') ? 'bg-gray-200 text-gray-500 cursor-not-allowed' : 'bg-gray-300 hover:bg-gray-400'}`}
-                            title={!amIHost ? "ホストのみ変更可" : (gameState.phase !== 'waiting' ? "待機中のみ変更可" : "ステージ変更")}
-                        >変更</button>
+                            className={`mt-1 px-2 py-0.5 text-xs rounded ${gameState.phase !== 'waiting' && !amIHost ? 'bg-gray-200 text-gray-500 cursor-not-allowed' : 'bg-gray-300 hover:bg-gray-400'}`}
+                            title={gameState.phase !== 'waiting' ? "待機中のみ変更/確認可" : (amIHost ? "対象ステージ変更" : "対象ステージ確認")}
+                        >
+                            {amIHost && gameState.phase === 'waiting' ? '変更' : '確認'}
+                        </button>
                     </div>
 
                 </div> {/* flex container end */}
 
                 {/* 現在のターン表示 */}
                 {(gameState.phase === 'ban' || gameState.phase === 'pick') && gameState.currentTurn && (
-                     <p className="text-sm text-gray-700 mt-2">
+                    <p className="text-sm text-gray-700 mt-2">
                         現在のターン: <span className={`font-bold ${gameState.currentTurn === 'alpha' ? 'text-blue-600' : 'text-red-600'}`}>{gameState.currentTurn}チーム</span>
-                     </p>
-                 )}
-                 {/* Pick完了 */}
-                 {gameState.phase === 'pick_complete' && (<p className="font-bold text-green-600 text-xl mt-2">PICK完了！</p>)}
+                    </p>
+                )}
+                {/* Pick完了 */}
+                {gameState.phase === 'pick_complete' && (<p className="font-bold text-green-600 text-xl mt-2">PICK完了！</p>)}
 
             </div> {/* 中央ブロック end */}
 

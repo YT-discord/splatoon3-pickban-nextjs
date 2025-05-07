@@ -66,18 +66,22 @@ export interface ConnectedUserInfo {
     selectedRuleId: number | 'random' | null;
     hostId: string | null;
     lastActivityTime: number;
+    randomStagePool: number[];
+    randomRulePool: number[];
   }
 
   // クライアントに送信する公開ゲーム状態
-  export interface PublicRoomGameState extends Omit<RoomGameState, | 'connectedUsers' | 'weapons' | 'timer' | 'turnActionTaken' | 'teams'> {
-      roomName: string; 
-      userCount: number;
-      banCounts: Record<Team, number>;
-      pickCounts: Record<Team, number>;
-      selectedStageId: number | 'random' | null;
-      selectedRuleId: number | 'random' | null;
-      hostId: string | null;
-  }
+  export interface PublicRoomGameState extends Omit<RoomGameState, | 'connectedUsers' | 'weapons' | 'timer' | 'turnActionTaken' | 'teams' | 'lastActivityTime'> {
+    roomName: string; 
+    userCount: number;
+    banCounts: Record<Team, number>;
+    pickCounts: Record<Team, number>;
+    selectedStageId: number | 'random' | null;
+    selectedRuleId: number | 'random' | null;
+    hostId: string | null;
+    randomStagePool: number[];
+    randomRulePool: number[];
+}
   // ★ クライアント側で使用する GameState 型
   export type GameState = PublicRoomGameState;
 

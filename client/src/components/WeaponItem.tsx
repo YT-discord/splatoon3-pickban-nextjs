@@ -4,7 +4,7 @@ import Image from 'next/image';
 // ★ 必要な型や定数をインポート (common や WeaponGrid から)
 import type { Team, GameState } from '../../../common/types/game'; // GameState もインポート
 import type { DisplayWeapon } from './WeaponGrid'; // WeaponGrid から型をインポート
-import { MAX_BANS_PER_TEAM, RANDOM_CHOICE_ID, /*MAX_PICKS_PER_TEAM*/ } from '../../../common/types/constants';
+import { MAX_BANS_PER_TEAM, RANDOM_WEAPON_ID, /*MAX_PICKS_PER_TEAM*/ } from '../../../common/types/constants';
 
 // ★ WeaponItem が受け取る Props
 interface WeaponItemProps {
@@ -62,7 +62,7 @@ const WeaponItemComponent: React.FC<WeaponItemProps> = memo(({
     const isBannedByBravo = weapon.bannedBy.includes('bravo');
     const isBanned = isBannedByAlpha || isBannedByBravo;
     const isMyTeamPlayer = myTeam === 'alpha' || myTeam === 'bravo';
-    const isRandomChoice = weapon.id === RANDOM_CHOICE_ID;
+    const isRandomChoice = weapon.id === RANDOM_WEAPON_ID;
 
     // クリック可否判定 (props を使用)
     let canClick = false;

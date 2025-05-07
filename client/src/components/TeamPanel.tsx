@@ -2,7 +2,7 @@ import React from 'react';
 import Image from 'next/image';
 import type { GameState, Team, RoomUser } from '../../../common/types/game';
 import type { DisplayWeapon } from './WeaponGrid';
-import { MAX_PICKS_PER_TEAM, MAX_BANS_PER_TEAM, RANDOM_CHOICE_ID } from '../../../common/types/constants';
+import { MAX_PICKS_PER_TEAM, MAX_BANS_PER_TEAM, RANDOM_WEAPON_ID } from '../../../common/types/constants';
 
 interface TeamPanelProps {
     team: Team; // 'alpha' または 'bravo'
@@ -63,7 +63,7 @@ const TeamPanel: React.FC<TeamPanelProps> = ({
     const banCount = gameState.banPhaseState?.bans[team] ?? 0;
     const pickCount = gameState.pickPhaseState?.picks[team] ?? 0;
     const shouldShowBan = (weapon: DisplayWeapon): boolean => {
-        if (weapon.id === RANDOM_CHOICE_ID) return false;
+        if (weapon.id === RANDOM_WEAPON_ID) return false;
         const isSelfOrObserver = myTeam === team || myTeam === 'observer';
         return gameState.phase === 'pick' || gameState.phase === 'pick_complete' || (gameState.phase === 'ban' && isSelfOrObserver);
     }

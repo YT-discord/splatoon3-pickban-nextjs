@@ -2,7 +2,7 @@ import React, { memo, useMemo } from 'react';
 import { FixedSizeGrid, GridChildComponentProps } from 'react-window';
 import type { GameState, Team, MasterWeapon, RoomWeaponState, BanPhaseState, PickPhaseState } from '../../../common/types/game';
 import type { DisplayWeapon } from './WeaponGrid';
-import { MAX_BANS_PER_TEAM, MAX_PICKS_PER_TEAM, RANDOM_CHOICE_ID, RANDOM_CHOICE_ITEM } from '../../../common/types/constants';
+import { MAX_BANS_PER_TEAM, MAX_PICKS_PER_TEAM, RANDOM_WEAPON_ID, RANDOM_WEAPON_CHOICE_ITEM } from '../../../common/types/constants';
 import WeaponItem from './WeaponItem';
 import AutoSizer from 'react-virtualized-auto-sizer';
 
@@ -69,8 +69,8 @@ const Cell: React.FC<CellProps> = memo(({ columnIndex, rowIndex, style, data }) 
         ...masterData,
         selectedBy: stateData.selectedBy,
         bannedBy: stateData.bannedBy,
-        imageUrl: weaponId === RANDOM_CHOICE_ID
-            ? RANDOM_CHOICE_ITEM.imageUrl
+        imageUrl: weaponId === RANDOM_WEAPON_ID
+            ? RANDOM_WEAPON_CHOICE_ITEM.imageUrl
             : `/images/weapons/${encodeURIComponent(masterData.name)}.webp`,
         isLoading: loadingWeaponId === weaponId,
     };
@@ -118,14 +118,12 @@ const WeaponGridDisplayComponent: React.FC<WeaponGridDisplayProps> = ({
 
     // ★★★★★ グリッドの計算 (固定値 - 要調整) ★★★★★
     const targetColumnCount = 7;
-    // const itemWidth = 110; // アイテムの想定幅 (ボーダーやマージン含む)
-    // const itemHeight = 110; // アイテムの想定高さ (ボーダーやマージン含む)
 
     // ★ masterWeapons を Map に変換 (useMemo)
     const masterWeaponsMap = useMemo(() => {
         const map = new Map<number, MasterWeapon>();
         masterWeapons.forEach(mw => map.set(mw.id, mw));
-        map.set(RANDOM_CHOICE_ID, RANDOM_CHOICE_ITEM as MasterWeapon);
+        map.set(RANDOM_WEAPON_ID, RANDOM_WEAPON_CHOICE_ITEM as MasterWeapon);
         return map;
     }, [masterWeapons]);
 

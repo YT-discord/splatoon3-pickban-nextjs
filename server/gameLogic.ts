@@ -1,7 +1,8 @@
 
 import { Server } from 'socket.io';
 import { RoomGameState, RoomUser, RoomWeaponState, PublicRoomGameState, MasterWeapon, Team } from '../common/types/game';
-import { MAX_BANS_PER_TEAM, MAX_PICKS_PER_TEAM, TOTAL_PICK_TURNS, BAN_PHASE_DURATION, PICK_PHASE_TURN_DURATION, USE_FAST_TIMER, FAST_TIMER_MULTIPLIER, DEFAULT_ROOM_NAMES, ROOM_IDS } from '../common/types/constants';
+import { MAX_BANS_PER_TEAM, MAX_PICKS_PER_TEAM, TOTAL_PICK_TURNS, BAN_PHASE_DURATION,
+     PICK_PHASE_TURN_DURATION, USE_FAST_TIMER, FAST_TIMER_MULTIPLIER, DEFAULT_ROOM_NAMES, ROOM_IDS, STAGES_DATA, RULES_DATA } from '../common/types/constants';
 
 // タイムアウト関連の定数
 export const ROOM_TIMEOUT_DURATION = 30 * 60 * 1000; // 30分 (ミリ秒)
@@ -68,7 +69,9 @@ export const initializeRoomState = (roomId: string, existingUsers?: Map<string, 
         selectedStageId: 'random', 
         selectedRuleId: 'random',
         hostId: null,
-        lastActivityTime: Date.now()
+        lastActivityTime: Date.now(),
+        randomStagePool: STAGES_DATA.map(stage => stage.id),
+        randomRulePool: RULES_DATA.map(rule => rule.id)
     };
     gameRooms.set(roomId, newState);
     return newState;
@@ -83,6 +86,8 @@ export const electNewHost = (roomId: string): void => {
         // 単純に配列の最初のユーザーを新しいホストにする
         const newHost = currentUsers[0];
         roomState.hostId = newHost.id;
+        roomState.randomStagePool = STAGES_DATA.map(stage => stage.id);
+        roomState.randomRulePool = RULES_DATA.map(rule => rule.id);
         console.log(`[Host Election ${roomId}] New host elected: ${newHost.name} (${newHost.id})`);
         // ★ ホスト変更をクライアントに通知 (新しいイベント)
         io.to(roomId).emit('host changed', { hostId: newHost.id, hostName: newHost.name });
@@ -150,6 +155,96 @@ export const resetRoom = (roomId: string, triggeredBy?: 'user' | 'timeout' | 'sy
     // ユーザー操作によるリセット通知は app.ts 側で行う
 
     console.log(`[Game Logic] Room ${roomId} reset. Name kept: "${newState.roomName}", Users: ${newState.connectedUsers.size}, New Host: ${newState.hostId}`);
+};
+
+// ★★★★★ 追加: ランダムステージプール更新関数 ★★★★★
+export const updateRandomStagePool = (roomId: string, stageId: number): boolean => {
+    const roomState = gameRooms.get(roomId);
+    if (!roomState) return false;
+
+    const pool = roomState.randomStagePool;
+    const index = pool.indexOf(stageId);
+
+    if (index > -1) {
+        // 既に含まれていれば削除
+        pool.splice(index, 1);
+        console.log(`[Random Pool ${roomId}] Stage ${stageId} removed. New size: ${pool.length}`);
+    } else {
+        // 含まれていなければ追加
+        pool.push(stageId);
+        console.log(`[Random Pool ${roomId}] Stage ${stageId} added. New size: ${pool.length}`);
+    }
+    // pool.sort((a, b) => a - b); // 任意: ID順にソートしておく
+
+    roomState.lastActivityTime = Date.now(); // アクティビティ時刻更新
+
+    // 変更をルーム全員に通知
+    io.to(roomId).emit('room state update', getPublicRoomState(roomState));
+    return true;
+};
+
+// ゲーム開始時のランダムステージ選択ロジック
+// (このロジックは start game イベントハンドラ内に移動しても良い)
+export const determineStartingStage = (roomId: string): number | 'random' | null | 'error' => {
+    const roomState = gameRooms.get(roomId);
+    if (!roomState) return null; // エラーまたは未選択
+
+    if (roomState.selectedStageId === 'random') {
+        const pool = roomState.randomStagePool;
+        if (pool.length === 0) {
+            console.error(`[Start Game ${roomId}] Random stage selected but pool is empty!`);
+            return 'error'; // プールが空の場合はエラーを示す
+        }
+        const randomIndex = Math.floor(Math.random() * pool.length);
+        const selectedId = pool[randomIndex];
+        console.log(`[Start Game ${roomId}] Random stage selected from pool: ${STAGES_DATA.find(s=>s.id === selectedId)?.name} (ID: ${selectedId})`);
+        return selectedId; // 選択された数値 ID を返す
+    } else {
+        // 'random' 以外が選択されている場合はそれをそのまま返す
+        return roomState.selectedStageId;
+    }
+};
+
+export const updateRandomRulePool = (roomId: string, ruleId: number): boolean => {
+    const roomState = gameRooms.get(roomId);
+    if (!roomState) return false;
+    const pool = roomState.randomRulePool;
+    const index = pool.indexOf(ruleId);
+
+    if (index > -1) {
+        // 既に含まれていれば削除
+        pool.splice(index, 1);
+        console.log(`[Random Pool ${roomId}] Rule ${ruleId} removed. New size: ${pool.length}`);
+    } else {
+        // 含まれていなければ追加
+        pool.push(ruleId);
+        console.log(`[Random Pool ${roomId}] Rule ${ruleId} added. New size: ${pool.length}`);
+    }
+    console.log(`[Random Pool ${roomId}] Rule ${ruleId} ${pool.includes(ruleId) ? 'added' : 'removed'}. New size: ${pool.length}`);
+    roomState.lastActivityTime = Date.now();
+    io.to(roomId).emit('room state update', getPublicRoomState(roomState));
+    return true;
+};
+
+// ★★★★★ 追加: determineStartingRule 関数 ★★★★★
+export const determineStartingRule = (roomId: string): number | 'random' | null | 'error' => {
+     const roomState = gameRooms.get(roomId);
+     if (!roomState) return null;
+     if (roomState.selectedRuleId === 'random') {
+         const pool = roomState.randomRulePool;
+         // ★★★★★ 変更点: プールが1つ以下の場合の考慮 ★★★★★
+         if (pool.length === 0) {
+             console.error(`[Start Game ${roomId}] Random rule selected but pool is empty!`);
+             return 'error';
+         }
+         // ★ ランダム対象が1つの場合も、その1つを選択する（ランダムではない警告はクライアント側）
+         const randomIndex = Math.floor(Math.random() * pool.length);
+         const selectedId = pool[randomIndex];
+         console.log(`[Start Game ${roomId}] Random rule selected from pool: ${RULES_DATA.find(r=>r.id === selectedId)?.name} (ID: ${selectedId})`);
+         return selectedId;
+     } else {
+         return roomState.selectedRuleId;
+     }
 };
 
 export const changeRoomName = (roomId: string, newName: string): boolean => {
