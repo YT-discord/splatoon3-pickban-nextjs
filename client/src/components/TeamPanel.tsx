@@ -43,7 +43,7 @@ const TeamPanel: React.FC<TeamPanelProps> = ({
     const banSvgColor = isAlpha ? 'text-blue-600' : 'text-red-600';
 
     // 参加ボタンのスタイルを条件分岐で設定
-    const buttonBaseStyle = `w-full px-3 py-1.5 rounded-md text-sm transition-colors font-semibold`;
+    const buttonBaseStyle = `w-full px-3 py-1.5 rounded-md text-sm transition-colors font-semibold border`;
     const buttonDisabledStyle = gameState.phase !== 'waiting' ? 'opacity-60 cursor-not-allowed' : '';
     let buttonTeamStyle = '';
     if (myTeam === team) {

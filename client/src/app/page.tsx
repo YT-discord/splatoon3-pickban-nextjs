@@ -227,8 +227,7 @@ export default function Home() {
         if (!masterWeapons) { return <p className="text-center p-8 text-red-500">エラー: 武器データの読み込みに失敗しました。</p>; }
         return <RoomSelector socket={socket} setUserNameForParent={handleSetUserName} />;
       case 'in_room':
-        // ★★★★★ 変更点: WeaponGrid に mySocketId を渡す ★★★★★
-        if (socket && joinedRoomId && masterWeapons && userName && mySocketId) { // mySocketId もチェック
+        if (socket && joinedRoomId && masterWeapons && userName && mySocketId) {
           return <WeaponGrid
             socket={socket}
             roomId={joinedRoomId}

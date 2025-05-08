@@ -42,7 +42,7 @@ const WeaponFilter: React.FC<WeaponFilterProps> = ({
     ) => (
         <div className="flex items-start gap-2 py-1.5 border-b border-gray-100 last:border-b-0 px-2">
         {/* ラベル */}
-        <div className="w-20 flex-shrink-0 pt-1 text-right pr-2">
+        <div className="w-20 flex-shrink-0 text-right pr-1">
             <span className="text-xs font-semibold text-gray-600">{title}:</span>
         </div>
 
@@ -89,7 +89,7 @@ const WeaponFilter: React.FC<WeaponFilterProps> = ({
 );
 
 return (
-    <div className="mb-2 bg-white rounded border p-1">
+    <div className="mb-1 bg-white rounded border p-1">
         {renderFilterRow('attribute', 'ブキ種', WEAPON_ATTRIBUTES, selectedAttributes, onFilterChange, onClearFilterSection)}
         {renderFilterRow('subWeapon', 'サブ', SUB_WEAPONS, selectedSubWeapons, onFilterChange, onClearFilterSection)}
         {renderFilterRow('specialWeapon', 'スペシャル', SPECIAL_WEAPONS, selectedSpecialWeapons, onFilterChange, onClearFilterSection)}

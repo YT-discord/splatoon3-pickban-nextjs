@@ -142,9 +142,9 @@ const GameHeader: React.FC<GameHeaderProps> = ({
     const timerDuration = getTimerDuration();
 
     return (
-        <div className={`grid grid-cols-1 md:grid-cols-3 gap-4 items-stretch p-1 ${headerBgColor} rounded-lg shadow mb-6 transition-colors duration-300`}>
+        <div className={`grid grid-cols-1 md:grid-cols-3 gap-4 items-stretch p-1 ${headerBgColor} rounded-lg shadow mb-4 transition-colors duration-300`}>
             {/* 左ブロック: ルーム情報 */}
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 ml-4">
 
                 <Image
                     src={getRoomIconPath(roomId)}
@@ -336,9 +336,18 @@ const GameHeader: React.FC<GameHeaderProps> = ({
                 </div> {/* flex container end */}
 
                 {/* 現在のターン表示 */}
-                {(gameState.phase === 'ban' || gameState.phase === 'pick') && gameState.currentTurn && (
-                    <p className="text-sm text-gray-700 mt-2">
-                        現在のターン: <span className={`font-bold ${gameState.currentTurn === 'alpha' ? 'text-blue-600' : 'text-red-600'}`}>{gameState.currentTurn}チーム</span>
+                {gameState.phase === 'waiting' && (<p className="font-bold text-gray-700 text-xl"> --- </p>)}
+                {gameState.phase === 'ban' && (
+                    <p className="font-bold text-xl text-purple-700 mt-2">
+                        BANフェーズ
+                    </p>)}
+                {gameState.phase === 'pick' && gameState.currentTurn === 'alpha' && (
+                    <p className="font-bold text-xl text-gray-700 mt-2">
+                        PICKフェーズ: <span className={'text-blue-600'}> アルファチーム </span>
+                    </p>)}
+                {gameState.phase === 'pick' && gameState.currentTurn === 'bravo' && (
+                    <p className="font-bold text-xl text-gray-700 mt-2">
+                        PICKフェーズ: <span className={'text-red-600'}> ブラボーチーム </span>
                     </p>
                 )}
                 {/* Pick完了 */}
@@ -347,7 +356,7 @@ const GameHeader: React.FC<GameHeaderProps> = ({
             </div> {/* 中央ブロック end */}
 
             {/* 右ブロック: 操作ボタン */}
-            <div className="flex flex-col items-end gap-2">
+            <div className="flex flex-col items-end gap-2 mt-4 mr-4">
                 <button
                     onClick={onLeaveRoom} // Props の関数を呼び出し
                     className="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 text-sm w-full md:w-auto"

@@ -506,7 +506,7 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
 
     // --- JSX レンダリング本体 ---
     return (
-        <div className={`container mx-auto p-4 space-y-3 bg-white rounded-lg shadow-md flex flex-col min-h-[calc(100vh-100px)]`}>
+        <div className={`container mx-auto p-2 space-y-3 bg-white rounded-lg shadow-md flex flex-col min-h-[calc(100vh-100px)]`}>
             {/* ================== ヘッダーエリア ================== */}
             <GameHeader
                 roomId={roomId}
