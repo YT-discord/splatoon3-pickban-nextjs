@@ -4,7 +4,7 @@ import Image from 'next/image';
 // ★ 必要な型や定数をインポート (common や WeaponGrid から)
 import type { Team, GameState } from '../../../common/types/game'; // GameState もインポート
 import type { DisplayWeapon } from './WeaponGrid'; // WeaponGrid から型をインポート
-import { MAX_BANS_PER_TEAM, RANDOM_WEAPON_ID, /*MAX_PICKS_PER_TEAM*/ } from '../../../common/types/constants';
+import { MAX_BANS_PER_TEAM, RANDOM_WEAPON_ID } from '../../../common/types/constants';
 
 // ★ WeaponItem が受け取る Props
 interface WeaponItemProps {
@@ -119,6 +119,9 @@ const WeaponItemComponent: React.FC<WeaponItemProps> = memo(({
     // サブ・スペ画像パス生成
     const subWeaponImageUrl = !isRandomChoice ? `/images/subweapon/${encodeURIComponent(weapon.subWeaponImageName)}.webp` : '';
     const specialWeaponImageUrl = !isRandomChoice ? `/images/specialweapon/${encodeURIComponent(weapon.specialWeaponImageName)}.webp` : '';
+    // const mainImageUrl = weapon.id === RANDOM_WEAPON_ID
+    //     ? RANDOM_WEAPON_CHOICE_ITEM.imageUrl
+    //     : `/images/weapons/${encodeURIComponent(weapon.name)}.webp`;
 
     return (
         <div

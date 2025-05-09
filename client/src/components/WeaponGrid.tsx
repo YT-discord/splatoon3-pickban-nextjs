@@ -5,7 +5,7 @@ import Image from 'next/image';
 import type { Socket } from 'socket.io-client';
 import type { GameState, RoomUser, RoomWeaponState, MasterWeapon, Team, Stage, Rule } from '../../../common/types/game';
 import {
-    MAX_BANS_PER_TEAM, STAGES_DATA, RULES_DATA, WEAPON_ATTRIBUTES,
+    MAX_BANS_PER_TEAM, STAGES_DATA, RULES_DATA, WEAPON_ATTRIBUTES, BAN_PHASE_DURATION, PICK_PHASE_TURN_DURATION,
     RANDOM_WEAPON_ID, // 武器用
     RANDOM_STAGE_CHOICE, RANDOM_RULE_CHOICE // ステージ・ルール用
 } from '../../../common/types/constants';
@@ -52,8 +52,17 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
     const [selectedSubWeapons, setSelectedSubWeapons] = useState<string[]>([]);
     const [selectedSpecialWeapons, setSelectedSpecialWeapons] = useState<string[]>([]);
 
-    // ★ amIHost の計算 (GameHeader から移動 or 再計算)
-    const amIHost = gameState !== null && gameState?.hostId !== null && gameState.hostId === myActualSocketId;
+    const amIHost = useMemo(() => { // ★ useMemo で amIHost を計算
+        return gameState !== null && gameState.hostId !== null && gameState.hostId === myActualSocketId;
+    // ★★★★★ 変更点: 依存配列を gameState.hostId と myActualSocketId に ★★★★★
+    }, [gameState?.hostId, myActualSocketId]); // ★ 修正
+    
+    const timerDuration = useMemo(() => {
+        if (!gameState) return 0;
+        if (gameState.phase === 'ban') return BAN_PHASE_DURATION;
+        if (gameState.phase === 'pick') return PICK_PHASE_TURN_DURATION;
+        return 0;
+    }, [gameState?.phase]);
 
     // myBanCount, myPickCount の useMemo 依存配列修正
     const myBanCount = useMemo(() => {
@@ -65,6 +74,25 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
         return gameState.pickPhaseState?.picks[myTeam] ?? 0;
     }, [gameState?.pickPhaseState?.picks, myTeam]);
 
+    const masterWeaponsMap = useMemo(() => {
+        console.log('[useMemo] Calculating masterWeaponsMap'); // 計算確認ログ
+        const map = new Map<number, MasterWeapon>();
+        masterWeapons.forEach(mw => map.set(mw.id, mw));
+        // TeamPanel ではランダム不要なので追加しない
+        return map;
+    }, [masterWeapons]);
+
+    const allPickedWeaponIds = useMemo(() => { // ★ 名前変更: 全チームのPick ID
+        return Object.values(weaponStates).filter(s => s.selectedBy !== null).map(s => s.id);
+    }, [weaponStates]);
+    const allBannedWeaponIds = useMemo(() => { // ★ 名前変更: 全チームのBan ID
+        return Object.values(weaponStates).filter(s => s.bannedBy.length > 0).map(s => s.id);
+    }, [weaponStates]);
+
+    const alphaPickedIds = useMemo(() => allPickedWeaponIds.filter(id => weaponStates[id]?.selectedBy === 'alpha'), [allPickedWeaponIds, weaponStates]);
+    const bravoPickedIds = useMemo(() => allPickedWeaponIds.filter(id => weaponStates[id]?.selectedBy === 'bravo'), [allPickedWeaponIds, weaponStates]);
+    const alphaBannedIds = useMemo(() => allBannedWeaponIds.filter(id => weaponStates[id]?.bannedBy.includes('alpha')), [allBannedWeaponIds, weaponStates]);
+    const bravoBannedIds = useMemo(() => allBannedWeaponIds.filter(id => weaponStates[id]?.bannedBy.includes('bravo')), [allBannedWeaponIds, weaponStates]);
 
     const displayWeaponIds = useMemo<number[]>(() => {
         let filteredWeapons = [...masterWeapons];
@@ -116,28 +144,6 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
     const alphaTeamUsers = useMemo(() => roomUsers.filter(u => u.team === 'alpha'), [roomUsers]);
     const bravoTeamUsers = useMemo(() => roomUsers.filter(u => u.team === 'bravo'), [roomUsers]);
     const observers = useMemo(() => roomUsers.filter(u => u.team === 'observer' || !u.team), [roomUsers]); // チーム未定も観戦扱い
-
-    const { alphaPicks, bravoPicks, alphaBans, bravoBans } = useMemo(() => {
-        // フィルター前の全マスター武器を対象にする
-        const allWeaponsWithState = masterWeapons.map(master => {
-            const state = weaponStates[master.id] || { id: master.id, selectedBy: null, bannedBy: [] };
-            return {
-                ...master,
-                selectedBy: state.selectedBy,
-                bannedBy: state.bannedBy,
-                imageUrl: `/images/weapons/${encodeURIComponent(master.name)}.webp`,
-                isLoading: false, // または loadingWeaponId === master.id
-            } as DisplayWeapon; // 型アサーション
-        });
-
-        // 全武器の状態から Pick/Ban を抽出
-        const picksAlpha = allWeaponsWithState.filter(w => w.selectedBy === 'alpha');
-        const picksBravo = allWeaponsWithState.filter(w => w.selectedBy === 'bravo');
-        const bansAlpha = allWeaponsWithState.filter(w => w.bannedBy.includes('alpha'));
-        const bansBravo = allWeaponsWithState.filter(w => w.bannedBy.includes('bravo'));
-
-        return { alphaPicks: picksAlpha, bravoPicks: picksBravo, alphaBans: bansAlpha, bravoBans: bansBravo };
-    }, [masterWeapons, weaponStates]);
 
     // --- エラーハンドラー ---
     const handleError = useCallback((message: string) => {
@@ -442,7 +448,7 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
             console.log(`[WeaponGrid ${roomId}] Cannot select team, phase is not 'waiting' (${gameState?.phase})`);
             handleError('ゲーム開始前のみチームを選択できます。');
         }
-    }, [socket, gameState, handleError, roomId]);
+    }, [socket, gameState?.phase, handleError, roomId]);
 
     // モーダルを開くためのコールバック関数
     const openStageModal = useCallback(() => setIsStageModalOpen(true), []);
@@ -451,10 +457,9 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
     // --- ゲーム開始処理 (useCallbackで最適化) ---
     const handleStartGame = useCallback(() => {
         if (socket && gameState && gameState.phase === 'waiting') {
-            console.log(`[WeaponGrid ${roomId}] Emitting start game`);
             socket.emit('start game');
         }
-    }, [socket, gameState, roomId]);
+    }, [socket, gameState?.phase, roomId]); 
 
     // --- リセット処理 (useCallbackで最適化) ---
     const handleResetGame = useCallback(() => {
@@ -510,36 +515,47 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
             {/* ================== ヘッダーエリア ================== */}
             <GameHeader
                 roomId={roomId}
-                gameState={gameState}
-                // userName={userName}
-                // myActualSocketId={myActualSocketId}
+                roomName={gameState.roomName} // ★ gameState から抽出
+                userCount={gameState.userCount} // ★ gameState から抽出
+                phase={gameState.phase} // ★ gameState から抽出
+                currentTurn={gameState.currentTurn} // ★ gameState から抽出
+                timeLeft={gameState.timeLeft} // ★ gameState から抽出
+                hostId={gameState.hostId} // ★ gameState から抽出
+                timerDuration={timerDuration} // ★ 計算済みの値を渡す
+                myTeam={myTeam} // これは WeaponGrid の state
+                amIHost={amIHost} // 計算済みの値
                 socket={socket}
-                myTeam={myTeam}
-                selectedStage={selectedStage}
-                selectedRule={selectedRule}
-                onLeaveRoom={handleLeaveButtonClick} // 親から受け取った関数をそのまま渡す
-                onStartGame={handleStartGame}       // 名前変更した関数
-                onResetGame={handleResetGame}       // 名前変更した関数
-                onOpenStageModal={openStageModal}   // モーダルを開く関数
-                onOpenRuleModal={openRuleModal}     // モーダルを開く関数
+                selectedStage={selectedStage} // WeaponGrid の state
+                selectedRule={selectedRule}   // WeaponGrid の state
                 randomStagePoolCount={gameState.randomStagePool?.length ?? 0}
                 randomRulePoolCount={gameState.randomRulePool?.length ?? 0}
-                amIHost={amIHost} // amIHost は渡す
+                onLeaveRoom={handleLeaveButtonClick}
+                onStartGame={handleStartGame}
+                onResetGame={handleResetGame}
+                onOpenStageModal={openStageModal}
+                onOpenRuleModal={openRuleModal}
             />
 
             {/* ================== メインエリア (3カラム) ================== */}
             {/* lg以上で3カラム、それ未満は1カラム */}
             <div className="grid grid-cols-1 lg:grid-cols-11 gap-4 items-stretch flex-grow mb-2 ">
                 <TeamPanel
-                    team="alpha"
-                    teamDisplayName="アルファ"
-                    gameState={gameState} // gameState を渡す
-                    teamUsers={alphaTeamUsers}
-                    pickedWeapons={alphaPicks}
-                    bannedWeapons={alphaBans}
-                    myTeam={myTeam}
-                    userName={userName}
-                    onSelectTeam={handleTeamSelect} // チーム選択関数を渡す
+                        team="alpha"
+                        teamDisplayName="アルファ"
+                        phase={gameState.phase}
+                        hostId={gameState.hostId}
+                        teamUsers={alphaTeamUsers}
+                        // IDリストと全データを渡す
+                        pickedWeaponIds={alphaPickedIds}
+                        bannedWeaponIds={alphaBannedIds}
+                        masterWeaponsMap={masterWeaponsMap}
+                        weaponStates={weaponStates}
+                        pickCount={gameState.pickPhaseState?.picks.alpha ?? 0} // Pickカウント
+                        banCount={gameState.banPhaseState?.bans.alpha ?? 0}   // Banカウント
+                        banPhaseState={gameState.banPhaseState}
+                        myTeam={myTeam}
+                        userName={userName}
+                        onSelectTeam={handleTeamSelect}
                 />
 
                 {/* ----- 中央カラム: 武器グリッド ----- */}
@@ -576,21 +592,28 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
 
                 {/* ----- 右カラム: ブラボーチーム ----- */}
                 <TeamPanel
-                    team="bravo"
-                    teamDisplayName="ブラボー"
-                    gameState={gameState} // gameState を渡す
-                    teamUsers={bravoTeamUsers}
-                    pickedWeapons={bravoPicks}
-                    bannedWeapons={bravoBans}
-                    myTeam={myTeam}
-                    userName={userName}
-                    onSelectTeam={handleTeamSelect} // チーム選択関数を渡す
+                        team="bravo"
+                        teamDisplayName="ブラボー"
+                        phase={gameState.phase}
+                        hostId={gameState.hostId}
+                        teamUsers={bravoTeamUsers}
+                        pickedWeaponIds={bravoPickedIds}
+                        bannedWeaponIds={bravoBannedIds}
+                        masterWeaponsMap={masterWeaponsMap}
+                        weaponStates={weaponStates}
+                        pickCount={gameState.pickPhaseState?.picks.bravo ?? 0}
+                        banCount={gameState.banPhaseState?.bans.bravo ?? 0}
+                        banPhaseState={gameState.banPhaseState}
+                        myTeam={myTeam}
+                        userName={userName}
+                        onSelectTeam={handleTeamSelect}
                 />
             </div>
 
             {/* ================== フッターエリア: 観戦者リスト ================== */}
             <ObserverPanel
-                gameState={gameState}
+                phase={gameState.phase} // ★ gameState から抽出
+                hostId={gameState.hostId} // ★ gameState から抽出
                 observers={observers}
                 myTeam={myTeam}
                 userName={userName}

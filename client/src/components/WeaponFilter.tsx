@@ -1,5 +1,5 @@
 // client/src/components/WeaponFilter.tsx
-import React from 'react';
+import React,{memo} from 'react';
 import Image from 'next/image';
 import type { WeaponAttribute, FilterType } from './WeaponGrid';
 import { WEAPON_ATTRIBUTES, SUB_WEAPONS, SPECIAL_WEAPONS } from '../../../common/types/constants';
@@ -24,7 +24,7 @@ interface WeaponFilterProps {
     onClearFilterSection: (type: FilterType) => void;
 }
 
-const WeaponFilter: React.FC<WeaponFilterProps> = ({
+const WeaponFilter: React.FC<WeaponFilterProps> = memo(({
     selectedAttributes,
     selectedSubWeapons,
     selectedSpecialWeapons,
@@ -95,6 +95,7 @@ return (
         {renderFilterRow('specialWeapon', 'スペシャル', SPECIAL_WEAPONS, selectedSpecialWeapons, onFilterChange, onClearFilterSection)}
     </div>
 );
-};
+});
+WeaponFilter.displayName = 'WeaponFilter';
 
 export default WeaponFilter;

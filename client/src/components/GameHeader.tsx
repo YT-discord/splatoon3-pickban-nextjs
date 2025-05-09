@@ -1,26 +1,31 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, memo } from 'react';
 import Image from 'next/image';
 import type { GameState, Team, Stage, Rule } from '../../../common/types/game';
 import type { Socket } from 'socket.io-client';
-import { BAN_PHASE_DURATION, PICK_PHASE_TURN_DURATION, RANDOM_RULE_CHOICE, RANDOM_STAGE_CHOICE, STAGES_DATA, RULES_DATA } from '../../../common/types/constants';
+import { RANDOM_RULE_CHOICE, RANDOM_STAGE_CHOICE, STAGES_DATA, RULES_DATA } from '../../../common/types/constants';
 import CircularTimer from './CircularTimer';
 
 interface GameHeaderProps {
     roomId: string;
-    gameState: GameState | null; // GameState全体を渡すか、必要な情報だけにするか検討
-    myTeam: Team | 'observer'; // 自分のチーム
-    // myActualSocketId: string;
+    roomName: string; // ★ gameState.roomName から
+    userCount: number; // ★ gameState.userCount から
+    phase: GameState['phase']; // ★ gameState.phase から
+    currentTurn: GameState['currentTurn']; // ★ gameState.currentTurn から
+    timeLeft: number | null; // ★ gameState.timeLeft から
+    hostId: string | null; // ★ gameState.hostId から
+    timerDuration: number; // ★ WeaponGrid で計算して渡す
+    myTeam: Team | 'observer'; // ★ これは WeaponGrid の myTeam state から
+    amIHost: boolean;
     socket: Socket | null;
     selectedStage: Stage | typeof RANDOM_STAGE_CHOICE | null;
     selectedRule: Rule | typeof RANDOM_RULE_CHOICE | null;
+    randomStagePoolCount: number;
+    randomRulePoolCount: number;
     onLeaveRoom: () => void;
     onStartGame: () => void;
     onResetGame: () => void;
     onOpenStageModal: () => void;
     onOpenRuleModal: () => void;
-    amIHost: boolean;
-    randomStagePoolCount: number;
-    randomRulePoolCount: number;
 }
 
 const validateRoomName = (name: string): string | null => {
@@ -51,78 +56,67 @@ const getRandomRuleDisplayImagePath = (count: number, total: number): string => 
     return `/images/rules/omakase/${count}.png`; // カスタム選択状態アイコン
 };
 
-const GameHeader: React.FC<GameHeaderProps> = ({
+const GameHeader: React.FC<GameHeaderProps> = memo(({
     roomId,
-    gameState,
+    roomName, // ★ 受け取る
+    userCount, // ★ 受け取る
+    phase,     // ★ 受け取る
+    currentTurn, // ★ 受け取る
+    timeLeft,    // ★ 受け取る
+    // hostId,      // ★ 受け取る
+    timerDuration, // ★ 受け取る
     // myTeam,
-    // myActualSocketId,
+    amIHost,
     socket,
     selectedStage,
+    selectedRule,
     randomStagePoolCount,
     randomRulePoolCount,
-    selectedRule,
     onLeaveRoom,
     onStartGame,
     onResetGame,
     onOpenStageModal,
     onOpenRuleModal,
-    amIHost
 }) => {
 
     const [isEditingName, setIsEditingName] = useState(false);
-    const [editingName, setEditingName] = useState('');
+    const [editingName, setEditingName] = useState(roomName);
     const [editError, setEditError] = useState<string | null>(null);
 
     const handleSaveName = useCallback(() => {
-        // gameState が null の可能性もあるのでチェックを追加
-        if (!socket || !gameState) return;
+        if (!socket || !amIHost) return; // ★ amIHost を使う
         const validationError = validateRoomName(editingName);
-        if (validationError) {
-            setEditError(validationError); // エラーメッセージを表示
-            // toast.error(validationError); // トーストで表示する場合
-            return;
-        }
-        setEditError(null); // エラークリア
+        if (validationError) { setEditError(validationError); return; }
+        setEditError(null);
         const newName = editingName.trim();
-        if (newName && newName !== gameState.roomName) {
-            console.log(`[UI] Emitting 'change room name' to "${newName}"`);
+        if (newName && newName !== roomName) { // ★ props の roomName と比較
             socket.emit('change room name', { newName });
         }
         setIsEditingName(false);
-        // ★ 依存配列に gameState?.roomName, myActualSocketId を追加
-    }, [socket, editingName, gameState?.roomName]); // ★ 修正
+    }, [socket, amIHost, editingName, roomName]);
 
     const handleCancelEditName = useCallback(() => {
-        // gameState が null の可能性を考慮
-        setEditingName(gameState?.roomName || roomId);
+        setEditingName(roomName || roomId); // ★ props の roomName を使う
         setIsEditingName(false);
-        // ★ 依存配列に gameState?.roomName, roomId を追加
-    }, [gameState?.roomName, roomId]); // ★ 修正
+        setEditError(null);
+    }, [roomName, roomId]);
 
     // 編集モード開始時に現在の名前をセットするための useEffect
     // (startEditingName 内で set すると useCallback の依存関係が複雑になるため)
     useEffect(() => {
-        if (isEditingName && gameState) {
-            setEditingName(gameState.roomName || roomId);
+        if (isEditingName) {
+            setEditingName(roomName || roomId); // ★ props の roomName を使う
         }
-    }, [isEditingName, gameState, roomId]); // gameState と roomId も依存配列に追加
+    }, [isEditingName, roomName, roomId]);
 
     const startEditingName = useCallback(() => {
-        // gameState が null の可能性を考慮
-        if (!gameState) return;
-        // setEditingName は useEffect で行うのでここでは不要
+        if (!amIHost) return; // ★ amIHost を使う
         setIsEditingName(true);
-        // ★ 依存配列に gameState?.hostId, myActualSocketId を追加
-    }, [gameState?.hostId]); // ★ 修正
+    }, [amIHost]);
 
     const getRoomIconPath = (roomId: string): string => {
         return `/images/icons/${roomId}.png`; // ★ roomId を直接使用
     };
-
-    // ★ 早期リターン (Hook 呼び出しの後なら OK)
-    if (!gameState) {
-        return <div className="p-4 text-center">ヘッダー情報読み込み中...</div>;
-    }
 
     const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setEditingName(e.target.value);
@@ -130,16 +124,6 @@ const GameHeader: React.FC<GameHeaderProps> = ({
     };
 
     const headerBgColor = 'bg-gray-100';
-
-    const getTimerDuration = (): number => {
-        if (gameState.phase === 'ban') {
-            return BAN_PHASE_DURATION;
-        } else if (gameState.phase === 'pick') {
-            return PICK_PHASE_TURN_DURATION;
-        }
-        return 0; // それ以外のフェーズでは 0
-    };
-    const timerDuration = getTimerDuration();
 
     return (
         <div className={`grid grid-cols-1 md:grid-cols-3 gap-4 items-stretch p-1 ${headerBgColor} rounded-lg shadow mb-4 transition-colors duration-300`}>
@@ -162,8 +146,8 @@ const GameHeader: React.FC<GameHeaderProps> = ({
                     {!isEditingName ? (
                         // 表示モード
                         <div className="flex items-center gap-1">
-                            <div className="font-semibold text-lg text-gray-800 truncate" title={gameState.roomName}>
-                                {gameState.roomName}
+                            <div className="font-semibold text-lg text-gray-800 truncate" title={roomName}>
+                                {roomName}
                             </div>
                             {/* 鉛筆マーク (ルーム名の右) */}
                             {amIHost && (
@@ -200,7 +184,7 @@ const GameHeader: React.FC<GameHeaderProps> = ({
                             {editError && <p className="text-red-500 text-xs mt-1">{editError}</p>}
                         </div>
                     )}
-                    <p className="text-sm text-gray-600 mt-0.5">({gameState.userCount}人参加)</p>
+                    <p className="text-sm text-gray-600 mt-0.5">({userCount}人参加)</p>
                 </div>
             </div>
 
@@ -214,18 +198,18 @@ const GameHeader: React.FC<GameHeaderProps> = ({
                     <div className="flex flex-col items-center text-xs border rounded p-1 bg-white shadow-sm w-[33%] h-full">
                         <span className="font-medium text-gray-600 mb-1">残り時間</span>
                         <div className="flex items-center justify-center w-full flex-grow min-h-0">
-                            {(gameState.phase === 'ban' || gameState.phase === 'pick') && gameState.timeLeft != null && timerDuration > 0 ? (
+                            {(phase === 'ban' || phase === 'pick') && timeLeft != null && timerDuration > 0 ? (
                                 // BAN/PICK 中はタイマー表示
                                 <CircularTimer
                                     duration={timerDuration}
-                                    currentTime={gameState.timeLeft}
+                                    currentTime={timeLeft}
                                     size={50}
                                     strokeWidth={4}
                                 />
-                            ) : gameState.phase === 'waiting' ? (
+                            ) : phase === 'waiting' ? (
                                 // 待機中はテキスト表示
                                 <span className="text-gray-400 text-lg font-mono" title="ゲーム開始後に表示されます">--:--</span>
-                            ) : gameState.phase === 'pick_complete' ? (
+                            ) : phase === 'pick_complete' ? (
                                 // Pick完了時はチェックマークなど (任意)
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
@@ -276,10 +260,10 @@ const GameHeader: React.FC<GameHeaderProps> = ({
                         {/* 変更/確認ボタン */}
                         <button
                             onClick={onOpenRuleModal}
-                            className={`mt-1 px-2 py-0.5 text-xs rounded ${gameState.phase !== 'waiting' && !amIHost ? 'bg-gray-200 text-gray-500 cursor-not-allowed' : 'bg-gray-300 hover:bg-gray-400'}`}
-                            title={gameState.phase !== 'waiting' ? "待機中のみ変更/確認可" : (amIHost ? "対象ルール変更" : "対象ルール確認")}
+                            className={`mt-1 px-2 py-0.5 text-xs rounded ${phase !== 'waiting' && !amIHost ? 'bg-gray-200 text-gray-500 cursor-not-allowed' : 'bg-gray-300 hover:bg-gray-400'}`}
+                            title={phase !== 'waiting' ? "待機中のみ変更/確認可" : (amIHost ? "対象ルール変更" : "対象ルール確認")}
                         >
-                            {amIHost && gameState.phase === 'waiting' ? '変更' : '確認'}
+                            {amIHost && phase === 'waiting' ? '変更' : '確認'}
                         </button>
                     </div>
 
@@ -326,32 +310,32 @@ const GameHeader: React.FC<GameHeaderProps> = ({
                         {/* 変更/確認ボタン */}
                         <button
                             onClick={onOpenStageModal}
-                            className={`mt-1 px-2 py-0.5 text-xs rounded ${gameState.phase !== 'waiting' && !amIHost ? 'bg-gray-200 text-gray-500 cursor-not-allowed' : 'bg-gray-300 hover:bg-gray-400'}`}
-                            title={gameState.phase !== 'waiting' ? "待機中のみ変更/確認可" : (amIHost ? "対象ステージ変更" : "対象ステージ確認")}
+                            className={`mt-1 px-2 py-0.5 text-xs rounded ${phase !== 'waiting' && !amIHost ? 'bg-gray-200 text-gray-500 cursor-not-allowed' : 'bg-gray-300 hover:bg-gray-400'}`}
+                            title={phase !== 'waiting' ? "待機中のみ変更/確認可" : (amIHost ? "対象ステージ変更" : "対象ステージ確認")}
                         >
-                            {amIHost && gameState.phase === 'waiting' ? '変更' : '確認'}
+                            {amIHost && phase === 'waiting' ? '変更' : '確認'}
                         </button>
                     </div>
 
                 </div> {/* flex container end */}
 
                 {/* 現在のターン表示 */}
-                {gameState.phase === 'waiting' && (<p className="font-bold text-gray-700 text-xl"> --- </p>)}
-                {gameState.phase === 'ban' && (
+                {phase === 'waiting' && (<p className="font-bold text-gray-700 text-xl"> --- </p>)}
+                {phase === 'ban' && (
                     <p className="font-bold text-xl text-purple-700 mt-2">
                         BANフェーズ
                     </p>)}
-                {gameState.phase === 'pick' && gameState.currentTurn === 'alpha' && (
+                {phase === 'pick' && currentTurn === 'alpha' && (
                     <p className="font-bold text-xl text-gray-700 mt-2">
                         PICKフェーズ: <span className={'text-blue-600'}> アルファチーム </span>
                     </p>)}
-                {gameState.phase === 'pick' && gameState.currentTurn === 'bravo' && (
+                {phase === 'pick' && currentTurn === 'bravo' && (
                     <p className="font-bold text-xl text-gray-700 mt-2">
                         PICKフェーズ: <span className={'text-red-600'}> ブラボーチーム </span>
                     </p>
                 )}
                 {/* Pick完了 */}
-                {gameState.phase === 'pick_complete' && (<p className="font-bold text-green-600 text-xl mt-2">PICK完了！</p>)}
+                {phase === 'pick_complete' && (<p className="font-bold text-green-600 text-xl mt-2">PICK完了！</p>)}
 
             </div> {/* 中央ブロック end */}
 
@@ -366,29 +350,28 @@ const GameHeader: React.FC<GameHeaderProps> = ({
                 <button
                     onClick={onStartGame}
                     // disabled 条件: ホストでない または 待機中でない
-                    disabled={!amIHost || gameState.phase !== 'waiting'}
+                    disabled={!amIHost || phase !== 'waiting'}
                     className={`px-6 py-2 rounded-md text-sm w-full md:w-auto transition-colors
-                        ${(amIHost && gameState.phase === 'waiting')
+                        ${(amIHost && phase === 'waiting')
                             ? 'bg-green-500 text-white hover:bg-green-600' // ホストかつ待機中: 緑
                             : 'bg-gray-300 text-gray-500 cursor-not-allowed' // それ以外: グレーアウト
                         }`}
                     // title は disabled の理由を示す
-                    title={!amIHost ? 'ホストのみ開始できます' : (gameState.phase !== 'waiting' ? '待機中のみ開始できます' : '')}
+                    title={!amIHost ? 'ホストのみ開始できます' : (phase !== 'waiting' ? '待機中のみ開始できます' : '')}
                 >
-                    {/* ★★★★★ 変更点: 文言を常に表示 ★★★★★ */}
                     ゲーム開始 (ホストのみ)
                 </button>
 
                 <button
                     onClick={onResetGame}
                     // disabled 条件: ホストでない または 待機中でない (リセットは待機中にはできない)
-                    disabled={!amIHost || gameState.phase === 'waiting'}
+                    disabled={!amIHost || phase === 'waiting'}
                     className={`px-4 py-2 rounded-md text-sm w-full md:w-auto transition-colors
-                        ${(amIHost && gameState.phase !== 'waiting')
+                        ${(amIHost && phase !== 'waiting')
                             ? 'bg-yellow-500 text-white hover:bg-yellow-600' // ホストかつ待機中でない: 黄色
                             : 'bg-gray-300 text-gray-500 cursor-not-allowed' // それ以外: グレーアウト
                         }`}
-                    title={!amIHost ? 'ホストのみリセットできます' : (gameState.phase === 'waiting' ? '待機中はリセットできません' : '')}
+                    title={!amIHost ? 'ホストのみリセットできます' : (phase === 'waiting' ? '待機中はリセットできません' : '')}
                 >
                     ルームリセット (ホストのみ)
                 </button>
@@ -396,6 +379,6 @@ const GameHeader: React.FC<GameHeaderProps> = ({
             </div>
         </div>
     );
-};
-
+});
+GameHeader.displayName = 'GameHeader';
 export default GameHeader;

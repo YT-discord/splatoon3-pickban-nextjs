@@ -97,6 +97,43 @@ const Cell: React.FC<CellProps> = memo(({ columnIndex, rowIndex, style, data }) 
 });
 Cell.displayName = 'GridCell';
 
+// WeaponGridDisplay 用の Props 比較関数 ★★★★★
+const areGridDisplayPropsEqual = (prevProps: WeaponGridDisplayProps, nextProps: WeaponGridDisplayProps): boolean => {
+    // 表示内容に影響する主要な Props を比較
+    if (
+        prevProps.phase !== nextProps.phase ||
+        prevProps.currentTurn !== nextProps.currentTurn ||
+        // banPhaseState と pickPhaseState は中身のカウントを比較
+        // (オブジェクト参照が変わっても、表示されるカウントが変わらなければ再レンダリング不要)
+        (prevProps.myTeam !== 'observer' && nextProps.myTeam !== 'observer' && // 両方がプレイヤーチームの場合のみ比較
+            (prevProps.banPhaseState?.bans[prevProps.myTeam as Team] ?? 0) !== (nextProps.banPhaseState?.bans[nextProps.myTeam as Team] ?? 0)) ||
+        (prevProps.myTeam !== 'observer' && nextProps.myTeam !== 'observer' &&
+            (prevProps.pickPhaseState?.picks[prevProps.myTeam as Team] ?? 0) !== (nextProps.pickPhaseState?.picks[nextProps.myTeam as Team] ?? 0)) ||
+        prevProps.displayWeaponIds.length !== nextProps.displayWeaponIds.length ||
+        // displayWeaponIds は参照が変わる可能性が高いので、内容 (length と各ID) を比較
+        prevProps.displayWeaponIds.length !== nextProps.displayWeaponIds.length ||
+        !prevProps.displayWeaponIds.every((id, i) => id === nextProps.displayWeaponIds[i]) ||
+        // masterWeapons は基本的に不変なので参照比較でOK
+        prevProps.masterWeapons !== nextProps.masterWeapons ||
+        // weaponStates は変更があった場合に displayWeaponIds が変わるか、
+        // loadingWeaponId が変わることで検知されるはずなので、ここでは詳細比較は省略
+        // (もし weaponStates の微細な変更でもグリッド全体が再レンダリングされるなら、ここも詳細比較が必要)
+        // prevProps.weaponStates !== nextProps.weaponStates || // ← 問題があれば詳細比較を検討
+        prevProps.loadingWeaponId !== nextProps.loadingWeaponId ||
+        prevProps.myTeam !== nextProps.myTeam ||
+        // amIHost は表示に直接影響しないので比較対象から外しても良いかも (ボタン制御は親で行うため)
+        // prevProps.amIHost !== nextProps.amIHost ||
+        prevProps.myBanCount !== nextProps.myBanCount || // これは banPhaseState.bans[myTeam] と重複する可能性
+        prevProps.myPickCount !== nextProps.myPickCount || // これは pickPhaseState.picks[myTeam] と重複する可能性
+        prevProps.onWeaponClick !== nextProps.onWeaponClick // コールバックは参照比較
+    ) {
+        // console.log('[areGridDisplayPropsEqual] Props changed, re-rendering WeaponGridDisplay');
+        return false; // 変更があれば再レンダリング
+    }
+
+    // console.log('[areGridDisplayPropsEqual] Props are equal, skipping re-render for WeaponGridDisplay');
+    return true; // 変更がなければ再レンダリングしない
+};
 
 // メインコンポーネント
 const WeaponGridDisplayComponent: React.FC<WeaponGridDisplayProps> = ({
@@ -223,5 +260,5 @@ const WeaponGridDisplayComponent: React.FC<WeaponGridDisplayProps> = ({
 
 // メモ化とエクスポート
 WeaponGridDisplayComponent.displayName = 'WeaponGridDisplay';
-const MemoizedWeaponGridDisplay = memo(WeaponGridDisplayComponent);
+const MemoizedWeaponGridDisplay = memo(WeaponGridDisplayComponent, areGridDisplayPropsEqual);
 export default MemoizedWeaponGridDisplay;
