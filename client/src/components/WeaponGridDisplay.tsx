@@ -16,7 +16,7 @@ interface WeaponGridDisplayProps {
     weaponStates: Record<number, RoomWeaponState>;
     loadingWeaponId: number | null;
     myTeam: Team | 'observer';
-    amIHost: boolean;
+    // amIHost: boolean;
     myBanCount: number;
     myPickCount: number;
     onWeaponClick: (weaponId: number) => void;
@@ -99,40 +99,73 @@ Cell.displayName = 'GridCell';
 
 // WeaponGridDisplay 用の Props 比較関数 ★★★★★
 const areGridDisplayPropsEqual = (prevProps: WeaponGridDisplayProps, nextProps: WeaponGridDisplayProps): boolean => {
-    // 表示内容に影響する主要な Props を比較
+    // 1. myTeam の変更チェック (waiting フェーズでの変更は特別扱い)
+    if (prevProps.myTeam !== nextProps.myTeam) {
+        // waiting フェーズ中での myTeam の変更は、WeaponGridDisplay の表示に直接影響しないため、
+        // この変更だけでは再レンダリングしない。
+        // ただし、フェーズ自体が waiting から変わった場合は、myTeam の変更も考慮して再レンダリングする。
+        if (nextProps.phase === 'waiting' && prevProps.phase === 'waiting') {
+            // console.log('[areGridDisplayPropsEqual] myTeam changed within waiting phase, WGD re-render skipped for this change.');
+            // myTeam の変更はスキップするが、他の Props の比較は継続する
+        } else {
+            // console.log('[areGridDisplayPropsEqual] myTeam changed (and not within waiting phase or phase itself changed)');
+            return false; // waiting フェーズ以外、またはフェーズが変わった場合は再レンダリング
+        }
+    }
+
+    // 2. phase, currentTurn, loadingWeaponId の比較 (UIの主要な状態変化)
     if (
         prevProps.phase !== nextProps.phase ||
         prevProps.currentTurn !== nextProps.currentTurn ||
-        // banPhaseState と pickPhaseState は中身のカウントを比較
-        // (オブジェクト参照が変わっても、表示されるカウントが変わらなければ再レンダリング不要)
-        (prevProps.myTeam !== 'observer' && nextProps.myTeam !== 'observer' && // 両方がプレイヤーチームの場合のみ比較
-            (prevProps.banPhaseState?.bans[prevProps.myTeam as Team] ?? 0) !== (nextProps.banPhaseState?.bans[nextProps.myTeam as Team] ?? 0)) ||
-        (prevProps.myTeam !== 'observer' && nextProps.myTeam !== 'observer' &&
-            (prevProps.pickPhaseState?.picks[prevProps.myTeam as Team] ?? 0) !== (nextProps.pickPhaseState?.picks[nextProps.myTeam as Team] ?? 0)) ||
-        prevProps.displayWeaponIds.length !== nextProps.displayWeaponIds.length ||
-        // displayWeaponIds は参照が変わる可能性が高いので、内容 (length と各ID) を比較
-        prevProps.displayWeaponIds.length !== nextProps.displayWeaponIds.length ||
-        !prevProps.displayWeaponIds.every((id, i) => id === nextProps.displayWeaponIds[i]) ||
-        // masterWeapons は基本的に不変なので参照比較でOK
-        prevProps.masterWeapons !== nextProps.masterWeapons ||
-        // weaponStates は変更があった場合に displayWeaponIds が変わるか、
-        // loadingWeaponId が変わることで検知されるはずなので、ここでは詳細比較は省略
-        // (もし weaponStates の微細な変更でもグリッド全体が再レンダリングされるなら、ここも詳細比較が必要)
-        // prevProps.weaponStates !== nextProps.weaponStates || // ← 問題があれば詳細比較を検討
-        prevProps.loadingWeaponId !== nextProps.loadingWeaponId ||
-        prevProps.myTeam !== nextProps.myTeam ||
-        // amIHost は表示に直接影響しないので比較対象から外しても良いかも (ボタン制御は親で行うため)
-        // prevProps.amIHost !== nextProps.amIHost ||
-        prevProps.myBanCount !== nextProps.myBanCount || // これは banPhaseState.bans[myTeam] と重複する可能性
-        prevProps.myPickCount !== nextProps.myPickCount || // これは pickPhaseState.picks[myTeam] と重複する可能性
-        prevProps.onWeaponClick !== nextProps.onWeaponClick // コールバックは参照比較
+        prevProps.loadingWeaponId !== nextProps.loadingWeaponId
     ) {
-        // console.log('[areGridDisplayPropsEqual] Props changed, re-rendering WeaponGridDisplay');
-        return false; // 変更があれば再レンダリング
+        // console.log('[areGridDisplayPropsEqual] phase, currentTurn, or loadingWeaponId changed');
+        return false;
     }
 
-    // console.log('[areGridDisplayPropsEqual] Props are equal, skipping re-render for WeaponGridDisplay');
-    return true; // 変更がなければ再レンダリングしない
+    // 3. displayWeaponIds の比較 (表示される武器リストの変更)
+    //    参照が変わる可能性が高いので、内容 (length と各ID) を比較
+    if (
+        prevProps.displayWeaponIds.length !== nextProps.displayWeaponIds.length ||
+        !prevProps.displayWeaponIds.every((id, i) => id === nextProps.displayWeaponIds[i])
+    ) {
+        // console.log('[areGridDisplayPropsEqual] displayWeaponIds changed');
+        return false;
+    }
+
+    // 4. masterWeapons の比較 (基本的に不変なので参照比較でOK)
+    if (prevProps.masterWeapons !== nextProps.masterWeapons) {
+        // console.log('[areGridDisplayPropsEqual] masterWeapons changed');
+        return false;
+    }
+
+    // 5. myBanCount, myPickCount の比較 (自分のチームのBAN/PICK数の変更)
+    if (prevProps.myBanCount !== nextProps.myBanCount || prevProps.myPickCount !== nextProps.myPickCount) {
+        // waiting フェーズ中では myBanCount, myPickCount の変更は WeaponGridDisplay の表示に影響しないためスキップ
+        if (nextProps.phase === 'waiting' && prevProps.phase === 'waiting') {
+            // console.log('[areGridDisplayPropsEqual] myBanCount/myPickCount changed within waiting phase, WGD re-render skipped for this change.');
+            // myBanCount/myPickCount の変更はスキップするが、他の Props の比較は継続する
+        } else {
+            // console.log('[areGridDisplayPropsEqual] myBanCount or myPickCount changed (and not within waiting phase or phase itself changed)');
+            return false; // waiting フェーズ以外、またはフェーズが変わった場合は再レンダリング
+        }
+    }
+
+    // 6. onWeaponClick コールバックの比較 (親で useCallback により安定化されている前提)
+    if (prevProps.onWeaponClick !== nextProps.onWeaponClick) {
+        // console.log('[areGridDisplayPropsEqual] onWeaponClick changed');
+        return false;
+    }
+
+    // 7. weaponStates, banPhaseState, pickPhaseState の比較について:
+    //    - weaponStates: itemDataForGrid の依存配列に含まれており、Cell レベルでの更新に影響。
+    //      WGD レベルでの詳細比較はコストが高く、他の Props (loadingWeaponId, myBanCount等) の変更で検知されることを期待。
+    //    - banPhaseState, pickPhaseState: phase, myBanCount, myPickCount の変更でUIへの影響はカバーされる想定。
+    //      これらのオブジェクト参照のみが変わり、他の主要 Props が変わらないケースは稀で、
+    //      かつ現在の WGD の表示ロジックではUIに影響しない可能性が高い。
+
+    // console.log('[areGridDisplayPropsEqual] Props are considered equal, skipping re-render for WeaponGridDisplay');
+    return true; // 上記のいずれにも該当しなければ、Props は等しいとみなし再レンダリングしない
 };
 
 // メインコンポーネント

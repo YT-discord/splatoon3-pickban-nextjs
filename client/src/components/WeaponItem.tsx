@@ -19,27 +19,54 @@ interface WeaponItemProps {
 }
 
 const arePropsEqual = (prevProps: WeaponItemProps, nextProps: WeaponItemProps): boolean => {
-    // まずプリミティブ値や単純な比較で済むものをチェック
-    if (
-        prevProps.phase !== nextProps.phase ||
-        prevProps.currentTurn !== nextProps.currentTurn ||
-        prevProps.myTeam !== nextProps.myTeam ||
-        // isHost や pickCount も使うなら比較
-        prevProps.banCount !== nextProps.banCount ||
-        // ★ weapon オブジェクトの重要なプロパティを比較 ★
-        prevProps.weapon.id !== nextProps.weapon.id || // ID (念のため)
-        prevProps.weapon.selectedBy !== nextProps.weapon.selectedBy || // 選択状態
-        prevProps.weapon.isLoading !== nextProps.weapon.isLoading || // ローディング状態
-        // ★ bannedBy は配列なので参照ではなく内容を比較する必要がある (簡易比較) ★
-        // (要素数が同じで、各要素が同じか。より厳密には順序も考慮)
-        prevProps.weapon.bannedBy.length !== nextProps.weapon.bannedBy.length ||
-        !prevProps.weapon.bannedBy.every((team, i) => team === nextProps.weapon.bannedBy[i]) ||
-        // ★ onWeaponClick は useCallback でメモ化されている前提であれば参照比較でOK
-        prevProps.onWeaponClick !== nextProps.onWeaponClick
-    ) {
-        // console.log(`[arePropsEqual] false for ${nextProps.weapon.name} - Simple props changed`);
-        return false; // いずれかが異なれば再レンダリング (false を返す)
+    console.log(`[WeaponItem arePropsEqual CALLED] For ${nextProps.weapon.name} (ID: ${nextProps.weapon.id})`);
+    if (prevProps.phase !== nextProps.phase) {
+        console.log(`[WeaponItem arePropsEqual RETURNING FALSE] For ${nextProps.weapon.name}. Reason: phase changed. Prev: ${prevProps.phase}, Next: ${nextProps.phase}`);
+        return false;
     }
+    if (prevProps.myTeam !== nextProps.myTeam) {
+        console.log(`[WeaponItem arePropsEqual RETURNING FALSE] For ${nextProps.weapon.name}. Reason: myTeam changed. Prev: ${prevProps.myTeam}, Next: ${nextProps.myTeam}`);
+        return false;
+    }
+    if (prevProps.banCount !== nextProps.banCount) {
+        console.log(`[WeaponItem arePropsEqual RETURNING FALSE] For ${nextProps.weapon.name}. Reason: banCount changed. Prev: ${prevProps.banCount}, Next: ${nextProps.banCount}`);
+        return false;
+    }
+    if (prevProps.weapon.id !== nextProps.weapon.id) { // 通常これは起こらないはず
+        console.log(`[WeaponItem arePropsEqual RETURNING FALSE] For ${nextProps.weapon.name}. Reason: weapon.id changed. Prev: ${prevProps.weapon.id}, Next: ${nextProps.weapon.id}`);
+        return false;
+    }
+    if (prevProps.weapon.selectedBy !== nextProps.weapon.selectedBy) {
+        console.log(`[WeaponItem arePropsEqual RETURNING FALSE] For ${nextProps.weapon.name}. Reason: weapon.selectedBy changed. Prev: ${prevProps.weapon.selectedBy}, Next: ${nextProps.weapon.selectedBy}`);
+        return false;
+    }
+    if (prevProps.weapon.isLoading !== nextProps.weapon.isLoading) {
+        console.log(`[WeaponItem arePropsEqual RETURNING FALSE] For ${nextProps.weapon.name}. Reason: weapon.isLoading changed. Prev: ${prevProps.weapon.isLoading}, Next: ${nextProps.weapon.isLoading}`);
+        return false;
+    }
+    if (prevProps.weapon.bannedBy.length !== nextProps.weapon.bannedBy.length ||
+        !prevProps.weapon.bannedBy.every((team, i) => team === nextProps.weapon.bannedBy[i])) {
+        console.log(`[WeaponItem arePropsEqual RETURNING FALSE] For ${nextProps.weapon.name}. Reason: weapon.bannedBy changed. Prev: ${JSON.stringify(prevProps.weapon.bannedBy)}, Next: ${JSON.stringify(nextProps.weapon.bannedBy)}`);
+        return false;
+    }
+    if (prevProps.onWeaponClick !== nextProps.onWeaponClick) {
+        console.log(`[WeaponItem arePropsEqual RETURNING FALSE] For ${nextProps.weapon.name}. Reason: onWeaponClick changed (ref).`);
+        return false;
+    }
+    if (prevProps.currentTurn !== nextProps.currentTurn) {
+        const isPlayerTeam = nextProps.myTeam === 'alpha' || nextProps.myTeam === 'bravo';
+        // PICKフェーズでプレイヤーチームのアイテムの場合、currentTurnはクリック可否に影響するため再レンダリング
+        if (nextProps.phase === 'pick' && isPlayerTeam) {
+            console.log(`[WeaponItem arePropsEqual RETURNING FALSE] For ${nextProps.weapon.name}. Reason: currentTurn changed (pick phase, player). Prev: ${prevProps.currentTurn}, Next: ${nextProps.currentTurn}`);
+            return false;
+        }
+        // それ以外の場合 (BANフェーズなど) は、currentTurnの変更だけではWeaponItemの表示に影響しないとみなし、
+        // この理由だけでの再レンダリングはスキップする。
+        // (他のプロパティが変更されていれば、そちらの条件で再レンダリングされる)
+        console.log(`[WeaponItem arePropsEqual SKIPPING for currentTurn change] For ${nextProps.weapon.name}. Phase: ${nextProps.phase}, MyTeam: ${nextProps.myTeam}. Prev: ${prevProps.currentTurn}, Next: ${nextProps.currentTurn}`);
+        return true; // ここでtrueを返すと、currentTurnの変更だけでは再レンダリングされなくなる
+    }
+    console.log(`[WeaponItem arePropsEqual RETURNING TRUE (all checks passed)] Skipping re-render for ${nextProps.weapon.name} (ID: ${nextProps.weapon.id})`);
     return true;
 }
 
@@ -53,7 +80,7 @@ const WeaponItemComponent: React.FC<WeaponItemProps> = memo(({
     // pickCount,
     onWeaponClick,
 }) => {
-    // console.log(`[WeaponItem] Rendering: ${weapon.name}`); // 再レンダリング確認用ログ
+    // console.log(`[WeaponItem Rendering] ${weapon.name} (ID: ${weapon.id}), isLoading: ${weapon.isLoading}, selectedBy: ${weapon.selectedBy}, bannedBy: ${weapon.bannedBy.join(',')}`);
 
     // --- renderWeaponItem のロジックをここに移植 ---
     const isSelectedByAlpha = weapon.selectedBy === 'alpha';
@@ -132,26 +159,26 @@ const WeaponItemComponent: React.FC<WeaponItemProps> = memo(({
             {/* メイン武器アイコン */}
             {isRandomChoice ? (
                 <Image
-                src={weapon.imageUrl}
-                alt={weapon.name}
-                // ★★★ ダミーの width と height を指定 ★★★
-                width={100}
-                height={100}
-                style={{
-                    width: '100%', // ★ 親要素の幅に合わせる
-                    height: 'auto',  // ★ 高さは自動調整
-                    objectFit: 'contain', // ★ 念のため contain を指定 (なくても効く場合あり)
-                }}
+                    src={weapon.imageUrl}
+                    alt={weapon.name}
+                    // ★★★ ダミーの width と height を指定 ★★★
+                    width={100}
+                    height={100}
+                    style={{
+                        width: '100%', // ★ 親要素の幅に合わせる
+                        height: 'auto',  // ★ 高さは自動調整
+                        objectFit: 'contain', // ★ 念のため contain を指定 (なくても効く場合あり)
+                    }}
                     className={`mx-auto transition-opacity duration-150 ${imageOpacity} rounded-sm overflow-hidden `}
                 />
-            ):(
+            ) : (
                 <Image
-                src={weapon.imageUrl}
-                alt={weapon.name}
-                fill // ★ fill prop を使用
-                style={{ objectFit: 'contain' }} // ★ contain でアスペクト比維持
-                className={`mx-auto transition-opacity duration-150 ${imageOpacity}`}
-            />
+                    src={weapon.imageUrl}
+                    alt={weapon.name}
+                    fill // ★ fill prop を使用
+                    style={{ objectFit: 'contain' }} // ★ contain でアスペクト比維持
+                    className={`mx-auto transition-opacity duration-150 ${imageOpacity}`}
+                />
             )}
             {/* サブ・スペシャルアイコン表示エリア (アイコン上部) */}
             {!isRandomChoice && (
