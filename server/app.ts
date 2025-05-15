@@ -691,63 +691,6 @@ io.on('connection', (socket: Socket) => {
             GameLogic.updateRandomRulePool(roomId, data.ruleId);
         });
 
-    // --- ★ ランダムプール一括設定 ---
-    socket.on('set_random_pool', (data: { type: 'stage' | 'rule', itemIds: number[] }) => {
-        const userInfo = connectedUsersGlobal.get(socketId);
-        if (!userInfo || !userInfo.roomId || !userInfo.name) {
-            console.warn(`[Set Random Pool] User ${socketId} is not in a room or user info not found.`);
-            socket.emit('action failed', { reason: 'ルームに参加していません。' });
-            return;
-        }
-
-        const roomId = userInfo.roomId;
-        const roomState = gameRooms.get(roomId);
-
-        // データ、ホスト権限、フェーズをチェック
-        if (!data || (data.type !== 'stage' && data.type !== 'rule') || !Array.isArray(data.itemIds) || !data.itemIds.every(id => typeof id === 'number')) {
-            console.warn(`[Set Random Pool ${roomId}] Invalid data received from ${socketId}:`, data);
-            socket.emit('action failed', { reason: '無効なリクエストデータです。' });
-            return;
-        }
-        // ★ roomState の存在チェックを先に行う
-        if (!roomState) {
-            console.warn(`[Set Random Pool ${roomId}] Room not found for request by ${socketId}.`);
-            socket.emit('action failed', { reason: 'ルームが見つかりません。' });
-            return;
-        }
-        // ★ roomState が存在することが保証された上でホストチェック
-        if (roomState.hostId !== socketId) {
-            console.warn(`[Set Random Pool ${roomId}] Denied: User ${userInfo.name} (${socketId}) is not host. Host is ${roomState.hostId}.`);
-            socket.emit('action failed', { reason: 'ホストのみが対象を変更できます。' });
-            return;
-        }
-        if (roomState.phase !== 'waiting') {
-            console.warn(`[Set Random Pool ${roomId}] Denied: Room is not in 'waiting' phase (current: ${roomState.phase}). Request by host ${socketId}.`);
-            socket.emit('action failed', { reason: '待機中のみ変更できます。' });
-            return;
-        }
-
-        const { type, itemIds } = data;
-
-        console.log(`[Set Random Pool ${roomId}] Request from host ${userInfo.name} (${socketId}) to set ${type} pool with ${itemIds.length} items: [${itemIds.join(', ')}]`);
-
-        try {
-            const success = GameLogic.setRandomPool(roomId, type, itemIds);
-            if (success) {
-                // GameLogic.setRandomPool 内で 'room state update' が emit される
-                // 必要であれば、リクエスト元に個別の成功通知を送る
-                // socket.emit('action success', { message: `${type === 'stage' ? 'ステージ' : 'ルール'}のランダム対象を更新しました。` });
-            } else {
-                // GameLogic.setRandomPool が false を返した場合 (例: ルームが見つからない)
-                socket.emit('action failed', { reason: 'ランダムプールの更新に失敗しました。' });
-            }
-        } catch (error) {
-            console.error(`[Set Random Pool ${roomId}] Error calling GameLogic.setRandomPool:`, error);
-            socket.emit('action failed', { reason: 'サーバーエラーによりランダムプールの更新に失敗しました。' });
-        }
-    });
-
-
     // --- 切断処理 ---
     socket.on('disconnect', (reason: string) => {
         console.log(`[Disconnect] User disconnected: ${socketId}. Reason: ${reason}`);

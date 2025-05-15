@@ -56,7 +56,7 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
     const amIHost = useMemo(() => { // ★ useMemo で amIHost を計算
         return gameState !== null && gameState.hostId !== null && gameState.hostId === myActualSocketId;
     }, [gameState?.hostId, myActualSocketId]); // ★ 修正
-
+    
     const timerDuration = useMemo(() => {
         if (!gameState) return 0;
         if (gameState.phase === 'ban') return BAN_PHASE_DURATION;
@@ -199,11 +199,6 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
                 else { setSelectedRule(null); }
 
                 setGameState(initialGameState);
-                if (initialGameState.phase === 'waiting') {
-                    console.log(`[WeaponGrid ${roomId}] Initial state is 'waiting', resetting weaponStates and loadingWeaponId.`);
-                    setWeaponStates({});
-                    setLoadingWeaponId(null);
-                }
             } else {
                 console.warn(`[WeaponGrid ${roomId}] Received initial state for other room: ${initialGameState.roomId}`);
             }
@@ -220,53 +215,37 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
         };
 
         const handleUpdateGameState = (updatedState: GameState) => {
-            setGameState(prevGameState => {
-                if (updatedState.roomId === roomId) {
-                    console.log(`[WeaponGrid ${roomId}] Received game state update:`, updatedState);
-                    const oldPhase = prevGameState?.phase; // ★ 以前のフェーズを取得
-
-                    const newStageId = updatedState.selectedStageId;
-                    const newRuleId = updatedState.selectedRuleId;
-                    if (newStageId === 'random') {
-                        setSelectedStage(RANDOM_STAGE_CHOICE);
-                    } else if (newStageId !== null) {
-                        const foundStage = STAGES_DATA.find(s => s.id === newStageId);
-                        setSelectedStage(foundStage || null);
-                    } else {
-                        setSelectedStage(null);
-                    }
-                    if (newRuleId === 'random') {
-                        setSelectedRule(RANDOM_RULE_CHOICE);
-                    } else if (newRuleId !== null) {
-                        const foundRule = RULES_DATA.find(r => r.id === newRuleId);
-                        setSelectedRule(foundRule || null);
-                    } else {
-                        setSelectedRule(null);
-                    }
-
-                    if (updatedState.phase === 'waiting' && oldPhase !== 'waiting') {
-                        console.log(`[WeaponGrid ${roomId}] Phase changed from ${oldPhase} to 'waiting', resetting weaponStates and loadingWeaponId.`);
-                        setWeaponStates({});
-                        setLoadingWeaponId(null);
-                    } else if (updatedState.phase === 'waiting' && oldPhase === 'waiting' && Object.keys(weaponStatesRef.current).length > 0) {
-                        // waiting のままだが、何らかの理由で weaponStates が残っている場合もクリア (念のため)
-                        console.log(`[WeaponGrid ${roomId}] Phase is 'waiting' and weaponStates were not empty, resetting.`);
-                        setWeaponStates({});
-                        setLoadingWeaponId(null);
-                    }
-                    return updatedState; // ★ 新しいゲーム状態を返す
+            if (updatedState.roomId === roomId) {
+                console.log(`[WeaponGrid ${roomId}] Received game state update:`, updatedState);
+                const newStageId = updatedState.selectedStageId;
+                const newRuleId = updatedState.selectedRuleId;
+                if (newStageId === 'random') {
+                    setSelectedStage(RANDOM_STAGE_CHOICE);
+                } else if (newStageId !== null) {
+                    const foundStage = STAGES_DATA.find(s => s.id === newStageId);
+                    setSelectedStage(foundStage || null);
+                } else {
+                    setSelectedStage(null);
                 }
-                return prevGameState; // ルームIDが一致しない場合は変更しない
-            });
+                if (newRuleId === 'random') {
+                    setSelectedRule(RANDOM_RULE_CHOICE);
+                } else if (newRuleId !== null) {
+                    const foundRule = RULES_DATA.find(r => r.id === newRuleId);
+                    setSelectedRule(foundRule || null);
+                } else {
+                    setSelectedRule(null);
+                }
+                setGameState(updatedState);
+            }
         };
         const handleUpdateWeapon = (updatedWeaponData: RoomWeaponState) => {
             setWeaponStates((prevStates) => ({ ...prevStates, [updatedWeaponData.id]: updatedWeaponData }));
-            // console.log(`[DEBUG handleUpdateWeapon] Current loadingWeaponId: ${loadingWeaponId}, Updated weaponId: ${updatedWeaponData.id}`);
+            console.log(`[DEBUG handleUpdateWeapon] Current loadingWeaponId: ${loadingWeaponId}, Updated weaponId: ${updatedWeaponData.id}`);
             if (loadingWeaponId === updatedWeaponData.id || loadingWeaponId === RANDOM_WEAPON_ID) {
-                // console.log(`[DEBUG handleUpdateWeapon] Clearing loadingWeaponId (was: ${loadingWeaponId}) because updated weaponId is ${updatedWeaponData.id} or it was random.`);
+                console.log(`[DEBUG handleUpdateWeapon] Clearing loadingWeaponId (was: ${loadingWeaponId}) because updated weaponId is ${updatedWeaponData.id} or it was random.`);
                 setLoadingWeaponId(null);
             } else {
-                // console.log(`[DEBUG handleUpdateWeapon] loadingWeaponId (${loadingWeaponId}) does not match updated weaponId (${updatedWeaponData.id}) and was not random. Not clearing.`);
+                console.log(`[DEBUG handleUpdateWeapon] loadingWeaponId (${loadingWeaponId}) does not match updated weaponId (${updatedWeaponData.id}) and was not random. Not clearing.`);
             }
         };
 
@@ -278,7 +257,7 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
             console.error(`[WeaponGrid ${roomId}] Action failed: ${data.reason}`);
             handleError(data.reason);
             if (loadingWeaponId !== null) {
-                // console.log(`[DEBUG handleActionFailed] Clearing loadingWeaponId (was: ${loadingWeaponId})`);
+                console.log(`[DEBUG handleActionFailed] Clearing loadingWeaponId (was: ${loadingWeaponId})`);
                 setLoadingWeaponId(null);
             }
         };
@@ -382,20 +361,6 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
         onGameStateUpdate(gameState);
     }, [gameState, onGameStateUpdate]);
 
-    // モーダル表示中にゲームフェーズが 'waiting' から変更されたらモーダルを閉じる
-    useEffect(() => {
-        if (gameState?.phase !== 'waiting') {
-            if (isStageModalOpen) {
-                console.log('[WeaponGrid] Game phase changed from waiting, closing stage modal.');
-                setIsStageModalOpen(false);
-            }
-            if (isRuleModalOpen) {
-                console.log('[WeaponGrid] Game phase changed from waiting, closing rule modal.');
-                setIsRuleModalOpen(false);
-            }
-        }
-    }, [gameState?.phase, isStageModalOpen, isRuleModalOpen]);
-
     // gameState と weaponStates の最新値を useRef で保持
     const gameStateRef = useRef(gameState);
     useEffect(() => {
@@ -473,7 +438,7 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
                 action = 'ban';
                 canPerformAction = true;
             }
-            // ★ currentMyTeam を使用
+        // ★ currentMyTeam を使用
         } else if (phase === 'pick' && (currentMyTeam === 'alpha' || currentMyTeam === 'bravo') && isMyTurn) {
             if (!weapon.selectedBy && weapon.bannedBy.length === 0) {
                 action = 'select';
@@ -484,7 +449,7 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
         if (canPerformAction && action) {
             const eventName = action === 'ban' ? 'ban weapon' : 'select weapon';
             console.log(`[WeaponGrid ${roomId}] Emitting ${eventName} for weapon ${weaponId}`);
-            // console.log(`[DEBUG handleWeaponClick] Setting loadingWeaponId to: ${weaponId}`);
+            console.log(`[DEBUG handleWeaponClick] Setting loadingWeaponId to: ${weaponId}`);
             setLoadingWeaponId(weaponId);
             socket.emit(eventName, { weaponId: weaponId });
         } else {
@@ -504,7 +469,7 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
                 else handleError('不明なBANエラー');
             }
         }
-        // ★ 依存配列から myTeam と loadingWeaponId を削除
+    // ★ 依存配列から myTeam と loadingWeaponId を削除
     }, [socket, handleError, masterWeapons]); // masterWeapons は find で使うため残す
 
     // --- チーム選択処理関数 (useCallbackで最適化) ---
@@ -527,7 +492,7 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
         if (socket && gameState && gameState.phase === 'waiting') {
             socket.emit('start game');
         }
-    }, [socket, gameState?.phase, roomId]);
+    }, [socket, gameState?.phase, roomId]); 
 
     // --- リセット処理 (useCallbackで最適化) ---
     const handleResetGame = useCallback(() => {
@@ -565,15 +530,6 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
         }
         console.log(`[UI] Emitting 'update random rule pool' for ruleId: ${ruleId}`);
         socket.emit('update random rule pool', { ruleId });
-    }, [socket, amIHost, gameState?.phase, handleError]);
-
-    const handleSetRandomPool = useCallback((type: 'stage' | 'rule', itemIds: number[]) => {
-        if (!socket || !amIHost || gameState?.phase !== 'waiting') {
-            handleError(amIHost ? '待機中のみ変更できます。' : 'ホストのみ変更できます。');
-            return;
-        }
-        socket.emit('set_random_pool', { type, itemIds });
-        // クライアント側の即時反映はサーバーからの 'room state update' を待つ
     }, [socket, amIHost, gameState?.phase, handleError]);
 
     // --- レンダリング ---
@@ -617,22 +573,22 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
             {/* lg以上で3カラム、それ未満は1カラム */}
             <div className="grid grid-cols-1 lg:grid-cols-11 gap-4 items-stretch flex-grow mb-2 ">
                 <TeamPanel
-                    team="alpha"
-                    teamDisplayName="アルファ"
-                    phase={gameState.phase}
-                    hostId={gameState.hostId}
-                    teamUsers={alphaTeamUsers}
-                    // IDリストと全データを渡す
-                    pickedWeaponIds={alphaPickedIds}
-                    bannedWeaponIds={alphaBannedIds}
-                    masterWeaponsMap={masterWeaponsMap}
-                    weaponStates={weaponStates}
-                    pickCount={gameState.pickPhaseState?.picks.alpha ?? 0} // Pickカウント
-                    banCount={gameState.banPhaseState?.bans.alpha ?? 0}   // Banカウント
-                    banPhaseState={gameState.banPhaseState}
-                    myTeam={myTeam}
-                    userName={userName}
-                    onSelectTeam={handleTeamSelect}
+                        team="alpha"
+                        teamDisplayName="アルファ"
+                        phase={gameState.phase}
+                        hostId={gameState.hostId}
+                        teamUsers={alphaTeamUsers}
+                        // IDリストと全データを渡す
+                        pickedWeaponIds={alphaPickedIds}
+                        bannedWeaponIds={alphaBannedIds}
+                        masterWeaponsMap={masterWeaponsMap}
+                        weaponStates={weaponStates}
+                        pickCount={gameState.pickPhaseState?.picks.alpha ?? 0} // Pickカウント
+                        banCount={gameState.banPhaseState?.bans.alpha ?? 0}   // Banカウント
+                        banPhaseState={gameState.banPhaseState}
+                        myTeam={myTeam}
+                        userName={userName}
+                        onSelectTeam={handleTeamSelect}
                 />
 
                 {/* ----- 中央カラム: 武器グリッド ----- */}
@@ -669,21 +625,21 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
 
                 {/* ----- 右カラム: ブラボーチーム ----- */}
                 <TeamPanel
-                    team="bravo"
-                    teamDisplayName="ブラボー"
-                    phase={gameState.phase}
-                    hostId={gameState.hostId}
-                    teamUsers={bravoTeamUsers}
-                    pickedWeaponIds={bravoPickedIds}
-                    bannedWeaponIds={bravoBannedIds}
-                    masterWeaponsMap={masterWeaponsMap}
-                    weaponStates={weaponStates}
-                    pickCount={gameState.pickPhaseState?.picks.bravo ?? 0}
-                    banCount={gameState.banPhaseState?.bans.bravo ?? 0}
-                    banPhaseState={gameState.banPhaseState}
-                    myTeam={myTeam}
-                    userName={userName}
-                    onSelectTeam={handleTeamSelect}
+                        team="bravo"
+                        teamDisplayName="ブラボー"
+                        phase={gameState.phase}
+                        hostId={gameState.hostId}
+                        teamUsers={bravoTeamUsers}
+                        pickedWeaponIds={bravoPickedIds}
+                        bannedWeaponIds={bravoBannedIds}
+                        masterWeaponsMap={masterWeaponsMap}
+                        weaponStates={weaponStates}
+                        pickCount={gameState.pickPhaseState?.picks.bravo ?? 0}
+                        banCount={gameState.banPhaseState?.bans.bravo ?? 0}
+                        banPhaseState={gameState.banPhaseState}
+                        myTeam={myTeam}
+                        userName={userName}
+                        onSelectTeam={handleTeamSelect}
                 />
             </div>
 
@@ -703,16 +659,12 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
                 isOpen={isStageModalOpen}
                 onClose={() => setIsStageModalOpen(false)}
                 items={STAGES_DATA}
-                initialSelectedItem={selectedStage} // ★ 現在の選択を初期値として渡す
-                onSelect={(stage) => {
-                    console.log('[Stage Modal] Final selection on close:', stage);
-                    setSelectedStage(stage); // ★ モーダルが閉じる時に最終的な選択をセット
-                    if (socket && amIHost) { // ホストのみがサーバーに通知
+                onSelect={(stage) => { // stage は Stage | typeof RANDOM_STAGE_CHOICE
+                    console.log('[Stage Modal] Selected:', stage);
+                    setSelectedStage(stage); // 正しいオブジェクトをセット
+                    if (socket) {
                         const stageIdToSend = stage.id === 'random' ? 'random' : stage.id;
                         socket.emit('select stage', { stageId: stageIdToSend });
-                    } else if (!amIHost) {
-                        // ホストでない場合、選択はローカルでの表示更新のみ (サーバーには送らない)
-                        console.log('[Stage Modal] Non-host selected, updating local display only.');
                     }
                 }}
                 title="ステージを選択"
@@ -720,22 +672,18 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
                 isHost={amIHost} // ★ ホスト情報を渡す
                 randomStagePool={randomStagePoolSet} // ★ useMemo で計算した Set を渡す
                 onToggleRandomStage={handleToggleRandomStage} // ★ ハンドラを渡す
-                onSetRandomPool={handleSetRandomPool} // ★ 全選択/解除用ハンドラ
             />
             <SelectionModal<Rule>
                 modalType="rule"
                 isOpen={isRuleModalOpen}
                 onClose={() => setIsRuleModalOpen(false)}
                 items={RULES_DATA}
-                initialSelectedItem={selectedRule} // ★ 現在の選択を初期値として渡す
-                onSelect={(rule) => {
-                    console.log('[Rule Modal] Final selection on close:', rule);
-                    setSelectedRule(rule); // ★ モーダルが閉じる時に最終的な選択をセット
-                    if (socket && amIHost) { // ホストのみがサーバーに通知
+                onSelect={(rule) => { // rule は Rule | typeof RANDOM_RULE_CHOICE
+                    console.log('[Rule Modal] Selected:', rule);
+                    setSelectedRule(rule); // 正しいオブジェクトをセット
+                    if (socket) {
                         const ruleIdToSend = rule.id === 'random' ? 'random' : rule.id;
                         socket.emit('select rule', { ruleId: ruleIdToSend });
-                    } else if (!amIHost) {
-                        console.log('[Rule Modal] Non-host selected, updating local display only.');
                     }
                 }}
                 title="ルールを選択"
@@ -743,7 +691,6 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
                 isHost={amIHost}
                 randomRulePool={randomRulePoolSet} // ★ ルール用プールを渡す
                 onToggleRandomRule={handleToggleRandomRule}
-                onSetRandomPool={handleSetRandomPool} // ★ 全選択/解除用ハンドラ
             />
         </div> // container end
     );
@@ -753,7 +700,6 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
         isOpen: boolean;
         onClose: () => void;
         items: T[];
-        initialSelectedItem: T | RandomChoiceType | null; // ★ 初期選択アイテム
         onSelect: (item: T | RandomChoiceType) => void;
         title: string;
         randomOption?: RandomChoiceType;
@@ -761,8 +707,7 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
         randomStagePool?: Set<number>;
         randomRulePool?: Set<number>;
         onToggleRandomStage?: (stageId: number) => void;
-        onToggleRandomRule?: (ruleId: number) => void;
-        onSetRandomPool?: (type: 'stage' | 'rule', itemIds: number[]) => void;
+        onToggleRandomRule?: (ruleId: number) => void; // ★ ルール用ハンドラ追加
         modalType: 'stage' | 'rule';
     }
 
@@ -770,7 +715,6 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
         isOpen,
         onClose,
         items,
-        initialSelectedItem,
         onSelect,
         title,
         randomOption,
@@ -779,57 +723,26 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
         randomRulePool,
         onToggleRandomStage,
         onToggleRandomRule,
-        onSetRandomPool,
         modalType
     }: SelectionModalProps<T>) {
-
-        // モーダル内で現在選択されているアイテムを管理するローカルステート
-        const [currentModalSelection, setCurrentModalSelection] = useState<T | RandomChoiceType | null>(initialSelectedItem);
-        
-        // isRandomActive はローカルステート currentModalSelection から導出
-        const isRandomActiveForModal = useMemo(() => {
-            if (!randomOption || !currentModalSelection) return false;
-            return currentModalSelection.id === randomOption.id;
-        }, [currentModalSelection, randomOption]);
-
         if (!isOpen) return null;
 
         // ランダムオプションボタンの onClick
         const handleRandomSelect = () => {
-            if (isHost) { // ホストのみ操作可能
-                if (randomOption) {
-                    setCurrentModalSelection(randomOption); // ローカルステートを更新
-                }
-            } else {
-                toast.error('ホストのみ選択できます。');
+            if (randomOption) {
+                onSelect(randomOption);
+                onClose();
             }
         };
 
         // 通常アイテムボタンの onClick
         const handleItemSelect = (item: T) => {
             if (isHost) {
-                setCurrentModalSelection(item); // ローカルステートを更新
+                onSelect(item);
+                onClose();
             } else {
                 toast.error('ホストのみ選択できます。');
             }
-        };
-
-                // モーダルを閉じようとする際の共通処理
-        const attemptCloseModal = () => {
-            const currentPool = modalType === 'stage' ? randomStagePool : randomRulePool;
-            // isRandomActiveForModal (ローカルの選択状態に基づく) が true で、かつプール内のアイテムが0または1つの場合
-            const isPoolInsufficient = currentPool && (currentPool.size === 0 || currentPool.size === 1);
-
-            if (isHost && isRandomActiveForModal && isPoolInsufficient) {
-                const itemType = modalType === 'stage' ? 'ステージ' : 'ルール';
-                toast.error(`ランダム${itemType}の対象を2つ以上選択してください。`, { duration: 4000 });
-                return; // モーダルを閉じない
-            }
-            // モーダルを閉じる前に、最終的な選択を onSelect で通知
-            if (currentModalSelection) {
-                onSelect(currentModalSelection);
-            }
-            onClose(); // 元の onClose プロップを呼び出す
         };
 
         // プールを取得 (タイプに応じて)
@@ -843,45 +756,14 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
             // modalType は SelectionModal の props から参照
             const isStageModal = modalType === 'stage';
             // ランダムプール関連の判定
-            const isLastOneInPool = currentPool && currentPool.size === 1 && currentPool.has((item as Stage | Rule).id as number);
-            const canToggleCheckbox = isHost && !isLastOneInPool;
             const isInRandomPool = isRandom ? true : (currentPool ? currentPool.has((item as Stage | Rule).id as number) : true);
-            const checkboxTitle = !isHost ? 'ホストのみ変更可' :
-                                isLastOneInPool ? '最後の1つは対象から外せません' :
-                                (isInRandomPool ? 'ランダム対象外にする' : 'ランダム対象にする');
-            // ★ 選択されているアイテムかどうかの判定 (currentModalSelection を使用)
-            const isCurrentlySelectedInModal = currentModalSelection?.id === item.id;
-
-                        const itemClasses = ["relative", "border", "rounded-md", "overflow-hidden", "aspect-square", "group"];
-
-            if (isCurrentlySelectedInModal) {
-                // 現在モーダルで選択されているアイテムの場合
-                itemClasses.push(isRandom ? 'ring-2 ring-offset-1 ring-green-500' : 'ring-2 ring-offset-1 ring-blue-500');
-                if (isInRandomPool) {
-                    // 選択中で、かつランダムプール内
-                    itemClasses.push(isRandom ? 'bg-green-50' : 'bg-blue-50');
-                } else {
-                    // 選択中だが、ランダムプールから外れている
-                    itemClasses.push('bg-gray-200'); // ランダム対象外の背景を維持
-                }
-            } else {
-                // 現在モーダルで選択されていないアイテムの場合
-                if (isInRandomPool) {
-                    itemClasses.push('bg-white', 'hover:bg-gray-50');
-                } else {
-                    // 選択されておらず、ランダムプールからも外れている
-                    itemClasses.push('bg-gray-200');
-                }
-            }
-
-            if (!isHost && !isInRandomPool) { // ホストでなく、かつランダムプール外の場合のスタイル
-                itemClasses.push('opacity-60', 'cursor-not-allowed');
-            }
 
             return (
                 <div
                     key={item.id}
-                    className={itemClasses.join(' ')}
+                    className={`relative border rounded-md overflow-hidden aspect-square group ${ // ★ aspect-square (1:1) に変更、group 追加
+                        !isInRandomPool ? 'bg-gray-200' : 'bg-white hover:bg-gray-50'
+                        } ${!isHost && !isInRandomPool ? 'opacity-60 cursor-not-allowed' : ''}`}
                 >
                     {/* チェックボックス (ランダム以外で、対応するハンドラがある場合) */}
                     {!isRandom && currentToggleHandler && (
@@ -889,10 +771,10 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
                             <input
                                 type="checkbox"
                                 checked={isInRandomPool}
-                                disabled={!canToggleCheckbox}
-                                onChange={() => canToggleCheckbox && currentToggleHandler && currentToggleHandler((item as Stage | Rule).id as number)}
-                                className={`w-4 h-4 rounded border-gray-400 text-blue-600 focus:ring-blue-500 ${!canToggleCheckbox ? 'cursor-not-allowed opacity-80' : 'cursor-pointer'}`}
-                                title={checkboxTitle}
+                                disabled={!isHost}
+                                onChange={() => currentToggleHandler((item as Stage | Rule).id as number)}
+                                className={`w-4 h-4 rounded border-gray-400 text-blue-600 focus:ring-blue-500 ${!isHost ? 'cursor-not-allowed opacity-80' : 'cursor-pointer'}`}
+                                title={isHost ? (isInRandomPool ? 'ランダム対象外にする' : 'ランダム対象にする') : 'ホストのみ変更可'}
                             />
                         </div>
                     )}
@@ -925,7 +807,6 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
                                         src={item.imageUrl}
                                         alt={item.name}
                                         fill
-                                        sizes='width:159px height:159px'
                                         style={{ objectFit: `${isStageModal ? 'cover' : 'contain'}` }}
                                         className="rounded-sm"
                                     />
@@ -951,46 +832,13 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
         };
 
         return (
-            <div
-                className="fixed inset-0 bg-black/50 flex justify-center items-center z-50 p-4"
-                onClick={attemptCloseModal} // ★ 背景クリックでモーダルを閉じようとする
-            >
-                <div
-                    className="bg-white rounded-lg shadow-xl p-4 md:p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto"
-                    onClick={(e) => e.stopPropagation()} // ★ モーダル内部のクリックが背景に伝播しないようにする
-                >
+            <div className="fixed inset-0 bg-black/50 flex justify-center items-center z-50 p-4">
+                <div className="bg-white rounded-lg shadow-xl p-4 md:p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto"> {/* ★ p, max-w, max-h 調整 */}
                     {/* モーダルヘッダー */}
-                    <div className="flex justify-between items-start mb-3 md:mb-4"> {/* ★ items-start に変更 */}
-                        <div>
-                            <h3 className="text-lg md:text-xl font-semibold text-gray-800 font-bold">{title}</h3>
-                            {isHost && onSetRandomPool && (
-                                <div className="mt-1 flex gap-2">
-                                    <button
-                                        onClick={() => onSetRandomPool(modalType, items.map(i => i.id as number))}
-                                        disabled={!isHost || (currentPool && currentPool.size === items.length)}
-                                        className="text-xs px-2 py-1 border rounded bg-blue-500 text-white hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed"
-                                        title={currentPool && currentPool.size === items.length ? "すべて選択済みです" : "すべての対象を選択"}
-                                    >
-                                        全選択
-                                    </button>
-                                    <button
-                                        onClick={() => onSetRandomPool(modalType, [])}
-                                        disabled={!isHost || !currentPool || currentPool.size === 0}
-                                        className="text-xs px-2 py-1 border rounded bg-red-500 text-white hover:bg-red-600 disabled:bg-gray-300 disabled:cursor-not-allowed"
-                                        title={!currentPool || currentPool.size === 0 ? "すべて解除済みです" : "すべての対象を解除"}
-                                    >
-                                        全解除
-                                    </button>
-                                </div>
-                            )}
-                        </div>
-                        <button onClick={attemptCloseModal} className="text-gray-500 hover:text-gray-700 text-2xl">×</button>
+                    <div className="flex justify-between items-center mb-3 md:mb-4"> {/* ★ mb 調整 */}
+                        <h3 className="text-lg md:text-xl font-semibold text-gray-800 font-bold">{title}</h3>
+                        <button onClick={onClose} className="text-gray-500 hover:text-gray-700 text-2xl">×</button>
                     </div>
-                    {!isHost && (
-                         <p className="text-xs text-gray-500 mb-2 -mt-2">
-                            ランダム対象の変更はホストのみ可能です。
-                         </p>
-                    )}
                     <div className="grid grid-cols-3 xs:grid-cols-4 sm:grid-cols-5 gap-1.5 md:gap-2"> {/* ★ xs, sm, md で調整, gap 調整 */}
                         {/* ランダム選択肢 */}
                         {randomOption && renderModalItem(randomOption, true)}

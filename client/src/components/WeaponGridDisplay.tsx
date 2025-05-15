@@ -217,12 +217,12 @@ const WeaponGridDisplayComponent: React.FC<WeaponGridDisplayProps> = ({
         <div className="h-full flex flex-col ">
             {/* --- 上部メッセージエリア --- */}
             {phase === 'waiting' && (
-                <div className="text-lg font-semibold mb-2 text-gray-800 whitespace-normal px-1 flex-shrink-0">
-                    <p className="text-gray-500">チームを選択して、ホストのゲーム開始をお待ちください。</p>
+                <div className="text-center py-0 px-2 flex-shrink-0">
+                    <p className="text-gray-500 mt-1">チームを選択して、ホストのゲーム開始をお待ちください。</p>
                 </div>
             )}
             {(phase === 'ban' || phase === 'pick') && (
-                <h3 className="text-lg font-semibold mb-2 text-gray-800 whitespace-normal px-1 flex-shrink-0">
+                <h3 className="text-lg font-semibold mb-2 text-gray-800 whitespace-normal px-1 pt-3 flex-shrink-0">
                     {phase === 'ban' ? 'BANする武器を選択してください' : 'PICKする武器を選んでください'}
                     {myTeam !== 'observer' && (
                         ` (${phase === 'ban'
@@ -233,7 +233,7 @@ const WeaponGridDisplayComponent: React.FC<WeaponGridDisplayProps> = ({
                 </h3>
             )}
             {phase === 'pick_complete' && (
-                <div className="text-lg font-semibold mb-2 text-gray-800 whitespace-normal px-1 flex-shrink-0">
+                <div className="text-center px-2 flex-shrink-0">
                     <p className="text-gray-500 mt-1">試合を開始してください。結果をリセットするときはホストのルームリセットをお待ちください。</p>
                 </div>
             )}

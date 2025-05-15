@@ -236,19 +236,15 @@ const GameHeader: React.FC<GameHeaderProps> = memo(({
                                             <Image
                                                 src={getRandomRuleDisplayImagePath(randomRulePoolCount, RULES_DATA.length)}
                                                 alt={`ランダム (対象: ${randomRulePoolCount})`}
+                                                // width={80} height={60}
+                                                // style={{ height: 'auto', objectFit: 'contain', maxWidth: '100%', maxHeight: '100%' }}
                                                 fill
-                                                sizes='width:142px height:60px'
                                                 style={{ objectFit: 'cover' }}
                                             />
                                         </>
                                     ) : (
                                         // 通常のルール画像
-                                        <Image src={selectedRule.imageUrl}
-                                        alt={selectedRule.name}
-                                        fill
-                                        sizes='width:142px height:60px'
-                                        style={{ objectFit: 'contain' }}
-                                                 />
+                                        <Image src={selectedRule.imageUrl} alt={selectedRule.name} width={80} height={60} style={{ height: 'auto', objectFit: 'contain', maxWidth: '100%', maxHeight: '100%' }} />
                                     )}
                                 </>
                             ) : (<span className="text-gray-500 text-xs">未選択</span>)}
@@ -264,9 +260,8 @@ const GameHeader: React.FC<GameHeaderProps> = memo(({
                         {/* 変更/確認ボタン */}
                         <button
                             onClick={onOpenRuleModal}
-                            className={`mt-1 px-2 py-0.5 text-xs rounded ${phase !== 'waiting' ? 'bg-gray-200 text-gray-500 cursor-not-allowed' : 'bg-gray-300 hover:bg-gray-400'}`}
-                            disabled={phase !== 'waiting'} // ★ ゲーム進行中は常に無効
-                            title={phase !== 'waiting' ? "ゲーム進行中は変更/確認できません" : (amIHost ? "対象ルール変更" : "対象ルール確認")}
+                            className={`mt-1 px-2 py-0.5 text-xs rounded ${phase !== 'waiting' && !amIHost ? 'bg-gray-200 text-gray-500 cursor-not-allowed' : 'bg-gray-300 hover:bg-gray-400'}`}
+                            title={phase !== 'waiting' ? "待機中のみ変更/確認可" : (amIHost ? "対象ルール変更" : "対象ルール確認")}
                         >
                             {amIHost && phase === 'waiting' ? '変更' : '確認'}
                         </button>
@@ -284,8 +279,9 @@ const GameHeader: React.FC<GameHeaderProps> = memo(({
                                             <Image
                                                 src={getRandomStageDisplayImagePath(randomStagePoolCount, STAGES_DATA.length)}
                                                 alt={`ランダム (対象: ${randomStagePoolCount})`}
+                                                // width={80} height={60}
+                                                // style={{ height: 'auto', objectFit: 'contain', maxWidth: '100%', maxHeight: '100%' }}
                                                 fill
-                                                sizes='width:142px height:60px'
                                                 style={{ objectFit: 'cover' }}
                                             />
                                         </>
@@ -294,9 +290,10 @@ const GameHeader: React.FC<GameHeaderProps> = memo(({
                                         <Image 
                                         src={selectedStage.imageUrl}
                                         alt={selectedStage.name}
+                                        //  width={80} height={60}
+                                        // style={{ height: 'auto', objectFit: 'contain', maxWidth: '100%', maxHeight: '100%' }}
                                         fill
-                                        sizes='width:142px height:60px'
-                                        style={{ objectFit: 'cover' }}
+                                                style={{ objectFit: 'cover' }}
                                         />
                                     )}
                                 </>
@@ -313,9 +310,8 @@ const GameHeader: React.FC<GameHeaderProps> = memo(({
                         {/* 変更/確認ボタン */}
                         <button
                             onClick={onOpenStageModal}
-                            className={`mt-1 px-2 py-0.5 text-xs rounded ${phase !== 'waiting' ? 'bg-gray-200 text-gray-500 cursor-not-allowed' : 'bg-gray-300 hover:bg-gray-400'}`}
-                            disabled={phase !== 'waiting'} // ★ ゲーム進行中は常に無効
-                            title={phase !== 'waiting' ? "ゲーム進行中は変更/確認できません" : (amIHost ? "対象ステージ変更" : "対象ステージ確認")}
+                            className={`mt-1 px-2 py-0.5 text-xs rounded ${phase !== 'waiting' && !amIHost ? 'bg-gray-200 text-gray-500 cursor-not-allowed' : 'bg-gray-300 hover:bg-gray-400'}`}
+                            title={phase !== 'waiting' ? "待機中のみ変更/確認可" : (amIHost ? "対象ステージ変更" : "対象ステージ確認")}
                         >
                             {amIHost && phase === 'waiting' ? '変更' : '確認'}
                         </button>
@@ -324,7 +320,7 @@ const GameHeader: React.FC<GameHeaderProps> = memo(({
                 </div> {/* flex container end */}
 
                 {/* 現在のターン表示 */}
-                {phase === 'waiting' && (<p className="font-bold text-gray-700 text-xl mt-2"> --- </p>)}
+                {phase === 'waiting' && (<p className="font-bold text-gray-700 text-xl"> --- </p>)}
                 {phase === 'ban' && (
                     <p className="font-bold text-xl text-purple-700 mt-2">
                         BANフェーズ
@@ -339,7 +335,7 @@ const GameHeader: React.FC<GameHeaderProps> = memo(({
                     </p>
                 )}
                 {/* Pick完了 */}
-                {phase === 'pick_complete' && (<p className="font-bold text-green-600 text-xl mt-2">PICK完了!</p>)}
+                {phase === 'pick_complete' && (<p className="font-bold text-green-600 text-xl mt-2">PICK完了！</p>)}
 
             </div> {/* 中央ブロック end */}
 
