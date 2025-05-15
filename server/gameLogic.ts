@@ -183,6 +183,36 @@ export const updateRandomStagePool = (roomId: string, stageId: number): boolean 
     return true;
 };
 
+// ★★★★★ 追加: ランダムプールを一括設定する関数 ★★★★★
+export const setRandomPool = (roomId: string, type: 'stage' | 'rule', itemIds: number[]): boolean => {
+    const roomState = gameRooms.get(roomId);
+    if (!roomState) {
+        console.error(`[Set Random Pool ${roomId}] Room not found.`);
+        return false;
+    }
+
+    // itemIds のバリデーション (存在するIDのみにフィルタリングし、重複を排除)
+    const sourceData = type === 'stage' ? STAGES_DATA : RULES_DATA;
+    const allSourceIds = sourceData.map(item => item.id);
+    const validItemIds = [...new Set(itemIds.filter(id => allSourceIds.includes(id)))];
+
+    if (type === 'stage') {
+        roomState.randomStagePool = validItemIds;
+        console.log(`[Set Random Pool ${roomId}] Stage pool updated with ${validItemIds.length} items: [${validItemIds.join(', ')}]`);
+    } else { // type === 'rule'
+        roomState.randomRulePool = validItemIds;
+        console.log(`[Set Random Pool ${roomId}] Rule pool updated with ${validItemIds.length} items: [${validItemIds.join(', ')}]`);
+    }
+
+    roomState.lastActivityTime = Date.now(); // アクティビティ時刻更新
+
+    // 変更をルーム全員に通知
+    io.to(roomId).emit('room state update', getPublicRoomState(roomState));
+    console.log(`[Set Random Pool ${roomId}] Emitted 'room state update'.`);
+    return true;
+};
+
+
 // ゲーム開始時のランダムステージ選択ロジック
 // (このロジックは start game イベントハンドラ内に移動しても良い)
 export const determineStartingStage = (roomId: string): number | 'random' | null | 'error' => {
