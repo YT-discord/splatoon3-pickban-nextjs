@@ -19,7 +19,7 @@ const ObserverPanel: React.FC<ObserverPanelProps> = memo(({
     onSelectTeam,
 }) => {
     return (
-        <div className="border rounded-lg p-2 bg-gray-50 shadow-sm mt-1">
+        <div className="border rounded-lg p-2 bg-gray-50 shadow-sm mt-1 h-[78px]">
              <div className="flex justify-between items-center mb-2">
                  <h4 className="font-semibold text-gray-800">観戦者 ({observers.length})</h4>
                   <button
@@ -37,10 +37,10 @@ const ObserverPanel: React.FC<ObserverPanelProps> = memo(({
                      {observers.map(user => {
                          const isHost = user.id === hostId;
                          return (
-                            <li key={user.id} className={`flex items-center flex-shrink-0 py-0.5 ${user.name === userName ? 'font-bold' : ''} text-gray-700`}> {/* ★ flex-shrink-0, py */}
-                            <span className="inline-block w-2 h-2 bg-gray-500 rounded-full mr-1"></span> {/* ★ mr-1 */}
-                            <span className="truncate max-w-[100px]">{user.name}</span> {/* ★ max-w で最大幅指定 (任意) */}
-                            {isHost && <span className="text-xs text-gray-500 ml-1 flex-shrink-0 mr-1">(ホスト)</span>}
+                            <li key={user.id} className={`flex items-center flex-shrink-0 py-0.5 ${user.name === userName ? 'font-bold' : ''} text-gray-700 mr-1`}> 
+                            <span className="inline-block w-2 h-2 bg-gray-500 rounded-full mr-1"></span> 
+                            <span className="truncate max-w-[100px]">{user.name}</span> 
+                            {isHost && <span className="text-xs text-gray-500 flex-shrink-0 ml-1">(ホスト)</span>}
                         </li>
                          );
                      })}

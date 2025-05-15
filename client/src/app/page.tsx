@@ -31,7 +31,7 @@ export default function Home() {
   // --- Socket.IO 接続処理 ---
   useEffect(() => {
     console.log('[useEffect Socket.IO] Running effect to connect socket...');
-    const socketIoUrl = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:3001';
+    const socketIoUrl = process.env.NEXT_PUBLIC_SOCKET_URL || process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001';
     console.log(`[useEffect Socket.IO] Connecting to: ${socketIoUrl}`);
     const newSocket: Socket<DefaultEventsMap, DefaultEventsMap> = io(socketIoUrl);
     setSocket(newSocket); // ★ setSocket 呼び出しログ
@@ -55,38 +55,38 @@ export default function Home() {
       // ★ setUserStatus の呼び出しをログで確認
       setUserStatus(prevStatus => {
         if (prevStatus !== 'in_room') {
-            console.log('[Socket Event connect] Setting userStatus to loading_master');
-            return 'loading_master';
+          console.log('[Socket Event connect] Setting userStatus to loading_master');
+          return 'loading_master';
         }
         console.log('[Socket Event connect] userStatus is already in_room, not changing.');
         return prevStatus; // 現在の status を維持
-    });
-  };
+      });
+    };
 
-  const onDisconnect = (reason: string) => {
-    console.log('[Socket Event] disconnect received. Reason:', reason);
-    setIsConnected(false); // ★ 接続状態 state を false に
-    setMySocketId(null);
-    // サーバー側の問題かネットワークの問題かを区別するメッセージが良いかも
-    if (reason === 'io server disconnect') {
+    const onDisconnect = (reason: string) => {
+      console.log('[Socket Event] disconnect received. Reason:', reason);
+      setIsConnected(false); // ★ 接続状態 state を false に
+      setMySocketId(null);
+      // サーバー側の問題かネットワークの問題かを区別するメッセージが良いかも
+      if (reason === 'io server disconnect') {
         setConnectionError('サーバーによって切断されました。');
-    } else {
+      } else {
         setConnectionError('サーバーとの接続が切れました。ページを再読み込みしてください。');
-    }
-    setUserStatus('error');
-    setJoinedRoomId(null);
-    setUserName('');
-    // setSocket(null); // Socketオブジェクト自体は維持しても良いかもしれない
-  };
+      }
+      setUserStatus('error');
+      setJoinedRoomId(null);
+      setUserName('');
+      // setSocket(null); // Socketオブジェクト自体は維持しても良いかもしれない
+    };
 
-  const onConnectError = (err: Error) => {
-    console.error('[Socket Event] connect_error received:', err);
-    setIsConnected(false); // ★ 接続状態 state を false に
-    setMySocketId(null);
-    setUserStatus('error');
-    setConnectionError(`サーバーに接続できませんでした: ${err.message}`);
-    // setSocket(null);
-  };
+    const onConnectError = (err: Error) => {
+      console.error('[Socket Event] connect_error received:', err);
+      setIsConnected(false); // ★ 接続状態 state を false に
+      setMySocketId(null);
+      setUserStatus('error');
+      setConnectionError(`サーバーに接続できませんでした: ${err.message}`);
+      // setSocket(null);
+    };
 
     console.log('[useEffect Socket.IO] Registering listeners...');
     newSocket.on('connect', onConnect);
@@ -120,10 +120,22 @@ export default function Home() {
           console.log(`[fetchMasterData] Fetching from: ${apiUrl}`);
           const res = await fetch(apiUrl);
           console.log(`[fetchMasterData] Fetch response status: ${res.status}`);
-          if (!res.ok) { /* ... エラー処理 ... */ throw new Error(/* ... */); }
+          if (!res.ok) {
+            const errorText = await res.text().catch(() => 'Failed to get error details');
+            throw new Error(`マスター武器データの取得に失敗しました (Status: ${res.status} - ${errorText.substring(0, 100)})${errorText.length > 100 ? '...' : ''}`);
+          }
           const data: MasterWeapon[] = await res.json();
           console.log(`[fetchMasterData] Fetch successful. Data length: ${Array.isArray(data) ? data.length : 'Invalid Format'}`);
-          if (!Array.isArray(data)) { /* ... エラー処理 ... */ throw new Error(/* ... */); }
+          if (!Array.isArray(data)) {
+            // サーバーからのレスポンスがJSONではあるが、期待する配列形式でない場合
+            // （例: { error: "message" } のようなオブジェクトが返ってきた場合など）
+            let detail = '';
+                        try { detail = JSON.stringify(data).substring(0, 100); } catch (e) {
+              console.warn('[fetchMasterData] Failed to stringify non-array data for error detail:', e);
+              detail = 'Invalid JSON structure (stringify failed)';
+            }
+            throw new Error(`マスター武器データの形式が正しくありません。期待したのは配列ですが、受け取ったデータ: ${detail}${detail.length >= 100 ? '...' : ''}`);
+          }
           console.log('[fetchMasterData] Calling setMasterWeapons...');
           setMasterWeapons(data);
           console.log('[fetchMasterData] Calling setUserStatus("selecting_room")...');
@@ -144,39 +156,39 @@ export default function Home() {
       fetchMasterData();
     } else {
       console.log('[useEffect MasterData] Conditions NOT met. Details:', {
-          isConnected: isConnected,
-          isCorrectStatus: userStatus === 'loading_master',
-          masterWeaponsIsNull: masterWeapons === null,
-          userStatus: userStatus,
+        isConnected: isConnected,
+        isCorrectStatus: userStatus === 'loading_master',
+        masterWeaponsIsNull: masterWeapons === null,
+        userStatus: userStatus,
       });
-  }
+    }
 
   }, [isConnected, userStatus, masterWeapons]);
 
   const handleGameStateUpdate = useCallback((newGameState: GameState | null) => {
     setGameStateForBodyClass(newGameState); // 内部 state を更新
-}, []);
+  }, []);
 
-    // gameStateForBodyClass が変更されたら body クラスを更新する Effect ★★★★★
-    useEffect(() => {
-      // console.log('[Body Class Effect] gameState changed:', gameStateForBodyClass); // デバッグ用
-      const body = document.body;
-      // 既存のフェーズ/ターンクラスを一旦削除
-      body.classList.remove('phase-ban', 'phase-pick', 'turn-alpha', 'turn-bravo');
+  // gameStateForBodyClass が変更されたら body クラスを更新する Effect ★★★★★
+  useEffect(() => {
+    // console.log('[Body Class Effect] gameState changed:', gameStateForBodyClass); // デバッグ用
+    const body = document.body;
+    // 既存のフェーズ/ターンクラスを一旦削除
+    body.classList.remove('phase-ban', 'phase-pick', 'turn-alpha', 'turn-bravo');
 
-      if (!gameStateForBodyClass) return; // gameState がなければ何もしない
+    if (!gameStateForBodyClass) return; // gameState がなければ何もしない
 
-      // 新しいクラスを追加
-      if (gameStateForBodyClass.phase === 'ban') {
-          body.classList.add('phase-ban');
-      } else if (gameStateForBodyClass.phase === 'pick') {
-          body.classList.add('phase-pick'); // pick 自体のクラスも追加 (任意)
-          if (gameStateForBodyClass.currentTurn === 'alpha') {
-              body.classList.add('turn-alpha');
-          } else if (gameStateForBodyClass.currentTurn === 'bravo') {
-              body.classList.add('turn-bravo');
-          }
+    // 新しいクラスを追加
+    if (gameStateForBodyClass.phase === 'ban') {
+      body.classList.add('phase-ban');
+    } else if (gameStateForBodyClass.phase === 'pick') {
+      body.classList.add('phase-pick'); // pick 自体のクラスも追加 (任意)
+      if (gameStateForBodyClass.currentTurn === 'alpha') {
+        body.classList.add('turn-alpha');
+      } else if (gameStateForBodyClass.currentTurn === 'bravo') {
+        body.classList.add('turn-bravo');
       }
+    }
   }, [gameStateForBodyClass]); // gameStateForBodyClass の変更を監視
 
   // --- ルーム参加成功/失敗ハンドラー (ログ追加) ---
@@ -214,8 +226,9 @@ export default function Home() {
   const handleLeaveRoom = useCallback(() => {
     console.log(`[Home] Leaving room ${joinedRoomId}`);
     setJoinedRoomId(null);
+    setGameStateForBodyClass(null); // ★ body のクラスをリセットするために gameState を null にする
     setUserStatus('selecting_room');
-  }, [joinedRoomId]);
+  }, [joinedRoomId]); // setGameStateForBodyClass は安定しているので依存配列に追加不要
 
   // --- レンダリング ---
   console.log(`[renderContent] Rendering content for userStatus: ${userStatus}`); // ★ レンダリング時の状態確認
@@ -254,8 +267,8 @@ export default function Home() {
   };
 
   return (
-      <div>
-        {renderContent()}
-      </div>
+    <div>
+      {renderContent()}
+    </div>
   );
 }
