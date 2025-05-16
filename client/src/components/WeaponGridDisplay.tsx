@@ -1,8 +1,8 @@
 import React, { memo, useMemo } from 'react';
 import { FixedSizeGrid, GridChildComponentProps } from 'react-window';
-import type { GameState, Team, MasterWeapon, RoomWeaponState, BanPhaseState, PickPhaseState } from '../../../common/types/game';
+import type { GameState, Team, MasterWeapon, RoomWeaponState, BanPhaseState, PickPhaseState } from '../../../common/types/index';
 import type { DisplayWeapon } from './WeaponGrid';
-import { MAX_BANS_PER_TEAM, MAX_PICKS_PER_TEAM, RANDOM_WEAPON_ID, RANDOM_WEAPON_CHOICE_ITEM } from '../../../common/types/constants';
+import { MAX_BANS_PER_TEAM, MAX_PICKS_PER_TEAM, RANDOM_WEAPON_ID, RANDOM_WEAPON_CHOICE_ITEM } from '../../../common/types/index';
 import WeaponItem from './WeaponItem';
 import AutoSizer from 'react-virtualized-auto-sizer';
 

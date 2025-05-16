@@ -2,9 +2,9 @@
 import React, { memo } from 'react';
 import Image from 'next/image';
 // ★ 必要な型や定数をインポート (common や WeaponGrid から)
-import type { Team, GameState } from '../../../common/types/game'; // GameState もインポート
+import type { Team, GameState } from '../../../common/types/index'; // GameState もインポート
 import type { DisplayWeapon } from './WeaponGrid'; // WeaponGrid から型をインポート
-import { MAX_BANS_PER_TEAM, RANDOM_WEAPON_ID } from '../../../common/types/constants';
+import { MAX_BANS_PER_TEAM, RANDOM_WEAPON_ID } from '../../../common/types/index';
 
 // ★ WeaponItem が受け取る Props
 interface WeaponItemProps {
@@ -124,13 +124,13 @@ const WeaponItemComponent: React.FC<WeaponItemProps> = memo(({
     // BANフェーズ中の自チームBANスタイル
     else if (phase === 'ban' && isMyTeamPlayer && weapon.bannedBy.includes(myTeam)) {
         bgColor = 'bg-yellow-100'; borderColor = 'border-yellow-400'; imageOpacity = 'opacity-50'; overallOpacity = 'opacity-90'; hoverEffect = ''; cursor = 'cursor-not-allowed';
-        const banColor = myTeam === 'alpha' ? 'text-blue-600' : 'text-red-600';
+        const banColor = 'text-purple-600'; // 紫色に変更
         banMark = (<div className={`absolute inset-0 flex items-center justify-center rounded-lg pointer-events-none`}><svg className={`w-10 h-10 ${banColor} opacity-75`} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg></div>);
     }
     // PICKフェーズ以降 or 観戦者のBAN済みスタイル (公開BAN)
     else if (isBanned && (phase === 'pick' || phase === 'pick_complete' || myTeam === 'observer')) {
         bgColor = 'bg-gray-200'; borderColor = 'border-gray-300'; imageOpacity = 'opacity-40'; overallOpacity = 'opacity-70'; hoverEffect = ''; cursor = 'cursor-not-allowed';
-        const banColorConst = isBannedByAlpha ? 'text-blue-600' : isBannedByBravo ? 'text-red-600' : 'text-gray-700';
+        const banColorConst = 'text-purple-600'; // 紫色に変更 (isBannedByAlpha や isBannedByBravo の条件に関わらず紫)
         banMark = (<div className={`absolute inset-0 flex items-center justify-center rounded-lg pointer-events-none`}><svg className={`w-10 h-10 ${banColorConst} opacity-75`} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg></div>);
     }
     // その他のクリック不可状態

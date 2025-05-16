@@ -1,5 +1,5 @@
 import React,{memo} from 'react';
-import type { GameState, Team, RoomUser } from '../../../common/types/game';
+import type { GameState, Team, RoomUser } from '../../../common/types/index';
 
 interface ObserverPanelProps {
     phase: GameState['phase']; // ★ gameState.phase から

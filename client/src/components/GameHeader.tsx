@@ -1,8 +1,8 @@
 import React, { useState, useCallback, useEffect, memo } from 'react';
 import Image from 'next/image';
-import type { GameState, Team, Stage, Rule } from '../../../common/types/game';
+import type { GameState, Team, Stage, Rule } from '../../../common/types/index';
 import type { Socket } from 'socket.io-client';
-import { RANDOM_RULE_CHOICE, RANDOM_STAGE_CHOICE, STAGES_DATA, RULES_DATA } from '../../../common/types/constants';
+import { RANDOM_RULE_CHOICE, RANDOM_STAGE_CHOICE, STAGES_DATA, RULES_DATA } from '../../../common/types/index';
 import CircularTimer from './CircularTimer';
 
 interface GameHeaderProps {

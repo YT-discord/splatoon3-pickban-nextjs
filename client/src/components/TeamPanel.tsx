@@ -1,8 +1,8 @@
 import React, { memo } from 'react';
 import Image from 'next/image';
-import type { GameState, Team, RoomUser, MasterWeapon, RoomWeaponState, BanPhaseState } from '../../../common/types/game';
+import type { GameState, Team, RoomUser, MasterWeapon, RoomWeaponState, BanPhaseState } from '../../../common/types/index';
 // import type { DisplayWeapon } from './WeaponGrid';
-import { MAX_PICKS_PER_TEAM, MAX_BANS_PER_TEAM, RANDOM_WEAPON_ID } from '../../../common/types/constants';
+import { MAX_PICKS_PER_TEAM, MAX_BANS_PER_TEAM, RANDOM_WEAPON_ID } from '../../../common/types/index';
 
 interface TeamPanelProps {
     team: Team;
@@ -152,23 +152,23 @@ const TeamPanel: React.FC<TeamPanelProps> = memo(({ // ★ memo でラップ (�
                                     {/* サブ・スペ アイコン */}
                                     <div className="absolute top-0.5 left-0.5 flex items-center gap-0.5">
                                         {subIconPath && (
-                                            <div className="relative w-3.5 h-3.5 bg-gray-100 rounded-sm overflow-hidden">
+                                            <div className="relative w-6 h-6 bg-gray-100 rounded-sm overflow-hidden">
                                                 <Image
                                                     src={subIconPath}
                                                     alt={masterData.subWeapon}
                                                     fill
-                                                    sizes="width:75px height:75px"
+                                                    sizes="24px"
                                                     style={{ objectFit: 'contain' }}
                                                     title={`サブ: ${masterData.subWeapon}`} />
                                             </div>
                                         )}
                                         {spIconPath && (
-                                            <div className="relative w-3.5 h-3.5 bg-gray-100 rounded-sm overflow-hidden">
+                                            <div className="relative w-6 h-6 bg-gray-100 rounded-sm overflow-hidden">
                                                 <Image
                                                     src={spIconPath}
                                                     alt={masterData.specialWeapon}
                                                     fill
-                                                    sizes="width:75px height:75px"
+                                                    sizes="24px"
                                                     style={{ objectFit: 'contain' }}
                                                     title={`スペシャル: ${masterData.specialWeapon}`} />
                                             </div>
@@ -217,22 +217,22 @@ const TeamPanel: React.FC<TeamPanelProps> = memo(({ // ★ memo でラップ (�
                                     {/* サブ・スペ アイコン */}
                                     <div className="absolute top-0.5 left-0.5 flex items-center gap-0.5 opacity-70">
                                         {subIconPath && (
-                                            <div className="relative w-3.5 h-3.5 bg-gray-500/60 rounded-sm">
+                                            <div className="relative w-4 h-4 bg-gray-500/60 rounded-sm">
                                                 <Image
                                                     src={subIconPath}
                                                     alt={masterData.subWeapon}
                                                     fill
-                                                    sizes='width:120px height:120px'
+                                                    sizes="20px"
                                                     style={{ objectFit: 'contain' }}
                                                     title={`サブ: ${masterData.subWeapon}`} />
                                             </div>
                                         )}
                                         {spIconPath && (
-                                            <div className="relative w-3.5 h-3.5 bg-gray-500/60 rounded-sm">
+                                            <div className="relative w-4 h-4 bg-gray-500/60 rounded-sm">
                                                 <Image
                                                     src={spIconPath}
                                                     alt={masterData.specialWeapon} fill
-                                                    sizes='width:120px height:120px'
+                                                    sizes="20px"
                                                     style={{ objectFit: 'contain' }}
                                                     title={`スペシャル: ${masterData.specialWeapon}`} />
                                             </div>

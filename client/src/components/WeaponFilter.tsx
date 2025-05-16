@@ -2,7 +2,7 @@
 import React,{memo} from 'react';
 import Image from 'next/image';
 import type { WeaponAttribute, FilterType } from './WeaponGrid';
-import { WEAPON_ATTRIBUTES, SUB_WEAPONS, SPECIAL_WEAPONS } from '../../../common/types/constants';
+import { WEAPON_ATTRIBUTES, SUB_WEAPONS, SPECIAL_WEAPONS } from '../../../common/types/index';
 
 const getFilterIconPath = (type: FilterType, itemName: string): string => {
     let folder: string;

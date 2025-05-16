@@ -7,8 +7,8 @@ import cors from 'cors';
 import http from 'http';
 import { Server, Socket } from 'socket.io';
 import path from 'path';
-import type { ConnectedUserInfo, RoomUser, RoomGameState, PublicRoomGameState, MasterWeapon, RoomWeaponState, Team } from '../common/types/game';
-import { ROOM_IDS, MAX_USERS_PER_ROOM, MAX_BANS_PER_TEAM, BAN_PHASE_DURATION, PICK_PHASE_TURN_DURATION, MAX_PLAYERS_PER_TEAM, MIN_PLAYERS_PER_TEAM, STAGES_DATA, RULES_DATA } from '../common/types/constants';
+import type { ConnectedUserInfo, RoomUser, RoomGameState, PublicRoomGameState, MasterWeapon, RoomWeaponState, Team } from '../common/types/index';
+import { ROOM_IDS, MAX_USERS_PER_ROOM, MAX_BANS_PER_TEAM, BAN_PHASE_DURATION, PICK_PHASE_TURN_DURATION, MAX_PLAYERS_PER_TEAM, MIN_PLAYERS_PER_TEAM, STAGES_DATA, RULES_DATA } from '../common/types/index';
 import * as GameLogic from './gameLogic';
 
 const app: Application = express();

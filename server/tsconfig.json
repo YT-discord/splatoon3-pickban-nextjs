@@ -1,4 +1,3 @@
-// reactnext/server/tsconfig.json
 {
   "extends": "../tsconfig.json", // ★ ルートの設定を継承
   "compilerOptions": {
@@ -8,6 +7,11 @@
     "experimentalDecorators": true,
     "sourceMap": true
   },
-  "include": ["./**/*.ts"], // server ディレクトリ以下のみ対象
-  "exclude": ["node_modules", "./dist"]
+  "include": [
+    "./**/*.ts"
+  ], // server ディレクトリ以下のみ対象
+  "exclude": [
+    "node_modules",
+    "./dist"
+  ]
 }

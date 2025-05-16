@@ -3,13 +3,13 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import Image from 'next/image';
 import type { Socket } from 'socket.io-client';
-import type { GameState, RoomUser, RoomWeaponState, MasterWeapon, Team, Stage, Rule } from '../../../common/types/game';
+import type { GameState, RoomUser, RoomWeaponState, MasterWeapon, Team, Stage, Rule } from '../../../common/types/index';
 import {
     MAX_BANS_PER_TEAM, STAGES_DATA, RULES_DATA, WEAPON_ATTRIBUTES, BAN_PHASE_DURATION, PICK_PHASE_TURN_DURATION,
     RANDOM_WEAPON_ID, // 武器用
     RANDOM_WEAPON_CHOICE_ITEM,
     RANDOM_STAGE_CHOICE, RANDOM_RULE_CHOICE // ステージ・ルール用
-} from '../../../common/types/constants';
+} from '../../../common/types/index';
 import toast from 'react-hot-toast';
 
 import GameHeader from './GameHeader';

@@ -5,7 +5,7 @@ import { io, Socket } from 'socket.io-client';
 import RoomSelector from '../components/RoomSelector';
 import WeaponGrid from '../components/WeaponGrid';
 import type { DefaultEventsMap } from '@socket.io/component-emitter';
-import type { MasterWeapon, GameState } from '../../../common/types/game';
+import type { MasterWeapon, GameState } from '../../../common/types/index';
 
 type UserStatus = 'connecting' | 'loading_master' | 'selecting_room' | 'in_room' | 'error';
 
