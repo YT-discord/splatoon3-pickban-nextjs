@@ -70,8 +70,12 @@ export default function RoomSelector({ socket, setUserNameForParent }: RoomSelec
       setError(null);
 
       try {
-        // ★ 環境変数から API ベース URL を取得 (なければデフォルト値)
-        const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001';
+        let apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001'; // デフォルトは環境変数かローカル
+
+        if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+          apiBaseUrl = 'http://localhost:3001'; // localhost でアクセス時はローカルのAPIサーバー
+        }
+
         const apiUrl = `${apiBaseUrl}/api/v1/rooms`; // ★ 完全な URL を組み立て
         console.log(`Fetching room list from: ${apiUrl}`); // ★ ログで URL を確認
         const res = await fetch(apiUrl); // ★ 組み立てた URL で fetch

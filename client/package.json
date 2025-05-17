@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev -H 0.0.0.0",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"
@@ -15,8 +15,7 @@
     "react-hot-toast": "^2.5.2",
     "react-virtualized-auto-sizer": "^1.0.26",
     "react-window": "^1.8.11",
-    "socket.io-client": "^4.8.1",
-    "common": "workspace:*"
+    "socket.io-client": "^4.8.1"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",

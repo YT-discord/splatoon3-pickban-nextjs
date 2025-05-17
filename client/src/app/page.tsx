@@ -31,7 +31,12 @@ export default function Home() {
   // --- Socket.IO 接続処理 ---
   useEffect(() => {
     console.log('[useEffect Socket.IO] Running effect to connect socket...');
-    const socketIoUrl = process.env.NEXT_PUBLIC_SOCKET_URL || process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001';
+    let socketIoUrl = process.env.NEXT_PUBLIC_SOCKET_IO_URL || 'ws://localhost:3001'; // デフォルトは環境変数かローカル
+
+    if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+      socketIoUrl = 'ws://localhost:3001'; // localhost でアクセス時はローカルのAPIサーバー
+    }
+
     console.log(`[useEffect Socket.IO] Connecting to: ${socketIoUrl}`);
     const newSocket: Socket<DefaultEventsMap, DefaultEventsMap> = io(socketIoUrl);
     setSocket(newSocket); // ★ setSocket 呼び出しログ
@@ -115,7 +120,12 @@ export default function Home() {
       const fetchMasterData = async () => {
         console.log('[fetchMasterData] Fetch function started.');
         try {
-          const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001';
+          let apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001'; // デフォルトは環境変数かローカル
+
+          if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+            apiBaseUrl = 'http://localhost:3001'; // localhost でアクセス時はローカルのAPIサーバー
+          }
+
           const apiUrl = `${apiBaseUrl}/api/v1/master-weapons`;
           console.log(`[fetchMasterData] Fetching from: ${apiUrl}`);
           const res = await fetch(apiUrl);

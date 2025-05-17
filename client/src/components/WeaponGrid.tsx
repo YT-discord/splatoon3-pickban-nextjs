@@ -658,7 +658,6 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
                             weaponStates={weaponStates}
                             loadingWeaponId={loadingWeaponId}
                             myTeam={myTeam}
-                            // amIHost={amIHost} // WeaponGridDisplay では直接使用しないため削除
                             myBanCount={myBanCount}
                             myPickCount={myPickCount}
                             onWeaponClick={handleWeaponClick}

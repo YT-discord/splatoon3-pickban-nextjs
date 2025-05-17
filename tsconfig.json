@@ -1,21 +1,25 @@
 {
-    "compilerOptions": {
-      "target": "ES2017",
-      "module": "CommonJS", // Node.js向け (サーバー用、クライアントは上書き)
-      "moduleResolution": "node",
-      "esModuleInterop": true,
-      "forceConsistentCasingInFileNames": true,
-      "strict": true,
-      "skipLibCheck": true,
-      "baseUrl": ".", // ルートを基準にする
-      "paths": {
-        "@common/*": ["./common/*"], // ルートからのパス
-        "@server/*": ["./server/*"], // (任意) サーバー内のエイリアス
-        "@client/*": ["./client/src/*"] // (任意) クライアント内のエイリアス
-      },
-       // サーバー固有設定は server/tsconfig.json へ
-       // クライアント固有設定は client/tsconfig.json へ
+  "compilerOptions": {
+    "target": "es2017", // プロジェクトに合わせて調整
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "forceConsistentCasingInFileNames": true,
+    "noEmit": true, // ルートではビルド成果物を出力しない
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "node", // または "bundler"
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "preserve", // Next.jsを想定
+    "incremental": true,
+    "baseUrl": ".",
+    "paths": {
+      "@common/*": ["common/*"], // commonディレクトリへのエイリアス
+      "@/*": ["client/src/*"]    // clientディレクトリのsrcへのエイリアス (Next.jsで一般的)
     }
-    // "include": [] // ここでは include は空か、設定しない
-    // "exclude": ["node_modules"]
-  }
+  },
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", "common/**/*.ts"],
+  "exclude": ["node_modules", "client/.next", "client/out", "server/dist", "**/dist"]
+}

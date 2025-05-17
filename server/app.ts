@@ -10,12 +10,36 @@ import path from 'path';
 import type { ConnectedUserInfo, RoomUser, RoomGameState, PublicRoomGameState, MasterWeapon, RoomWeaponState, Team } from '../common/types/index';
 import { ROOM_IDS, MAX_USERS_PER_ROOM, MAX_BANS_PER_TEAM, BAN_PHASE_DURATION, PICK_PHASE_TURN_DURATION, MAX_PLAYERS_PER_TEAM, MIN_PLAYERS_PER_TEAM, STAGES_DATA, RULES_DATA } from '../common/types/index';
 import * as GameLogic from './gameLogic';
+import dotenv from 'dotenv';
 
 const app: Application = express();
 const server = http.createServer(app);
+dotenv.config();
 
 // --- CORS 設定 ---
-const corsOptions = { origin: 'http://localhost:3000', credentials: true, optionsSuccessStatus: 200 };
+// 許可するオリジンを動的にチェックする関数
+const originCallback = (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+    // origin が undefined の場合 (例: 同一オリジンからのリクエスト、Postmanなど) は許可
+    if (!origin) {
+        return callback(null, true);
+    }
+
+    // 許可するオリジンのリストまたは正規表現
+    // 環境変数から外部クライアントのオリジンを取得、なければ開発用のlocalhost:3000をフォールバック
+    const externalClientOrigin = process.env.CLIENT_ORIGIN_EXTERNAL || 'http://localhost:3000';
+    const localNetworkPattern = /^http:\/\/192\.168\.0\.\d{1,3}:3000$/; // 自宅ネットワーク (192.168.0.x:3000) にマッチ
+
+    // 開発用に http://localhost:3000 も許可リストに含める (環境変数がない場合など)
+    if (origin === externalClientOrigin || origin === 'http://localhost:3000' || localNetworkPattern.test(origin)) {
+        callback(null, true); // 許可
+    } else {
+        console.warn(`[CORS] Origin ${origin} not allowed.`);
+        callback(new Error('Not allowed by CORS')); // 拒否
+    }
+};
+
+const corsOptions = { origin: originCallback, credentials: true, optionsSuccessStatus: 200 };
+
 app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -137,9 +161,9 @@ io.on('connection', (socket: Socket) => {
         const { roomId, name } = data;
         const nameValidationError = validateNameServer(name);
         if (nameValidationError) {
-             console.log(`[Join Room ${roomId}] Invalid name from ${socketId}: ${name} - ${nameValidationError}`);
-             socket.emit('join room failed', { roomId, reason: nameValidationError });
-             return;
+            console.log(`[Join Room ${roomId}] Invalid name from ${socketId}: ${name} - ${nameValidationError}`);
+            socket.emit('join room failed', { roomId, reason: nameValidationError });
+            return;
         }
         const trimmedName = name.trim(); // ★ trim 処理を追加
         console.log(`[Join Room] User ${socketId} requests to join room ${roomId} as ${trimmedName}`);
@@ -209,9 +233,9 @@ io.on('connection', (socket: Socket) => {
             roomState.hostId = socketId;
             console.log(`[Host Assignment ${roomId}] First user joined. ${trimmedName} (${socketId}) is now the host.`);
             // ★ ホスト決定を通知 (任意だが、最初のホストが決まったことを知らせる)
-             io.to(roomId).emit('host changed', { hostId: socketId, hostName: trimmedName });
-             // ★ 状態更新も通知 (hostId が設定されたため)
-             // この後の room state update に含まれるので、ここでは不要かも
+            io.to(roomId).emit('host changed', { hostId: socketId, hostName: trimmedName });
+            // ★ 状態更新も通知 (hostId が設定されたため)
+            // この後の room state update に含まれるので、ここでは不要かも
         } else {
             // 既にホストがいる場合は何もしない
             console.log(`[Host Assignment ${roomId}] Host already exists: ${roomState.hostId}`);
@@ -240,9 +264,9 @@ io.on('connection', (socket: Socket) => {
 
         // データとホスト権限チェック
         if (!data || typeof data.newName !== 'string') {
-             console.log(`[Change Room Name ${roomId}] Invalid data received from ${socketId}:`, data);
-             socket.emit('action failed', { reason: '無効なリクエストデータです' });
-             return;
+            console.log(`[Change Room Name ${roomId}] Invalid data received from ${socketId}:`, data);
+            socket.emit('action failed', { reason: '無効なリクエストデータです' });
+            return;
         }
         if (!roomState || roomState.hostId !== socketId) {
             console.log(`[Change Room Name ${roomId}] Denied: User ${userInfo.name} (${socketId}) is not the host.`);
@@ -252,9 +276,9 @@ io.on('connection', (socket: Socket) => {
 
         const nameValidationError = validateNameServer(data.newName);
         if (nameValidationError) {
-             console.log(`[Change Room Name ${roomId}] Invalid new name from ${socketId}: ${data.newName} - ${nameValidationError}`);
-             socket.emit('action failed', { reason: nameValidationError });
-             return;
+            console.log(`[Change Room Name ${roomId}] Invalid new name from ${socketId}: ${data.newName} - ${nameValidationError}`);
+            socket.emit('action failed', { reason: nameValidationError });
+            return;
         }
         const newNameValidated = data.newName.trim();
 
@@ -297,7 +321,7 @@ io.on('connection', (socket: Socket) => {
                     GameLogic.electNewHost(roomId); // 新しいホストを選出 (内部で通知も行う)
                 } else {
                     // ホスト以外の退出なら、通常の参加者数更新のみ通知
-                     io.to(roomId).emit('room state update', GameLogic.getPublicRoomState(roomState));
+                    io.to(roomId).emit('room state update', GameLogic.getPublicRoomState(roomState));
                 }
                 // ★ ゲーム進行中にプレイヤーが抜けた場合の処理 (disconnect と同様)
                 if ((teamLeft === 'alpha' || teamLeft === 'bravo') && (roomState.phase === 'pick' || roomState.phase === 'ban')) {
@@ -412,12 +436,12 @@ io.on('connection', (socket: Socket) => {
             if (determinedRuleId === 'error') {
                 socket.emit('action failed', { reason: 'ランダム選択対象ルールがありません。対象を1つ以上選択してください。' });
                 return;
-           }
+            }
             if (determinedRuleId === null) {
                 socket.emit('action failed', { reason: 'ルールが選択されていません。' });
                 return;
-           }
-           roomState.selectedRuleId = determinedRuleId;
+            }
+            roomState.selectedRuleId = determinedRuleId;
 
             console.log(`[Start Game ${roomId}] Starting ban phase with Stage ID: ${roomState.selectedStageId}, Rule ID: ${roomState.selectedRuleId}`);
             // roomState の更新は GameLogic 内で行う想定に変更しても良い
@@ -628,8 +652,8 @@ io.on('connection', (socket: Socket) => {
         }
         // ★ ターン内で既にアクション済みでないかチェック
         if (roomState.turnActionTaken[team]) {
-             socket.emit('action failed', { reason: 'このターンは既に選択済みです'});
-             return;
+            socket.emit('action failed', { reason: 'このターンは既に選択済みです' });
+            return;
         }
 
         // GameLogic の selectRandomWeapon を呼び出す
@@ -644,52 +668,52 @@ io.on('connection', (socket: Socket) => {
         }
     });
 
-        socket.on('update random stage pool', (data: { stageId: number }) => {
-            const userInfo = connectedUsersGlobal.get(socketId);
-            if (!userInfo || !userInfo.roomId || !userInfo.name) return;
-            const roomId = userInfo.roomId;
-            const roomState = gameRooms.get(roomId);
-    
-            // データ、ホスト権限、フェーズをチェック
-            if (!data || typeof data.stageId !== 'number') {
-                socket.emit('action failed', { reason: '無効なステージIDです' });
-                return;
-            }
-            if (!roomState || roomState.hostId !== socketId) {
-                socket.emit('action failed', { reason: 'ホストのみが対象ステージを変更できます' });
-                return;
-            }
-            if (roomState.phase !== 'waiting') {
-                 socket.emit('action failed', { reason: '待機中のみ変更できます' });
-                return;
-            }
-            // ステージIDが存在するかチェック (任意)
-            if (!STAGES_DATA.some(stage => stage.id === data.stageId)) {
-                 socket.emit('action failed', { reason: '存在しないステージIDです' });
-                 return;
-            }
-    
-            console.log(`[Update Random Pool ${roomId}] Request from host ${userInfo.name} to toggle stageId: ${data.stageId}`);
-            const success = GameLogic.updateRandomStagePool(roomId, data.stageId);
-            // 成功した場合、gameLogic 内で room state update が emit される
-            if (!success) {
-                socket.emit('action failed', { reason: 'プール更新処理に失敗しました' });
-            }
-        });
+    socket.on('update random stage pool', (data: { stageId: number }) => {
+        const userInfo = connectedUsersGlobal.get(socketId);
+        if (!userInfo || !userInfo.roomId || !userInfo.name) return;
+        const roomId = userInfo.roomId;
+        const roomState = gameRooms.get(roomId);
 
-        socket.on('update random rule pool', (data: { ruleId: number }) => {
-            const userInfo = connectedUsersGlobal.get(socketId);
-            if (!userInfo || !userInfo.roomId || !userInfo.name) return;
-            const roomId = userInfo.roomId;
-            const roomState = gameRooms.get(roomId);
-            // ... (ホストチェック、フェーズチェック) ...
-            if (!data || typeof data.ruleId !== 'number' || !RULES_DATA.some(r => r.id === data.ruleId)) {
-                 socket.emit('action failed', { reason: '無効または存在しないルールIDです' });
-                 return;
-            }
-            console.log(`[Update Random Pool ${roomId}] Request from host ${userInfo.name} to toggle ruleId: ${data.ruleId}`);
-            GameLogic.updateRandomRulePool(roomId, data.ruleId);
-        });
+        // データ、ホスト権限、フェーズをチェック
+        if (!data || typeof data.stageId !== 'number') {
+            socket.emit('action failed', { reason: '無効なステージIDです' });
+            return;
+        }
+        if (!roomState || roomState.hostId !== socketId) {
+            socket.emit('action failed', { reason: 'ホストのみが対象ステージを変更できます' });
+            return;
+        }
+        if (roomState.phase !== 'waiting') {
+            socket.emit('action failed', { reason: '待機中のみ変更できます' });
+            return;
+        }
+        // ステージIDが存在するかチェック (任意)
+        if (!STAGES_DATA.some(stage => stage.id === data.stageId)) {
+            socket.emit('action failed', { reason: '存在しないステージIDです' });
+            return;
+        }
+
+        console.log(`[Update Random Pool ${roomId}] Request from host ${userInfo.name} to toggle stageId: ${data.stageId}`);
+        const success = GameLogic.updateRandomStagePool(roomId, data.stageId);
+        // 成功した場合、gameLogic 内で room state update が emit される
+        if (!success) {
+            socket.emit('action failed', { reason: 'プール更新処理に失敗しました' });
+        }
+    });
+
+    socket.on('update random rule pool', (data: { ruleId: number }) => {
+        const userInfo = connectedUsersGlobal.get(socketId);
+        if (!userInfo || !userInfo.roomId || !userInfo.name) return;
+        const roomId = userInfo.roomId;
+        const roomState = gameRooms.get(roomId);
+        // ... (ホストチェック、フェーズチェック) ...
+        if (!data || typeof data.ruleId !== 'number' || !RULES_DATA.some(r => r.id === data.ruleId)) {
+            socket.emit('action failed', { reason: '無効または存在しないルールIDです' });
+            return;
+        }
+        console.log(`[Update Random Pool ${roomId}] Request from host ${userInfo.name} to toggle ruleId: ${data.ruleId}`);
+        GameLogic.updateRandomRulePool(roomId, data.ruleId);
+    });
 
     // --- ★ ランダムプール一括設定 ---
     socket.on('set_random_pool', (data: { type: 'stage' | 'rule', itemIds: number[] }) => {
@@ -764,18 +788,19 @@ io.on('connection', (socket: Socket) => {
                 socket.leave(roomId);
                 const roomState = gameRooms.get(roomId);
                 let userWasInRoom = false;
-                let wasHost = false; 
+                let wasHost = false;
                 if (roomState) {
                     wasHost = roomState.hostId === leavingUserId;
-                    userWasInRoom = roomState.connectedUsers.delete(socketId); }
+                    userWasInRoom = roomState.connectedUsers.delete(socketId);
+                }
                 if (userWasInRoom && roomState) {
                     io.to(roomId).emit('user left', { userId: leavingUserId, name: userName, team: teamLeft }); // 先にユーザー退出を通知
                     if (wasHost) {
-                         console.log(`[Host Disconnected ${roomId}] Host ${userName} (${leavingUserId}) disconnected. Electing new host...`);
-                         GameLogic.electNewHost(roomId); // 新しいホストを選出 (内部で通知)
+                        console.log(`[Host Disconnected ${roomId}] Host ${userName} (${leavingUserId}) disconnected. Electing new host...`);
+                        GameLogic.electNewHost(roomId); // 新しいホストを選出 (内部で通知)
                     } else {
-                         // ホスト以外なら状態更新のみ
-                         io.to(roomId).emit('room state update', GameLogic.getPublicRoomState(roomState));
+                        // ホスト以外なら状態更新のみ
+                        io.to(roomId).emit('room state update', GameLogic.getPublicRoomState(roomState));
                     }
                     if ((teamLeft === 'alpha' || teamLeft === 'bravo') && (roomState.phase === 'pick' || roomState.phase === 'ban')) {
                         // ... (ゲーム進行中の離脱処理) ...
@@ -800,9 +825,9 @@ io.on('connection', (socket: Socket) => {
         if (!roomState) return;
 
         if (roomState.hostId !== socketId) {
-             console.log(`[Reset Room ${roomId}] Denied: User ${userName} (${socketId}) is not the host (${roomState.hostId}).`);
-             socket.emit('action failed', { reason: 'ホストのみがルームをリセットできます' });
-             return;
+            console.log(`[Reset Room ${roomId}] Denied: User ${userName} (${socketId}) is not the host (${roomState.hostId}).`);
+            socket.emit('action failed', { reason: 'ホストのみがルームをリセットできます' });
+            return;
         }
 
         console.log(`[Reset Room ${roomId}] Request from host ${userName} (${socketId}).`);
@@ -867,3 +892,5 @@ sequelize
         console.error('Server startup failed:', error);
         process.exit(1);
     });
+
+export default app;
