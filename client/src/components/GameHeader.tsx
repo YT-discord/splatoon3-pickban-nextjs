@@ -128,92 +128,136 @@ const GameHeader: React.FC<GameHeaderProps> = memo(({
     const headerBgColor = 'bg-gray-100';
 
     return (
-        <div className={`grid grid-cols-1 md:grid-cols-3 gap-4 items-stretch p-1 ${headerBgColor} rounded-lg shadow mb-4 transition-colors duration-300`}>
-            {/* 左ブロック: ルーム情報 */}
-            <div className="flex items-center gap-3 ml-4">
-
-                <Image
-                    src={getRoomIconPath(roomId)}
-                    alt={`${roomId} icon`}
-                    width={40}
-                    height={40}
-                    className="rounded flex-shrink-0"
-                />
-                <div className="flex-grow min-w-0">
-                    {/* 固定の部屋ID表示 */}
-                    <div className="text-xs text-black truncate" title={roomId}>
-                        {roomId} {/* アイコンと連動する元のID */}
+        <div className={`flex flex-col lg:grid lg:grid-cols-3 lg:gap-4 items-stretch ${headerBgColor} rounded-lg shadow lg:mb-4 transition-colors duration-300 h-full`}>
+            {/* --- 上部セクション (スマホ: 2/5高, 横並び) / PC: 左ブロック (アイコンと情報が横並び) --- */}
+            <div className={`h-[40%] lg:h-auto flex flex-row items-start justify-between p-1 lg:flex-row lg:items-center lg:p-0 lg:ml-4`}>
+                {/* 左側コンテンツブロック (ルームアイコン + ルーム情報) */}
+                <div className="flex items-center gap-2 lg:gap-3"> {/* スマホ・PC共にアイコンとテキスト情報を横並びにするためのコンテナ */}
+                    <Image
+                        src={getRoomIconPath(roomId)} // roomId は固定なので変更なし
+                        alt={`${roomId} icon`} // roomId は固定なので変更なし
+                        width={32} // スマホ用に少し小さく
+                        height={32} // スマホ用に少し小さく
+                        className="rounded flex-shrink-0 lg:w-10 lg:h-10" // PCでは元のサイズに戻す
+                    />
+                    <div className="flex-grow min-w-0 ml-2 lg:ml-0">
+                        {/* 固定の部屋ID表示 */}
+                        <div className="text-[10px] lg:text-xs text-black truncate" title={roomId}>
+                            {roomId} {/* アイコンと連動する元のID */}
+                        </div>
+                        {/* 編集可能なルーム名表示/編集 */}
+                        {!isEditingName ? (
+                            // 表示モード
+                            <div className="flex items-center gap-1">
+                                <div className="font-semibold text-base lg:text-lg text-gray-800 truncate" title={roomName}>
+                                    {roomName}
+                                </div>
+                                {/* 鉛筆マーク (ルーム名の右) */}
+                                {amIHost && (
+                                    <button onClick={startEditingName} className="p-0.5 text-gray-500 hover:text-gray-700 flex-shrink-0" title="ルーム名編集">
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 lg:h-4 lg:w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                        </svg>
+                                    </button>
+                                )}
+                            </div>
+                        ) : (
+                            // 編集モード
+                            <div className="w-full mt-1">
+                                <div className="flex items-center gap-1 w-full">
+                                    <input
+                                        type="text"
+                                        value={editingName}
+                                        onChange={handleNameChange}
+                                        className={`flex-grow px-2 py-1 border rounded text-xs lg:text-sm text-gray-800 bg-white placeholder-gray-500 ${editError ? 'border-red-500' : 'border-gray-300'}`}
+                                        maxLength={10}
+                                        autoFocus
+                                    />
+                                    <button onClick={handleSaveName} className="p-1 text-green-600 hover:text-green-800" title="保存">
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                        </svg>
+                                    </button>
+                                    <button onClick={handleCancelEditName} className="p-1 text-red-600 hover:text-red-800" title="キャンセル">
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                        </svg>
+                                    </button>
+                                </div>
+                                {editError && <p className="text-red-500 text-xs mt-1">{editError}</p>}
+                            </div>
+                        )}
+                        <p className="text-xs lg:text-sm text-gray-600 mt-0.5">({userCount}人参加)</p>
                     </div>
-                    {/* 編集可能なルーム名表示/編集 */}
-                    {!isEditingName ? (
-                        // 表示モード
-                        <div className="flex items-center gap-1">
-                            <div className="font-semibold text-lg text-gray-800 truncate" title={roomName}>
-                                {roomName}
-                            </div>
-                            {/* 鉛筆マーク (ルーム名の右) */}
-                            {amIHost && (
-                                <button onClick={startEditingName} className="p-0.5 text-gray-500 hover:text-gray-700 flex-shrink-0" title="ルーム名編集"> {/* ★ p-0.5, flex-shrink-0 */}
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                                    </svg>
-                                </button>
-                            )}
-                        </div>
-                    ) : (
-                        // 編集モード
-                        <div className="w-full mt-1">
-                            <div className="flex items-center gap-1 w-full">
-                                <input
-                                    type="text"
-                                    value={editingName}
-                                    onChange={handleNameChange}
-                                    className={`flex-grow px-2 py-1 border rounded text-sm text-gray-800  bg-white placeholder-gray-500 ${editError ? 'border-red-500' : 'border-gray-300'}`}
-                                    maxLength={10}
-                                    autoFocus
-                                />
-                                <button onClick={handleSaveName} className="p-1 text-green-600 hover:text-green-800" title="保存">
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                                    </svg>
-                                </button>
-                                <button onClick={handleCancelEditName} className="p-1 text-red-600 hover:text-red-800" title="キャンセル">
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                                    </svg>
-                                </button>
-                            </div>
-                            {editError && <p className="text-red-500 text-xs mt-1">{editError}</p>}
-                        </div>
+                </div>
+
+                {/* 右側: スマホ用操作ボタン4つ (PCでは非表示) */}
+                {/* このコンテナはスマホでのみ表示され、ボタンを横並びにする */}
+                <div className="grid grid-cols-2 gap-1 lg:hidden flex-shrink-0"> {/* flex-shrink-0 でボタンが潰れるのを防ぐ */}
+                    {/* 1行目 */}
+                    {onOpenMembersModal && (
+                        <button
+                            onClick={onOpenMembersModal}
+                            className="w-10 h-7 flex items-center justify-center bg-indigo-500 text-white rounded-md hover:bg-indigo-600 text-[10px] leading-tight"
+                            title="参加者リスト"
+                        >
+                            メンバー
+                        </button>
                     )}
-                    <p className="text-sm text-gray-600 mt-0.5">({userCount}人参加)</p>
+                    <button
+                        onClick={onLeaveRoom}
+                        className="w-10 h-7 flex items-center justify-center bg-gray-500 text-white rounded-md hover:bg-gray-600 text-[10px] leading-tight"
+                        title="ルーム退出"
+                    >
+                        退出
+                    </button>
+                    {/* 2行目 */}
+                    <button
+                        onClick={onStartGame}
+                        disabled={!amIHost || phase !== 'waiting'}
+                        className={`w-10 h-7 flex items-center justify-center rounded-md text-[10px] leading-tight transition-colors
+                            ${(amIHost && phase === 'waiting') ? 'bg-green-500 text-white hover:bg-green-600' : 'bg-gray-300 text-gray-500 cursor-not-allowed'}`}
+                        title={!amIHost ? 'ホストのみ' : (phase !== 'waiting' ? '待機中のみ' : 'ゲーム開始')}
+                    >
+                        開始
+                    </button>
+                    <button
+                        onClick={onResetGame}
+                        disabled={!amIHost || phase === 'waiting'}
+                        className={`w-10 h-7 flex items-center justify-center rounded-md text-[10px] leading-tight transition-colors
+                            ${(amIHost && phase !== 'waiting') ? 'bg-yellow-500 text-white hover:bg-yellow-600' : 'bg-gray-300 text-gray-500 cursor-not-allowed'}`}
+                        title={!amIHost ? 'ホストのみ' : (phase === 'waiting' ? '待機中は不可' : 'ルームリセット')}
+                    >
+                        リセット
+                    </button>
                 </div>
             </div>
 
-            {/* ================= 中央ブロック: ゲームステータス & タイマー/ルール/ステージ ================= */}
-            <div className="text-center space-y-1 flex flex-col items-center flex-grow">
+            {/* --- 中央セクション (スマホ: 2/5高) / PC: 中央ブロック --- */}
+            <div className="h-[60%] lg:h-auto text-center flex flex-col items-center justify-center p-1 lg:p-0 border-t lg:border-none"> {/* スマホ用に p-1 を維持、高さを h-[40%] に戻す */}
 
                 {/* タイマー、ルール、ステージの横並びコンテナ */}
-                <div className="flex justify-center items-stretch gap-3 mt-1 w-full h-full">
+                <div className="flex justify-around items-stretch gap-1 lg:gap-3 w-full h-full lg:h-auto">
 
                     {/* ----- タイマー表示枠 (常に表示) ----- */}
-                    <div className="flex flex-col items-center text-xs border rounded p-1 bg-white shadow-sm w-[33%] h-full">
-                        <span className="font-medium text-gray-600 mb-1">残り時間</span>
-                        <div className="flex items-center justify-center w-full flex-grow min-h-0">
+                    <div className="flex flex-col items-center text-[10px] lg:text-xs border rounded p-0.5 lg:p-1 bg-white shadow-sm w-[33%] h-full">
+                        <span className="font-medium text-gray-600 mb-0.5 lg:mb-1">残り時間</span>
+                        <div className="flex items-center justify-center w-full flex-grow min-h-0 my-0.5 lg:my-0">
                             {(phase === 'ban' || phase === 'pick') && timeLeft != null && timerDuration > 0 ? (
                                 // BAN/PICK 中はタイマー表示
                                 <CircularTimer
                                     duration={timerDuration}
                                     currentTime={timeLeft}
-                                    size={50}
-                                    strokeWidth={4}
+                                    size={40} // スマホ用に小さく
+                                    strokeWidth={3} // スマホ用に細く
+                                // PC用スタイルは props で渡すか、ここで lg: で上書き
                                 />
                             ) : phase === 'waiting' ? (
                                 // 待機中はテキスト表示
-                                <span className="text-gray-400 text-lg font-mono" title="ゲーム開始後に表示されます">--:--</span>
+                                <span className="text-gray-400 text-base lg:text-lg font-mono" title="ゲーム開始後に表示されます">--:--</span>
                             ) : phase === 'pick_complete' ? (
                                 // Pick完了時はチェックマークなど (任意)
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 lg:h-8 lg:w-8 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                                 </svg>
                             ) : (
@@ -222,14 +266,23 @@ const GameHeader: React.FC<GameHeaderProps> = memo(({
                             )}
                         </div>
                         {/* ダミーのボタンエリア (高さを揃えるため) */}
-                        <div className="h-[26px] mt-1"></div>
+                        <div className="h-5 lg:h-[26px] mt-0.5 lg:mt-1"></div> {/* スマホ用に高さを調整 */}
                     </div>
 
 
                     {/* ----- ルール表示 ----- */}
-                    <div className="flex flex-col items-center text-xs border rounded p-1 bg-white shadow-sm w-[33%] h-full">
-                        <span className="font-medium text-gray-600 mb-1">ルール</span>
-                        <div className="flex items-center justify-center w-full h-[60px] bg-gray-100 rounded-sm overflow-hidden relative  flex-grow min-h-0"> {/* relative 追加 */}
+                    <div className="flex flex-col items-center text-[10px] lg:text-xs border rounded p-0.5 lg:p-1 bg-white shadow-sm w-[33%] h-full">
+                        <span className="font-medium text-gray-600 mb-0.5 lg:mb-1 flex-shrink-0">ルール</span>
+                        <div
+                            className={`flex items-center justify-center w-full h-12 lg:h-[60px] bg-gray-100 rounded-sm overflow-hidden relative flex-grow min-h-0 my-0.5 lg:my-0 group
+                                ${phase === 'waiting' ? (amIHost ? 'cursor-pointer hover:ring-2 hover:ring-blue-400' : 'cursor-pointer hover:ring-2 hover:ring-gray-400') : 'cursor-not-allowed opacity-70'}`}
+                            onClick={() => {
+                                if (phase === 'waiting') {
+                                    onOpenRuleModal();
+                                }
+                            }}
+                            title={phase !== 'waiting' ? "ゲーム進行中は変更/確認できません" : (amIHost ? "対象ルール変更" : "対象ルール確認")}
+                        >
                             {selectedRule ? (
                                 <>
                                     {/* ランダムルールアイコン表示 */}
@@ -238,46 +291,47 @@ const GameHeader: React.FC<GameHeaderProps> = memo(({
                                             <Image
                                                 src={getRandomRuleDisplayImagePath(randomRulePoolCount, RULES_DATA.length)}
                                                 alt={`ランダム (対象: ${randomRulePoolCount})`}
-                                                fill
-                                                sizes='width:142px height:60px'
+                                                fill // fill を維持
+                                                sizes='(max-width: 1023px) 80px, 142px' // スマホ用とPC用でサイズ指定
+
                                                 style={{ objectFit: 'cover' }}
                                             />
                                         </>
                                     ) : (
                                         // 通常のルール画像
                                         <Image src={selectedRule.imageUrl}
-                                        alt={selectedRule.name}
-                                        fill
-                                        sizes='width:142px height:60px'
-                                        style={{ objectFit: 'contain' }}
-                                                 />
+                                            alt={selectedRule.name}
+                                            fill
+                                            sizes='(max-width: 1023px) 80px, 142px'
+                                            style={{ objectFit: 'contain' }}
+                                        />
                                     )}
                                 </>
-                            ) : (<span className="text-gray-500 text-xs">未選択</span>)}
+                            ) : (<span className="text-gray-500 text-[10px] lg:text-xs">未選択</span>)}
                         </div>
                         {/* 名前表示 */}
-                        <div className="h-8 mt-1 flex items-center justify-center"> {/* ★ 名前表示用スペース */}
+                        <div className="h-5 lg:h-8 mt-0.5 lg:mt-1 flex items-center justify-center flex-shrink-0">
                             {selectedRule && (
-                                <p className="text-[15px] font-semibold text-gray-800 leading-tight text-center break-words"> {/* ★ スタイル調整 */}
+                                <p className="text-[10px] lg:text-[15px] font-semibold text-gray-800 leading-tight text-center break-words">
                                     {selectedRule.name}
                                 </p>
                             )}
                         </div>
-                        {/* 変更/確認ボタン */}
-                        <button
-                            onClick={onOpenRuleModal}
-                            className={`mt-1 px-2 py-0.5 text-xs rounded ${phase !== 'waiting' ? 'bg-gray-200 text-gray-500 cursor-not-allowed' : 'bg-gray-300 hover:bg-gray-400'}`}
-                            disabled={phase !== 'waiting'} // ★ ゲーム進行中は常に無効
-                            title={phase !== 'waiting' ? "ゲーム進行中は変更/確認できません" : (amIHost ? "対象ルール変更" : "対象ルール確認")}
-                        >
-                            {amIHost && phase === 'waiting' ? '変更' : '確認'}
-                        </button>
                     </div>
 
                     {/* ----- ステージ表示 ----- */}
-                    <div className="flex flex-col items-center text-xs border rounded p-1 bg-white shadow-sm w-[33%] h-full">
-                        <span className="font-medium text-gray-600 mb-1">ステージ</span>
-                        <div className="flex items-center justify-center w-full h-[60px] bg-gray-100 rounded-sm overflow-hidden relative  flex-grow min-h-0">
+                    <div className="flex flex-col items-center text-[10px] lg:text-xs border rounded p-0.5 lg:p-1 bg-white shadow-sm w-[33%] h-full">
+                        <span className="font-medium text-gray-600 mb-0.5 lg:mb-1 flex-shrink-0">ステージ</span>
+                        <div
+                            className={`flex items-center justify-center w-full h-12 lg:h-[60px] bg-gray-100 rounded-sm overflow-hidden relative flex-grow min-h-0 my-0.5 lg:my-0 group
+                                ${phase === 'waiting' ? (amIHost ? 'cursor-pointer hover:ring-2 hover:ring-blue-400' : 'cursor-pointer hover:ring-2 hover:ring-gray-400') : 'cursor-not-allowed opacity-70'}`}
+                            onClick={() => {
+                                if (phase === 'waiting') {
+                                    onOpenStageModal();
+                                }
+                            }}
+                            title={phase !== 'waiting' ? "ゲーム進行中は変更/確認できません" : (amIHost ? "対象ステージ変更" : "対象ステージ確認")}
+                        >
                             {selectedStage ? (
                                 <>
                                     {/* ランダムステージアイコン表示 */}
@@ -287,78 +341,88 @@ const GameHeader: React.FC<GameHeaderProps> = memo(({
                                                 src={getRandomStageDisplayImagePath(randomStagePoolCount, STAGES_DATA.length)}
                                                 alt={`ランダム (対象: ${randomStagePoolCount})`}
                                                 fill
-                                                sizes='width:142px height:60px'
+                                                sizes='(max-width: 1023px) 80px, 142px' // スマホ用とPC用でサイズ指定
                                                 style={{ objectFit: 'cover' }}
                                             />
                                         </>
                                     ) : (
                                         // 通常のステージ画像
-                                        <Image 
-                                        src={selectedStage.imageUrl}
-                                        alt={selectedStage.name}
-                                        fill
-                                        sizes='width:142px height:60px'
-                                        style={{ objectFit: 'cover' }}
+                                        <Image
+                                            src={selectedStage.imageUrl}
+                                            alt={selectedStage.name}
+                                            fill
+                                            sizes='(max-width: 1023px) 80px, 142px' // スマホ用とPC用でサイズ指定
+                                            style={{ objectFit: 'cover' }}
                                         />
                                     )}
                                 </>
-                            ) : (<span className="text-gray-500 text-xs">未選択</span>)}
+                            ) : (<span className="text-gray-500 text-[10px] lg:text-xs">未選択</span>)}
                         </div>
                         {/* 名前表示 */}
-                        <div className="h-8 mt-1 flex items-center justify-center"> {/* ★ 名前表示用スペース */}
+                        <div className="h-5 lg:h-8 mt-0.5 lg:mt-1 flex items-center justify-center flex-shrink-0">
                             {selectedStage && (
-                                <p className={`font-semibold text-gray-800 leading-tight text-center break-words ${selectedStage.name.length <= 7 ? 'text-[15px]' : 'text-[10px]'}`}>
+                                <p className={`font-semibold text-gray-800 leading-tight text-center break-words ${selectedStage.name.length <= 7 ? 'text-[10px] lg:text-[15px]' : 'text-[8px] lg:text-[10px]'}`}>
                                     {selectedStage.name}
                                 </p>
                             )}
                         </div>
-                        {/* 変更/確認ボタン */}
-                        <button
-                            onClick={onOpenStageModal}
-                            className={`mt-1 px-2 py-0.5 text-xs rounded ${phase !== 'waiting' ? 'bg-gray-200 text-gray-500 cursor-not-allowed' : 'bg-gray-300 hover:bg-gray-400'}`}
-                            disabled={phase !== 'waiting'} // ★ ゲーム進行中は常に無効
-                            title={phase !== 'waiting' ? "ゲーム進行中は変更/確認できません" : (amIHost ? "対象ステージ変更" : "対象ステージ確認")}
-                        >
-                            {amIHost && phase === 'waiting' ? '変更' : '確認'}
-                        </button>
                     </div>
 
                 </div> {/* flex container end */}
 
-                {/* 現在のターン表示 */}
-                {phase === 'waiting' && (<p className="font-bold text-gray-700 text-xl mt-2"> --- </p>)}
-                {phase === 'ban' && (
-                    <p className="font-bold text-xl text-purple-700 mt-2">
-                        BANフェーズ
-                    </p>)}
-                {phase === 'pick' && currentTurn === 'alpha' && (
-                    <p className="font-bold text-xl text-gray-700 mt-2">
-                        PICKフェーズ: <span className={'text-blue-600'}> アルファチーム </span>
-                    </p>)}
-                {phase === 'pick' && currentTurn === 'bravo' && (
-                    <p className="font-bold text-xl text-gray-700 mt-2">
-                        PICKフェーズ: <span className={'text-red-600'}> ブラボーチーム </span>
-                    </p>
-                )}
-                {/* Pick完了 */}
-                {phase === 'pick_complete' && (<p className="font-bold text-green-600 text-xl mt-2">PICK完了!</p>)}
+                {/* 現在のターン表示 (PC用 - 中央セクション下部) */}
+                <div className="hidden lg:flex h-[2rem] mt-2 items-center justify-center">
+                    {phase === 'waiting' && (<p className="font-semibold text-gray-700 text-sm lg:text-xl"> --- </p>)}
+                    {phase === 'ban' && (
+                        <p className="font-semibold text-sm lg:text-xl text-purple-700">
+                            BANフェーズ
+                        </p>)}
+                    {phase === 'pick' && currentTurn === 'alpha' && (
+                        <p className="font-semibold text-gray-700 text-sm lg:text-xl">
+                            PICK: <span className={'text-blue-600'}> アルファ </span>
+                        </p>)}
+                    {phase === 'pick' && currentTurn === 'bravo' && (
+                        <p className="font-semibold text-gray-700 text-sm lg:text-xl">
+                            PICK: <span className={'text-red-600'}> ブラボー </span>
+                        </p>
+                    )}
+                    {phase === 'pick_complete' && (<p className="font-semibold text-green-600 text-sm lg:text-xl">PICK完了!</p>)}
+                </div>
 
             </div> {/* 中央ブロック end */}
 
-            {/* 右ブロック: 操作ボタン */}
-            <div className="flex flex-col items-end gap-2 mt-4 mr-4">
-                                {/* ★ スマホ表示時のみメンバー表示ボタン (onOpenMembersModal が渡された場合) */}
-                {onOpenMembersModal && (
+            {/* --- 下部セクション (スマホ: 1/5高) / PC: 右ブロック --- */}
+            <div className="h-[20%] lg:h-auto flex flex-col items-center justify-center p-1 lg:p-0 lg:items-end lg:justify-start gap-1 lg:gap-2 lg:my-4 border-t lg:border-none"> {/* スマホ用に p-1 を維持 */}
+                {/* 現在のターン表示 (スマホ用 - 下部セクション) */}
+                <div className="lg:hidden flex items-center justify-center w-full h-full">
+                    {phase === 'waiting' && (<p className="font-semibold text-gray-700 text-sm"> --- </p>)}
+                    {phase === 'ban' && (
+                        <p className="font-semibold text-purple-700 text-sm">
+                            BANフェーズ
+                        </p>)}
+                    {phase === 'pick' && currentTurn === 'alpha' && (
+                        <p className="font-semibold text-gray-700 text-sm">
+                            PICK: <span className={'text-blue-600'}> アルファ </span>
+                        </p>)}
+                    {phase === 'pick' && currentTurn === 'bravo' && (
+                        <p className="font-semibold text-gray-700 text-sm">
+                            PICK: <span className={'text-red-600'}> ブラボー </span>
+                        </p>
+                    )}
+                    {phase === 'pick_complete' && (<p className="font-semibold text-green-600 text-sm">PICK完了!</p>)}
++                </div>
+                {/* PC用メンバー表示ボタン (スマホでは非表示、上部セクションに専用ボタンあり) */}
+                {onOpenMembersModal && ( // onOpenMembersModal が渡された場合のみ表示 (PC用)
                     <button
                         onClick={onOpenMembersModal}
-                        className="lg:hidden px-4 py-2 bg-indigo-500 text-white rounded-md hover:bg-indigo-600 text-sm w-full md:w-auto" // スマホでのみ表示
+                        className="hidden lg:block px-4 py-2 bg-indigo-500 text-white rounded-md hover:bg-indigo-600 text-sm lg:w-2/3 md:w-auto"
                     >
                         メンバー表示
                     </button>
                 )}
                 <button
                     onClick={onLeaveRoom} // Props の関数を呼び出し
-                    className="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 text-sm w-full md:w-auto"
+                    className="hidden lg:block lg:px-4 lg:py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 lg:text-sm lg:w-2/3"
                 >
                     ルーム退出
                 </button>
@@ -366,7 +430,7 @@ const GameHeader: React.FC<GameHeaderProps> = memo(({
                     onClick={onStartGame}
                     // disabled 条件: ホストでない または 待機中でない
                     disabled={!amIHost || phase !== 'waiting'}
-                    className={`px-6 py-2 rounded-md text-sm w-full md:w-auto transition-colors
+                    className={`hidden lg:block lg:px-6 lg:py-2 rounded-md lg:text-sm lg:w-2/3 transition-colors
                         ${(amIHost && phase === 'waiting')
                             ? 'bg-green-500 text-white hover:bg-green-600' // ホストかつ待機中: 緑
                             : 'bg-gray-300 text-gray-500 cursor-not-allowed' // それ以外: グレーアウト
@@ -381,7 +445,7 @@ const GameHeader: React.FC<GameHeaderProps> = memo(({
                     onClick={onResetGame}
                     // disabled 条件: ホストでない または 待機中でない (リセットは待機中にはできない)
                     disabled={!amIHost || phase === 'waiting'}
-                    className={`px-4 py-2 rounded-md text-sm w-full md:w-auto transition-colors
+                    className={`hidden lg:block lg:px-4 lg:py-2 rounded-md lg:text-sm lg:w-2/3 transition-colors
                         ${(amIHost && phase !== 'waiting')
                             ? 'bg-yellow-500 text-white hover:bg-yellow-600' // ホストかつ待機中でない: 黄色
                             : 'bg-gray-300 text-gray-500 cursor-not-allowed' // それ以外: グレーアウト

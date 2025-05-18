@@ -385,6 +385,35 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
         onGameStateUpdate(gameState);
     }, [gameState, onGameStateUpdate]);
 
+    // スマホ表示時に共通ヘッダーを非表示にする
+    useEffect(() => {
+        const globalHeader = document.getElementById('global-header');
+        if (!globalHeader) return;
+
+        let originalDisplay = globalHeader.style.display;
+
+        const handleResize = () => {
+            const isMobile = window.innerWidth < 1024; // Tailwindのlgブレークポイント (1024px)
+            if (isMobile) {
+                if (globalHeader.style.display !== 'none') {
+                    originalDisplay = globalHeader.style.display; // 元のスタイルを保存
+                    globalHeader.style.display = 'none';
+                }
+            } else {
+                globalHeader.style.display = originalDisplay || ''; // PC表示では元に戻す (空文字列ならデフォルト)
+            }
+        };
+
+        handleResize(); // 初期実行
+        window.addEventListener('resize', handleResize);
+
+        return () => {
+            // クリーンアップ時にも元のスタイルに戻す
+            globalHeader.style.display = originalDisplay || '';
+            window.removeEventListener('resize', handleResize);
+        };
+    }, []); // このuseEffectはマウント・アンマウント時に一度だけ実行
+
     // モーダル表示中にゲームフェーズが 'waiting' から変更されたらモーダルを閉じる
     useEffect(() => {
         if (gameState?.phase !== 'waiting') {
@@ -588,7 +617,7 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
 
     if (!gameState) {
         return (
-            <div className="container mx-auto p-4 text-center">
+            <div className="container mx-auto text-center">
                 <p>ルーム情報 ({roomId}) を読み込み中...</p>
             </div>
         );
@@ -682,13 +711,13 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
     return (
         <>
             {/* スマホ用レイアウト (lg未満) */}
-            <div className="lg:hidden flex flex-col min-h-screen bg-gray-900 text-gray-100">
+            <div className="lg:hidden flex flex-col overflow-y-hidden overflow-x-hidden text-gray-100">
                 {/* GameHeader: 高さ 1/5 */}
-                <div className="h-[20vh] p-1 flex-shrink-0">
+                <div className="h-[23vh] flex-shrink-0">
                     <GameHeader {...gameHeaderSharedProps} onOpenMembersModal={handleOpenMembersModal} />
                 </div>
                 {/* TeamPanels (Alpha & Bravo): 高さ 1/5、横並び */}
-                <div className="h-[20vh] flex p-1 gap-1 flex-shrink-0">
+                <div className="h-[25vh] flex gap-1 flex-shrink-0 py-1">
                     <div className="w-1/2 h-full">
                         <TeamPanel team="alpha" teamDisplayName="アルファ" {...teamAlphaPanelProps} isMobileView={true} />
                     </div>
@@ -697,14 +726,14 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
                     </div>
                 </div>
                 {/* WeaponFilter + WeaponGridDisplay: 高さ 3/5 (残り) */}
-                <div className="flex-grow p-1 flex flex-col min-h-0 relative"> {/* ★ relative を追加 */}
+                <div className="flex flex-col min-h-0 relative pb-1 h-[50vh]">
                     {/* フィルター開閉ボタン (スマホ用) */}
                     <div className="lg:hidden">
                         <button
                             onClick={() => setIsFilterOpen(!isFilterOpen)}
                             className="w-full bg-slate-700 hover:bg-slate-600 text-white px-3 py-2 text-sm rounded-md flex justify-between items-center h-10" // 高さを h-10 (2.5rem) に固定
                         >
-                            <span>フィルター {isFilterOpen ? 'を閉じる' : 'を開く'}</span>
+                            <span>ブキフィルター{isFilterOpen ? 'を閉じる' : 'を開く'}</span>
                             <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 transform transition-transform duration-150 ${isFilterOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
                             </svg>

@@ -35,6 +35,7 @@ interface CellData {
     onWeaponClick: (weaponId: number) => void;
     gridWidth: number;
     itemWidth: number;
+    isMobileView: boolean;
 }
 
 interface CellProps extends GridChildComponentProps {
@@ -45,7 +46,7 @@ const Cell: React.FC<CellProps> = memo(({ columnIndex, rowIndex, style, data }) 
     const {
         weaponIds, masterWeaponsMap, weaponStates, loadingWeaponId, /*columnCount,*/
         phase, currentTurn, myTeam, myBanCount, onWeaponClick,
-        gridWidth, itemWidth
+        gridWidth, itemWidth, isMobileView
     } = data;
 
     const columnCount = Math.max(1, Math.floor(gridWidth / itemWidth));
@@ -90,6 +91,7 @@ const Cell: React.FC<CellProps> = memo(({ columnIndex, rowIndex, style, data }) 
                     myTeam={myTeam}
                     banCount={myBanCount}
                     onWeaponClick={onWeaponClick}
+                    isMobileView={isMobileView}
                 />
             </div>
         </div>
@@ -187,18 +189,18 @@ const WeaponGridDisplayComponent: React.FC<WeaponGridDisplayProps> = ({
     console.log('[WeaponGridDisplay] Rendering, Phase:', phase);
 
     // ★★★★★ グリッドの計算 (固定値 - 要調整) ★★★★★
-    const targetColumnCount = 7;
+    // const targetColumnCount = 7; // PC用の列数はAutoSizer内で決定
 
     // ★ masterWeapons を Map に変換 (useMemo)
     const masterWeaponsMap = useMemo(() => {
         const map = new Map<number, MasterWeapon>();
         masterWeapons.forEach(mw => map.set(mw.id, mw));
-        map.set(RANDOM_WEAPON_ID, RANDOM_WEAPON_CHOICE_ITEM as MasterWeapon);
+        map.set(RANDOM_WEAPON_ID, RANDOM_WEAPON_CHOICE_ITEM as unknown as MasterWeapon); // 型アサーション調整
         return map;
     }, [masterWeapons]);
 
     // ★ itemData を useMemo でメモ化
-    const itemDataForGrid = useMemo<Omit<CellData, 'columnCount' | 'gridWidth' | 'itemWidth'>>(() => ({
+    const itemDataForGrid = useMemo<Omit<CellData, 'columnCount' | 'gridWidth' | 'itemWidth' | 'isMobileView'>>(() => ({
         weaponIds: displayWeaponIds,
         masterWeaponsMap,
         weaponStates,
@@ -214,15 +216,15 @@ const WeaponGridDisplayComponent: React.FC<WeaponGridDisplayProps> = ({
 
 
     return (
-        <div className="h-full flex flex-col ">
+        <div className="h-full flex flex-col bg-white rounded-md overflow-hidden pt-1">
             {/* --- 上部メッセージエリア --- */}
             {phase === 'waiting' && (
-                <div className="text-lg font-semibold mb-2 text-gray-800 whitespace-normal px-1 flex-shrink-0">
+                <div className="text-sm lg:text-lg font-semibold mb-2 text-gray-800 whitespace-normal px-1 flex-shrink-0">
                     <p className="text-gray-500">チームを選択して、ホストのゲーム開始をお待ちください。</p>
                 </div>
             )}
             {(phase === 'ban' || phase === 'pick') && (
-                <h3 className="text-lg font-semibold mb-2 text-gray-800 whitespace-normal px-1 flex-shrink-0">
+                <h3 className="text-sm lg:text-lg font-semibold mb-2 text-gray-800 whitespace-normal px-1 flex-shrink-0">
                     {phase === 'ban' ? 'BANする武器を選択してください' : 'PICKする武器を選んでください'}
                     {myTeam !== 'observer' && (
                         ` (${phase === 'ban'
@@ -233,7 +235,7 @@ const WeaponGridDisplayComponent: React.FC<WeaponGridDisplayProps> = ({
                 </h3>
             )}
             {phase === 'pick_complete' && (
-                <div className="text-lg font-semibold mb-2 text-gray-800 whitespace-normal px-1 flex-shrink-0">
+                <div className="text-sm lg:text-lg font-semibold mb-2 text-gray-800 whitespace-normal px-1 flex-shrink-0">
                     <p className="text-gray-500 mt-1">試合を開始してください。結果をリセットするときはホストのルームリセットをお待ちください。</p>
                 </div>
             )}
@@ -246,11 +248,13 @@ const WeaponGridDisplayComponent: React.FC<WeaponGridDisplayProps> = ({
                             {({ height, width }) => {
                                 if (width === 0 || height === 0) return null;
 
-                                const scrollbarWidth = 17; // 一般的なスクロールバー幅 (環境依存あり)
-                                const availableWidth = width - scrollbarWidth; // スクロールバー分を引いた幅
+                                // ★ スマホ表示かどうかの判定 (例: Tailwindのlgブレークポイント 1024px)
+                                const isMobileView = width < 700;
+                                const scrollbarWidth = isMobileView ? 0 : 17; // スマホではスクロールバー幅を0に
+                                const availableWidth = width - scrollbarWidth;
 
                                 // セルサイズを width/height と目標列数から計算
-                                const columnCount = targetColumnCount; // 目標列数をそのまま使用
+                                const columnCount = isMobileView ? 4 : 7;
                                 const calculatedColumnWidth = availableWidth / columnCount; // スクロールを除いた幅を列数で割る
                                 const rowCount = Math.ceil(displayWeaponIds.length / columnCount);// 実際の行数を計算
                                 // ★ セルの高さをアイテムのアスペクト比等から決定 (例: 幅に合わせる、または固定比率)
@@ -263,6 +267,7 @@ const WeaponGridDisplayComponent: React.FC<WeaponGridDisplayProps> = ({
                                     ...itemDataForGrid,
                                     gridWidth: width,
                                     itemWidth: calculatedColumnWidth, // ★ 計算結果を渡す
+                                    isMobileView: isMobileView, // ★ Cell に渡す
                                     // columnCount は Cell 内計算なので不要
                                 };
 

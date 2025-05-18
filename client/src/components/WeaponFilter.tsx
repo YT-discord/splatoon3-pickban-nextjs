@@ -40,7 +40,7 @@ const WeaponFilter: React.FC<WeaponFilterProps> = memo(({
         onItemChange: (type: FilterType, value: string) => void,
         onClear: (type: FilterType) => void
     ) => (
-        <div className="flex items-start gap-2 py-1.5 border-b border-gray-100 last:border-b-0 px-2">
+        <div className="flex items-start gap-2 pb-1 border-b border-gray-100 last:border-b-0 px-2">
         {/* ラベル */}
         <div className="w-20 flex-shrink-0 text-right pr-1">
             <span className="text-xs font-semibold text-gray-600">{title}:</span>

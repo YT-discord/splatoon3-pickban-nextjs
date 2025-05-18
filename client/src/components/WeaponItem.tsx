@@ -16,6 +16,7 @@ interface WeaponItemProps {
     banCount: number; // 自分のチームの現在のBAN数 (BAN可否判定用)
     // pickCount: number; // 現在使われていないのでコメントアウト or 削除
     onWeaponClick: (weaponId: number) => void;
+    isMobileView: boolean; // ★ この行を追加！
 }
 
 const arePropsEqual = (prevProps: WeaponItemProps, nextProps: WeaponItemProps): boolean => {
