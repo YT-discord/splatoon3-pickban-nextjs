@@ -8,6 +8,7 @@ interface ObserverPanelProps {
     myTeam: Team | 'observer';
     userName: string;
     onSelectTeam: (team: 'observer') => void; // 観戦を選択する関数
+    isMobileView?: boolean; 
 }
 
 const ObserverPanel: React.FC<ObserverPanelProps> = memo(({
@@ -17,6 +18,7 @@ const ObserverPanel: React.FC<ObserverPanelProps> = memo(({
     myTeam,
     userName,
     onSelectTeam,
+    isMobileView = false,
 }) => {
     return (
         <div className="border rounded-lg p-2 bg-gray-50 shadow-sm mt-1 h-[78px]">
@@ -32,21 +34,23 @@ const ObserverPanel: React.FC<ObserverPanelProps> = memo(({
                       観戦に参加 {myTeam === 'observer' ? '(選択中)' : ''}
                   </button>
              </div>
-             <div className="max-h-20 overflow-y-auto pr-2"> {/* ★ pr-2 でスクロールバー分のスペース確保 */}
-                 <ul className="flex flex-wrap space-y-0.5 text-sm">
-                     {observers.map(user => {
-                         const isHost = user.id === hostId;
-                         return (
-                            <li key={user.id} className={`flex items-center flex-shrink-0 py-0.5 ${user.name === userName ? 'font-bold' : ''} text-gray-700 mr-1`}> 
-                            <span className="inline-block w-2 h-2 bg-gray-500 rounded-full mr-1"></span> 
-                            <span className="truncate max-w-[100px]">{user.name}</span> 
-                            {isHost && <span className="text-xs text-gray-500 flex-shrink-0 ml-1">(ホスト)</span>}
-                        </li>
-                         );
-                     })}
-                      {observers.length === 0 && <li className="text-white italic text-xs w-full text-center py-1">ダミー</li>}
-                 </ul>
-             </div>
+            {!isMobileView && ( // ★ isMobileView が false の場合のみ表示 (PC表示時)
+                <div className="max-h-20 overflow-y-auto pr-2">
+                    <ul className="flex flex-wrap space-y-0.5 text-sm">
+                        {observers.map(user => {
+                            const isHost = user.id === hostId;
+                            return (
+                                <li key={user.id} className={`flex items-center flex-shrink-0 py-0.5 ${user.name === userName ? 'font-bold' : ''} text-gray-700 mr-1`}>
+                                <span className="inline-block w-2 h-2 bg-gray-500 rounded-full mr-1"></span>
+                                <span className="truncate max-w-[100px]">{user.name}</span>
+                                {isHost && <span className="text-xs text-gray-500 flex-shrink-0 ml-1">(ホスト)</span>}
+                            </li>
+                            );
+                        })}
+                        {observers.length === 0 && <li className="text-gray-400 italic text-xs w-full text-center py-1">観戦者はいません</li>} {/* テキスト色変更 */}
+                    </ul>
+                </div>
+            )}
         </div>
     );
 });

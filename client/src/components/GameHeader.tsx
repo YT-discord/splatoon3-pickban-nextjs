@@ -26,6 +26,7 @@ interface GameHeaderProps {
     onResetGame: () => void;
     onOpenStageModal: () => void;
     onOpenRuleModal: () => void;
+    onOpenMembersModal?: () => void;
 }
 
 const validateRoomName = (name: string): string | null => {
@@ -77,6 +78,7 @@ const GameHeader: React.FC<GameHeaderProps> = memo(({
     onResetGame,
     onOpenStageModal,
     onOpenRuleModal,
+    onOpenMembersModal
 }) => {
 
     const [isEditingName, setIsEditingName] = useState(false);
@@ -345,6 +347,15 @@ const GameHeader: React.FC<GameHeaderProps> = memo(({
 
             {/* 右ブロック: 操作ボタン */}
             <div className="flex flex-col items-end gap-2 mt-4 mr-4">
+                                {/* ★ スマホ表示時のみメンバー表示ボタン (onOpenMembersModal が渡された場合) */}
+                {onOpenMembersModal && (
+                    <button
+                        onClick={onOpenMembersModal}
+                        className="lg:hidden px-4 py-2 bg-indigo-500 text-white rounded-md hover:bg-indigo-600 text-sm w-full md:w-auto" // スマホでのみ表示
+                    >
+                        メンバー表示
+                    </button>
+                )}
                 <button
                     onClick={onLeaveRoom} // Props の関数を呼び出し
                     className="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 text-sm w-full md:w-auto"

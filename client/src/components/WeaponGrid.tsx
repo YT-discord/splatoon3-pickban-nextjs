@@ -17,6 +17,7 @@ import TeamPanel from './TeamPanel';
 import ObserverPanel from './ObserverPanel';
 import WeaponFilter from './WeaponFilter';
 import WeaponGridDisplay from './WeaponGridDisplay';
+import MembersDisplayModal from './MembersDisplayModal';
 
 interface WeaponGridProps {
     socket: Socket;
@@ -52,6 +53,8 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
     const [selectedAttributes, setSelectedAttributes] = useState<WeaponAttribute[]>([]);
     const [selectedSubWeapons, setSelectedSubWeapons] = useState<string[]>([]);
     const [selectedSpecialWeapons, setSelectedSpecialWeapons] = useState<string[]>([]);
+    const [isFilterOpen, setIsFilterOpen] = useState(false);
+    const [isMembersModalOpen, setIsMembersModalOpen] = useState(false);
 
     const amIHost = useMemo(() => { // ★ useMemo で amIHost を計算
         return gameState !== null && gameState.hostId !== null && gameState.hostId === myActualSocketId;
@@ -557,6 +560,11 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
         // クライアント側の gameState.randomStagePool はサーバーからの room state update で更新されるのを待つ
     }, [socket, amIHost, gameState?.phase, handleError]); // 依存配列
 
+    // ★ GameHeader に渡すメンバーモーダルを開く関数
+    const handleOpenMembersModal = useCallback(() => {
+        setIsMembersModalOpen(true);
+    }, []);
+
     const handleToggleRandomRule = useCallback((ruleId: number) => {
         if (!socket || !amIHost || gameState?.phase !== 'waiting') {
             if (!amIHost) handleError('ホストのみ対象ステージを変更できます。');
@@ -586,173 +594,221 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
         );
     }
 
+        // Props の組み立て (可読性のため)
+    const commonTeamPanelProps = {
+        phase: gameState.phase,
+        hostId: gameState.hostId,
+        masterWeaponsMap: masterWeaponsMap,
+        weaponStates: weaponStates,
+        banPhaseState: gameState.banPhaseState,
+        myTeam: myTeam,
+        userName: userName,
+        onSelectTeam: handleTeamSelect,
+    };
+
+    const teamAlphaPanelProps = {
+        ...commonTeamPanelProps,
+        teamUsers: alphaTeamUsers,
+        pickedWeaponIds: alphaPickedIds,
+        bannedWeaponIds: alphaBannedIds,
+        pickCount: gameState.pickPhaseState?.picks.alpha ?? 0,
+        banCount: gameState.banPhaseState?.bans.alpha ?? 0,
+    };
+
+    const teamBravoPanelProps = {
+        ...commonTeamPanelProps,
+        teamUsers: bravoTeamUsers,
+        pickedWeaponIds: bravoPickedIds,
+        bannedWeaponIds: bravoBannedIds,
+        pickCount: gameState.pickPhaseState?.picks.bravo ?? 0,
+        banCount: gameState.banPhaseState?.bans.bravo ?? 0,
+    };
+
+    const observerPanelSharedProps = { // ObserverPanel に渡す共通Props
+        phase: gameState.phase,
+        hostId: gameState.hostId,
+        myTeam: myTeam,
+        userName: userName,
+        onSelectTeam: handleTeamSelect,
+    };
+
+    const gameHeaderSharedProps = { // GameHeader に渡す共通Props
+        roomId: roomId,
+        roomName: gameState.roomName,
+        userCount: gameState.userCount,
+        phase: gameState.phase,
+        currentTurn: gameState.currentTurn,
+        timeLeft: gameState.timeLeft,
+        hostId: gameState.hostId,
+        timerDuration: timerDuration,
+        myTeam: myTeam,
+        amIHost: amIHost,
+        socket: socket,
+        selectedStage: selectedStage,
+        selectedRule: selectedRule,
+        randomStagePoolCount: gameState.randomStagePool?.length ?? 0,
+        randomRulePoolCount: gameState.randomRulePool?.length ?? 0,
+        onLeaveRoom: handleLeaveButtonClick,
+        onStartGame: handleStartGame,
+        onResetGame: handleResetGame,
+        onOpenStageModal: openStageModal,
+        onOpenRuleModal: openRuleModal,
+    };
+
+    const weaponFilterSharedProps = { // WeaponFilter に渡す共通Props
+        selectedAttributes,
+        selectedSubWeapons,
+        selectedSpecialWeapons,
+        onFilterChange: handleFilterChange,
+        onClearFilterSection: handleClearFilterSection,
+    };
+
+    const weaponGridDisplaySharedProps = { // WeaponGridDisplay に渡す共通Props
+        phase: gameState.phase,
+        currentTurn: gameState.currentTurn,
+        banPhaseState: gameState.banPhaseState,
+        pickPhaseState: gameState.pickPhaseState,
+        displayWeaponIds: displayWeaponIds,
+        masterWeapons: masterWeapons,
+        weaponStates: weaponStates,
+        loadingWeaponId: loadingWeaponId,
+        myTeam: myTeam,
+        myBanCount: myBanCount,
+        myPickCount: myPickCount,
+        onWeaponClick: handleWeaponClick,
+    };
+
     // --- JSX レンダリング本体 ---
     return (
-        <div className={`container mx-auto p-2 space-y-3 bg-white rounded-lg shadow-md flex flex-col min-h-[calc(100vh-100px)]`}>
-            {/* ================== ヘッダーエリア ================== */}
-            <GameHeader
-                roomId={roomId}
-                roomName={gameState.roomName} // ★ gameState から抽出
-                userCount={gameState.userCount} // ★ gameState から抽出
-                phase={gameState.phase} // ★ gameState から抽出
-                currentTurn={gameState.currentTurn} // ★ gameState から抽出
-                timeLeft={gameState.timeLeft} // ★ gameState から抽出
-                hostId={gameState.hostId} // ★ gameState から抽出
-                timerDuration={timerDuration} // ★ 計算済みの値を渡す
-                myTeam={myTeam} // これは WeaponGrid の state
-                amIHost={amIHost} // 計算済みの値
-                socket={socket}
-                selectedStage={selectedStage} // WeaponGrid の state
-                selectedRule={selectedRule}   // WeaponGrid の state
-                randomStagePoolCount={gameState.randomStagePool?.length ?? 0}
-                randomRulePoolCount={gameState.randomRulePool?.length ?? 0}
-                onLeaveRoom={handleLeaveButtonClick}
-                onStartGame={handleStartGame}
-                onResetGame={handleResetGame}
-                onOpenStageModal={openStageModal}
-                onOpenRuleModal={openRuleModal}
-            />
-
-            {/* ================== メインエリア (3カラム) ================== */}
-            {/* lg以上で3カラム、それ未満は1カラム */}
-            <div className="grid grid-cols-1 lg:grid-cols-11 gap-4 items-stretch flex-grow mb-2 ">
-                <TeamPanel
-                    team="alpha"
-                    teamDisplayName="アルファ"
-                    phase={gameState.phase}
-                    hostId={gameState.hostId}
-                    teamUsers={alphaTeamUsers}
-                    // IDリストと全データを渡す
-                    pickedWeaponIds={alphaPickedIds}
-                    bannedWeaponIds={alphaBannedIds}
-                    masterWeaponsMap={masterWeaponsMap}
-                    weaponStates={weaponStates}
-                    pickCount={gameState.pickPhaseState?.picks.alpha ?? 0} // Pickカウント
-                    banCount={gameState.banPhaseState?.bans.alpha ?? 0}   // Banカウント
-                    banPhaseState={gameState.banPhaseState}
-                    myTeam={myTeam}
-                    userName={userName}
-                    onSelectTeam={handleTeamSelect}
-                />
-
-                {/* ----- 中央カラム: 武器グリッド ----- */}
-                <div className="lg:col-span-7 flex flex-col gap-2 overflow-hidden min-h-0">
-                    <WeaponFilter
-                        selectedAttributes={selectedAttributes}
-                        selectedSubWeapons={selectedSubWeapons}
-                        selectedSpecialWeapons={selectedSpecialWeapons}
-                        onFilterChange={handleFilterChange}
-                        onClearFilterSection={handleClearFilterSection}
-                    />
-
-
-                    {/* Weapon Grid 本体 */}
-                    <div className={`rounded-lg shadow-sm relative mt-2 h-full`}>
-                        <WeaponGridDisplay
-                            phase={gameState.phase}
-                            currentTurn={gameState.currentTurn}
-                            banPhaseState={gameState.banPhaseState} // BANカウント表示用に必要
-                            pickPhaseState={gameState.pickPhaseState} // Pickカウント表示用に必要
-                            displayWeaponIds={displayWeaponIds}
-                            masterWeapons={masterWeapons} // state または prop の masterWeapons
-                            weaponStates={weaponStates}
-                            loadingWeaponId={loadingWeaponId}
-                            myTeam={myTeam}
-                            myBanCount={myBanCount}
-                            myPickCount={myPickCount}
-                            onWeaponClick={handleWeaponClick}
-                        />
+        <>
+            {/* スマホ用レイアウト (lg未満) */}
+            <div className="lg:hidden flex flex-col min-h-screen bg-gray-900 text-gray-100">
+                {/* GameHeader: 高さ 1/5 */}
+                <div className="h-[20vh] p-1 flex-shrink-0">
+                    <GameHeader {...gameHeaderSharedProps} onOpenMembersModal={handleOpenMembersModal} />
+                </div>
+                {/* TeamPanels (Alpha & Bravo): 高さ 1/5、横並び */}
+                <div className="h-[20vh] flex p-1 gap-1 flex-shrink-0">
+                    <div className="w-1/2 h-full">
+                        <TeamPanel team="alpha" teamDisplayName="アルファ" {...teamAlphaPanelProps} isMobileView={true} />
+                    </div>
+                    <div className="w-1/2 h-full">
+                        <TeamPanel team="bravo" teamDisplayName="ブラボー" {...teamBravoPanelProps} isMobileView={true} />
                     </div>
                 </div>
+                {/* WeaponFilter + WeaponGridDisplay: 高さ 3/5 (残り) */}
+                <div className="flex-grow p-1 flex flex-col min-h-0 relative"> {/* ★ relative を追加 */}
+                    {/* フィルター開閉ボタン (スマホ用) */}
+                    <div className="lg:hidden">
+                        <button
+                            onClick={() => setIsFilterOpen(!isFilterOpen)}
+                            className="w-full bg-slate-700 hover:bg-slate-600 text-white px-3 py-2 text-sm rounded-md flex justify-between items-center h-10" // 高さを h-10 (2.5rem) に固定
+                        >
+                            <span>フィルター {isFilterOpen ? 'を閉じる' : 'を開く'}</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 transform transition-transform duration-150 ${isFilterOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                            </svg>
+                        </button>
+                    </div>
 
-
-                {/* ----- 右カラム: ブラボーチーム ----- */}
-                <TeamPanel
-                    team="bravo"
-                    teamDisplayName="ブラボー"
-                    phase={gameState.phase}
-                    hostId={gameState.hostId}
-                    teamUsers={bravoTeamUsers}
-                    pickedWeaponIds={bravoPickedIds}
-                    bannedWeaponIds={bravoBannedIds}
-                    masterWeaponsMap={masterWeaponsMap}
-                    weaponStates={weaponStates}
-                    pickCount={gameState.pickPhaseState?.picks.bravo ?? 0}
-                    banCount={gameState.banPhaseState?.bans.bravo ?? 0}
-                    banPhaseState={gameState.banPhaseState}
-                    myTeam={myTeam}
-                    userName={userName}
-                    onSelectTeam={handleTeamSelect}
-                />
+                    {/* WeaponFilter (スマホ用、条件付き表示、オーバーレイ) */}
+                    {isFilterOpen && (
+                        <div className="lg:hidden absolute top-10 left-1 right-1 z-20 bg-gray-800 shadow-xl rounded-md border border-gray-700 max-h-[calc(60vh-3rem)] overflow-y-auto">
+                            {/* top-10 (2.5rem) はボタンの高さ h-10 と同じ */}
+                            {/* max-h: 60vh (コンテナの高さ想定) - 2.5rem (ボタンの高さ) - 0.5rem (余裕分) */}
+                            <WeaponFilter {...weaponFilterSharedProps} />
+                        </div>
+                    )}
+                    {/* PC用 WeaponFilter (従来通り) */}
+                    <div className="hidden lg:block mb-1">
+                        <WeaponFilter {...weaponFilterSharedProps} />
+                    </div>
+                    {/* WeaponGridDisplay (常に表示) */}
+                    <div className="flex-grow min-h-0 mt-1 lg:mt-0"> {/* スマホではボタンとの間に mt-1、PCではフィルターのmb-1があるのでmt-0 */}
+                        <WeaponGridDisplay {...weaponGridDisplaySharedProps} />
+                    </div>
+                </div>
+                {/* ObserverPanel はスマホではモーダルに統合されるため、ここには表示しない */}
             </div>
 
-            {/* ================== フッターエリア: 観戦者リスト ================== */}
-            <ObserverPanel
-                phase={gameState.phase} // ★ gameState から抽出
-                hostId={gameState.hostId} // ★ gameState から抽出
-                observers={observers}
-                myTeam={myTeam}
+            {/* PC用レイアウト (lg以上) */}
+            <div className={`hidden lg:flex lg:flex-col container mx-auto p-2 space-y-3 bg-white rounded-lg shadow-md min-h-[calc(100vh-100px)]`}>
+                <GameHeader {...gameHeaderSharedProps} /> {/* PCでは onOpenMembersModal は渡さない (ボタン非表示) */}
+                <div className="grid grid-cols-1 lg:grid-cols-11 gap-4 items-stretch flex-grow mb-2 ">
+                    <TeamPanel team="alpha" teamDisplayName="アルファ" {...teamAlphaPanelProps} isMobileView={false} />
+                    <div className="lg:col-span-7 flex flex-col gap-2 overflow-hidden min-h-0">
+                        <div className="hidden lg:block mb-1"> {/* mb-1 をここに追加 */}
+                            <WeaponFilter {...weaponFilterSharedProps} />
+                        </div>
+                        <div className={`rounded-lg shadow-sm relative mt-2 h-full`}>
+                            <WeaponGridDisplay {...weaponGridDisplaySharedProps} />
+                        </div>
+                    </div>
+                    <TeamPanel team="bravo" teamDisplayName="ブラボー" {...teamBravoPanelProps} isMobileView={false} />
+                </div>
+                <ObserverPanel observers={observers} {...observerPanelSharedProps} isMobileView={false} />
+            </div>
+
+            {/* メンバー表示モーダル (共通) */}
+            <MembersDisplayModal
+                isOpen={isMembersModalOpen}
+                onClose={() => setIsMembersModalOpen(false)}
+                roomUsers={roomUsers}
+                hostId={gameState.hostId}
                 userName={userName}
-                onSelectTeam={handleTeamSelect}
             />
 
-            {/* Selection Modals */}
+            {/* Selection Modals (既存のステージ・ルール選択モーダル) */}
             <SelectionModal<Stage>
                 modalType="stage"
                 isOpen={isStageModalOpen}
                 onClose={() => setIsStageModalOpen(false)}
                 items={STAGES_DATA}
-                initialSelectedItem={selectedStage} // ★ 現在の選択を初期値として渡す
+                initialSelectedItem={selectedStage}
                 onSelect={(stage) => {
-                    console.log('[Stage Modal] Final selection on close:', stage);
-                    setSelectedStage(stage); // ★ モーダルが閉じる時に最終的な選択をセット
-                    if (socket && amIHost) { // ホストのみがサーバーに通知
+                    setSelectedStage(stage);
+                    if (socket && amIHost) {
                         const stageIdToSend = stage.id === 'random' ? 'random' : stage.id;
                         socket.emit('select stage', { stageId: stageIdToSend });
-                    } else if (!amIHost) {
-                        // ホストでない場合、選択はローカルでの表示更新のみ (サーバーには送らない)
-                        console.log('[Stage Modal] Non-host selected, updating local display only.');
                     }
                 }}
                 title="ステージを選択"
-                randomOption={RANDOM_STAGE_CHOICE} // ★ ステージ用ランダムを渡す
-                isHost={amIHost} // ★ ホスト情報を渡す
-                randomStagePool={randomStagePoolSet} // ★ useMemo で計算した Set を渡す
-                onToggleRandomStage={handleToggleRandomStage} // ★ ハンドラを渡す
-                onSetRandomPool={handleSetRandomPool} // ★ 全選択/解除用ハンドラ
+                randomOption={RANDOM_STAGE_CHOICE}
+                isHost={amIHost}
+                randomStagePool={randomStagePoolSet}
+                onToggleRandomStage={handleToggleRandomStage}
+                onSetRandomPool={handleSetRandomPool}
             />
             <SelectionModal<Rule>
                 modalType="rule"
                 isOpen={isRuleModalOpen}
                 onClose={() => setIsRuleModalOpen(false)}
                 items={RULES_DATA}
-                initialSelectedItem={selectedRule} // ★ 現在の選択を初期値として渡す
+                initialSelectedItem={selectedRule}
                 onSelect={(rule) => {
-                    console.log('[Rule Modal] Final selection on close:', rule);
-                    setSelectedRule(rule); // ★ モーダルが閉じる時に最終的な選択をセット
-                    if (socket && amIHost) { // ホストのみがサーバーに通知
+                    setSelectedRule(rule);
+                    if (socket && amIHost) {
                         const ruleIdToSend = rule.id === 'random' ? 'random' : rule.id;
                         socket.emit('select rule', { ruleId: ruleIdToSend });
-                    } else if (!amIHost) {
-                        console.log('[Rule Modal] Non-host selected, updating local display only.');
                     }
                 }}
                 title="ルールを選択"
-                randomOption={RANDOM_RULE_CHOICE} // ★ ルール用ランダムを渡す
+                randomOption={RANDOM_RULE_CHOICE}
                 isHost={amIHost}
-                randomRulePool={randomRulePoolSet} // ★ ルール用プールを渡す
+                randomRulePool={randomRulePoolSet}
                 onToggleRandomRule={handleToggleRandomRule}
-                onSetRandomPool={handleSetRandomPool} // ★ 全選択/解除用ハンドラ
+                onSetRandomPool={handleSetRandomPool}
             />
-        </div> // container end
+        </>
     );
 
+    // SelectionModal の型定義と実装は変更なし (省略)
     type RandomChoiceType = typeof RANDOM_STAGE_CHOICE | typeof RANDOM_RULE_CHOICE;
     interface SelectionModalProps<T extends Stage | Rule> {
         isOpen: boolean;
         onClose: () => void;
         items: T[];
-        initialSelectedItem: T | RandomChoiceType | null; // ★ 初期選択アイテム
+        initialSelectedItem: T | RandomChoiceType | null;
         onSelect: (item: T | RandomChoiceType) => void;
         title: string;
         randomOption?: RandomChoiceType;
@@ -782,10 +838,8 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
         modalType
     }: SelectionModalProps<T>) {
 
-        // モーダル内で現在選択されているアイテムを管理するローカルステート
         const [currentModalSelection, setCurrentModalSelection] = useState<T | RandomChoiceType | null>(initialSelectedItem);
         
-        // isRandomActive はローカルステート currentModalSelection から導出
         const isRandomActiveForModal = useMemo(() => {
             if (!randomOption || !currentModalSelection) return false;
             return currentModalSelection.id === randomOption.id;
@@ -793,87 +847,73 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
 
         if (!isOpen) return null;
 
-        // ランダムオプションボタンの onClick
         const handleRandomSelect = () => {
-            if (isHost) { // ホストのみ操作可能
+            if (isHost) {
                 if (randomOption) {
-                    setCurrentModalSelection(randomOption); // ローカルステートを更新
+                    setCurrentModalSelection(randomOption);
                 }
             } else {
                 toast.error('ホストのみ選択できます。');
             }
         };
 
-        // 通常アイテムボタンの onClick
         const handleItemSelect = (item: T) => {
             if (isHost) {
-                setCurrentModalSelection(item); // ローカルステートを更新
+                setCurrentModalSelection(item);
             } else {
                 toast.error('ホストのみ選択できます。');
             }
         };
 
-                // モーダルを閉じようとする際の共通処理
         const attemptCloseModal = () => {
             const currentPool = modalType === 'stage' ? randomStagePool : randomRulePool;
-            // isRandomActiveForModal (ローカルの選択状態に基づく) が true で、かつプール内のアイテムが0または1つの場合
             const isPoolInsufficient = currentPool && (currentPool.size === 0 || currentPool.size === 1);
 
             if (isHost && isRandomActiveForModal && isPoolInsufficient) {
                 const itemType = modalType === 'stage' ? 'ステージ' : 'ルール';
                 toast.error(`ランダム${itemType}の対象を2つ以上選択してください。`, { duration: 4000 });
-                return; // モーダルを閉じない
+                return;
             }
-            // モーダルを閉じる前に、最終的な選択を onSelect で通知
             if (currentModalSelection) {
                 onSelect(currentModalSelection);
             }
-            onClose(); // 元の onClose プロップを呼び出す
+            onClose();
         };
 
-        // プールを取得 (タイプに応じて)
         const currentPool = modalType === 'stage' ? randomStagePool : randomRulePool;
         const currentToggleHandler = modalType === 'stage' ? onToggleRandomStage : onToggleRandomRule;
 
         const renderModalItem = (
-            item: T | RandomChoiceType, // Stage, Rule, またはランダムオプションの型
-            isRandom: boolean // これがランダムオプションかどうかのフラグ
+            item: T | RandomChoiceType,
+            isRandom: boolean
         ) => {
-            // modalType は SelectionModal の props から参照
             const isStageModal = modalType === 'stage';
-            // ランダムプール関連の判定
             const isLastOneInPool = currentPool && currentPool.size === 1 && currentPool.has((item as Stage | Rule).id as number);
             const canToggleCheckbox = isHost && !isLastOneInPool;
             const isInRandomPool = isRandom ? true : (currentPool ? currentPool.has((item as Stage | Rule).id as number) : true);
             const checkboxTitle = !isHost ? 'ホストのみ変更可' :
                                 isLastOneInPool ? '最後の1つは対象から外せません' :
                                 (isInRandomPool ? 'ランダム対象外にする' : 'ランダム対象にする');
-            // ★ 選択されているアイテムかどうかの判定 (currentModalSelection を使用)
             const isCurrentlySelectedInModal = currentModalSelection?.id === item.id;
 
-                        const itemClasses = ["relative", "border", "rounded-md", "overflow-hidden", "aspect-square", "group"];
+            const itemClasses = ["relative", "border", "rounded-md", "overflow-hidden", "aspect-square", "group"];
 
             if (isCurrentlySelectedInModal) {
-                // 現在モーダルで選択されているアイテムの場合
                 itemClasses.push(isRandom ? 'ring-2 ring-offset-1 ring-green-500' : 'ring-2 ring-offset-1 ring-blue-500');
                 if (isInRandomPool) {
-                    // 選択中で、かつランダムプール内
                     itemClasses.push(isRandom ? 'bg-green-50' : 'bg-blue-50');
                 } else {
-                    // 選択中だが、ランダムプールから外れている
-                    itemClasses.push('bg-gray-200'); // ランダム対象外の背景を維持
+                    itemClasses.push('bg-gray-200');
                 }
             } else {
-                // 現在モーダルで選択されていないアイテムの場合
                 if (isInRandomPool) {
                     itemClasses.push('bg-white', 'hover:bg-gray-50');
                 } else {
-                    // 選択されておらず、ランダムプールからも外れている
                     itemClasses.push('bg-gray-200');
                 }
             }
 
-            if (!isHost && !isInRandomPool) { // ホストでなく、かつランダムプール外の場合のスタイル
+            if (!isHost && !isInRandomPool) {
                 itemClasses.push('opacity-60', 'cursor-not-allowed');
             }
 
@@ -882,7 +922,6 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
                     key={item.id}
                     className={itemClasses.join(' ')}
                 >
-                    {/* チェックボックス (ランダム以外で、対応するハンドラがある場合) */}
                     {!isRandom && currentToggleHandler && (
                         <div className="absolute top-1 left-1 z-10 p-0.5 bg-white/60 rounded-sm group-hover:bg-white/80 transition-colors">
                             <input
@@ -951,7 +990,7 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
 
         return (
             <div
-                className="fixed inset-0 bg-black/50 flex justify-center items-center z-50 p-4"
+                className="fixed inset-0 bg-black/50 flex justify-center items-center z-[60] p-4" // z-index調整
                 onClick={attemptCloseModal} // ★ 背景クリックでモーダルを閉じようとする
             >
                 <div

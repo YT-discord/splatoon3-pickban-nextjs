@@ -20,6 +20,7 @@ interface TeamPanelProps {
     myTeam: Team | 'observer';
     userName: string;
     onSelectTeam: (team: Team) => void;
+    isMobileView?: boolean;
 }
 
 const TeamPanel: React.FC<TeamPanelProps> = memo(({ // ★ memo でラップ (任意)
@@ -38,6 +39,7 @@ const TeamPanel: React.FC<TeamPanelProps> = memo(({ // ★ memo でラップ (�
     myTeam,
     userName,
     onSelectTeam,
+    isMobileView = false,
     // className = '', // className を受け取る (任意)
 }) => {
     const isAlpha = team === 'alpha';
@@ -103,27 +105,28 @@ const TeamPanel: React.FC<TeamPanelProps> = memo(({ // ★ memo でラップ (�
             </div>
 
             {/* メンバーリスト */}
-            <div className="flex-grow-[2] flex flex-col pt-2"> {/* pt-2 for spacing */}
-                <h4 className={`font-semibold ${panelHeaderColor} mb-1`}>メンバー ({teamUsers.length})</h4>
-                {/* Member Grid Container - this div will take the allocated space and allow its content (the grid) to scroll if it overflows */}
-                <div className="flex-grow overflow-y-auto pr-1 min-h-14"> {/* min-h-14 (3.5rem = 56px) を追加して2行分の高さを確保 */}
-                    <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-sm">
-                        {teamUsers.map(user => {
-                            const isHost = user.id === hostId;
-                            return (
-                                <div key={user.id} className={`flex items-center py-0.5 ${user.name === userName ? 'font-bold' : ''} ${panelTextColor} truncate`}>
-                                    <span className={`inline-block w-2 h-2 ${userDotColor} rounded-full mr-1.5 flex-shrink-0`}></span>
-                                    <span className="truncate">{user.name}</span>
-                                    {isHost && <span className="text-xs text-gray-500 ml-1 flex-shrink-0">(ホスト)</span>}
-                                </div>
-                            );
-                        })}
-                        {teamUsers.length === 0 && (
-                            <p className="col-span-2 text-gray-500 italic text-xs py-1">プレイヤーがいません</p>
-                        )}
+            {!isMobileView && ( // ★ isMobileView が false の場合のみ表示 (PC表示時)
+                <div className="flex-grow-[2] flex flex-col pt-2">
+                    <h4 className={`font-semibold ${panelHeaderColor} mb-1`}>メンバー ({teamUsers.length})</h4>
+                    <div className="flex-grow overflow-y-auto pr-1 min-h-14">
+                        <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-sm">
+                            {teamUsers.map(user => {
+                                const isHost = user.id === hostId;
+                                return (
+                                    <div key={user.id} className={`flex items-center py-0.5 ${user.name === userName ? 'font-bold' : ''} ${panelTextColor} truncate`}>
+                                        <span className={`inline-block w-2 h-2 ${userDotColor} rounded-full mr-1.5 flex-shrink-0`}></span>
+                                        <span className="truncate">{user.name}</span>
+                                        {isHost && <span className="text-xs text-gray-500 ml-1 flex-shrink-0">(ホスト)</span>}
+                                    </div>
+                                );
+                            })}
+                            {teamUsers.length === 0 && (
+                                <p className="col-span-2 text-gray-500 italic text-xs py-1">プレイヤーがいません</p>
+                            )}
+                        </div>
                     </div>
                 </div>
-            </div>
+            )}
 
             {/* PICK 表示 (2列グリッド) */}
             <div className="flex-grow-[4] flex flex-col pt-2">

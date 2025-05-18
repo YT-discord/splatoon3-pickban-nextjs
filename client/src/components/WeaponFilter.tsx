@@ -89,7 +89,7 @@ const WeaponFilter: React.FC<WeaponFilterProps> = memo(({
 );
 
 return (
-    <div className="mb-1 bg-white rounded border p-1">
+    <div className="w-full bg-white rounded border p-1"> {/* w-full追加、mb-1はWeaponGrid側で制御 */}
         {renderFilterRow('attribute', 'ブキ種', WEAPON_ATTRIBUTES, selectedAttributes, onFilterChange, onClearFilterSection)}
         {renderFilterRow('subWeapon', 'サブ', SUB_WEAPONS, selectedSubWeapons, onFilterChange, onClearFilterSection)}
         {renderFilterRow('specialWeapon', 'スペシャル', SPECIAL_WEAPONS, selectedSpecialWeapons, onFilterChange, onClearFilterSection)}
