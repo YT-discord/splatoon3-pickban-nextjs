@@ -236,7 +236,7 @@ const WeaponGridDisplayComponent: React.FC<WeaponGridDisplayProps> = ({
             )}
             {phase === 'pick_complete' && (
                 <div className="text-sm lg:text-lg font-semibold mb-2 text-gray-800 whitespace-normal px-1 flex-shrink-0">
-                    <p className="text-gray-500 mt-1">試合を開始してください。結果をリセットするときはホストのルームリセットをお待ちください。</p>
+                    <p className="text-gray-500">試合を開始してください。結果をリセットするときはホストのルームリセットをお待ちください。</p>
                 </div>
             )}
 

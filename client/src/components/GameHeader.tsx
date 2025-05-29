@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, memo } from 'react';
+import React, { useState, useCallback, useEffect, memo} from 'react';
 import Image from 'next/image';
 import type { GameState, Team, Stage, Rule } from '../../../common/types/index';
 import type { Socket } from 'socket.io-client';
@@ -22,6 +22,7 @@ interface GameHeaderProps {
     randomStagePoolCount: number;
     randomRulePoolCount: number;
     onLeaveRoom: () => void;
+    isAnyRandomSettingsModalOpen: boolean; // ★ 追加: ランダム設定モーダルが開いているか
     onStartGame: () => void;
     onResetGame: () => void;
     onOpenStageModal: () => void;
@@ -74,6 +75,7 @@ const GameHeader: React.FC<GameHeaderProps> = memo(({
     randomStagePoolCount,
     randomRulePoolCount,
     onLeaveRoom,
+    isAnyRandomSettingsModalOpen, // ★ props を受け取る
     onStartGame,
     onResetGame,
     onOpenStageModal,
@@ -84,6 +86,45 @@ const GameHeader: React.FC<GameHeaderProps> = memo(({
     const [isEditingName, setIsEditingName] = useState(false);
     const [editingName, setEditingName] = useState(roomName);
     const [editError, setEditError] = useState<string | null>(null);
+
+    // 表示用のステージ・ルール情報を管理するローカルステート
+    const [displayStageImagePath, setDisplayStageImagePath] = useState<string>('');
+    const [displayRuleImagePath, setDisplayRuleImagePath] = useState<string>('');
+    const [displaySelectedStageName, setDisplaySelectedStageName] = useState<string>('');
+    const [displaySelectedRuleName, setDisplaySelectedRuleName] = useState<string>('');
+
+    useEffect(() => {
+        // モーダルが開いている間は、propsの変更を表示に即時反映しない
+        // (モーダル内での選択とヘッダー表示がチカチカするのを防ぐため)
+        // モーダルが閉じていれば、propsの変更を常に表示に反映する
+        if (!isAnyRandomSettingsModalOpen) {
+            if (selectedStage) {
+                setDisplaySelectedStageName(selectedStage.name);
+                if (selectedStage.id === 'random') {
+                    // ゲーム開始前のおまかせ選択時
+                    setDisplayStageImagePath(getRandomStageDisplayImagePath(randomStagePoolCount, STAGES_DATA.length));
+                } else {
+                    // ゲーム開始後、具体的なステージが決定された場合、または通常選択時
+                    setDisplayStageImagePath(selectedStage.imageUrl);
+                }
+            } else {
+                setDisplaySelectedStageName('未選択');
+                setDisplayStageImagePath(''); // またはデフォルト画像
+            }
+
+            if (selectedRule) {
+                setDisplaySelectedRuleName(selectedRule.name);
+                if (selectedRule.id === 'random') {
+                    setDisplayRuleImagePath(getRandomRuleDisplayImagePath(randomRulePoolCount, RULES_DATA.length));
+                } else {
+                    setDisplayRuleImagePath(selectedRule.imageUrl);
+                }
+            } else {
+                setDisplaySelectedRuleName('未選択');
+                setDisplayRuleImagePath(''); // またはデフォルト画像
+            }
+        }
+    }, [isAnyRandomSettingsModalOpen, selectedStage, randomStagePoolCount, selectedRule, randomRulePoolCount]);
 
     const handleSaveName = useCallback(() => {
         if (!socket || !amIHost) return; // ★ amIHost を使う
@@ -283,14 +324,14 @@ const GameHeader: React.FC<GameHeaderProps> = memo(({
                             }}
                             title={phase !== 'waiting' ? "ゲーム進行中は変更/確認できません" : (amIHost ? "対象ルール変更" : "対象ルール確認")}
                         >
-                            {selectedRule ? (
+                            {displayRuleImagePath ? (
                                 <>
                                     {/* ランダムルールアイコン表示 */}
-                                    {selectedRule.id === 'random' ? (
+                                    {selectedRule?.id === 'random' ? ( // props の selectedRule を参照してランダムかどうか判断
                                         <>
                                             <Image
-                                                src={getRandomRuleDisplayImagePath(randomRulePoolCount, RULES_DATA.length)}
-                                                alt={`ランダム (対象: ${randomRulePoolCount})`}
+                                                src={displayRuleImagePath} // 表示用ステートを使用
+                                                alt={`ランダム (対象: ${randomRulePoolCount})`} // alt は元の情報で良い
                                                 fill // fill を維持
                                                 sizes='(max-width: 1023px) 80px, 142px' // スマホ用とPC用でサイズ指定
 
@@ -299,28 +340,28 @@ const GameHeader: React.FC<GameHeaderProps> = memo(({
                                         </>
                                     ) : (
                                         // 通常のルール画像
-                                        <Image src={selectedRule.imageUrl}
-                                            alt={selectedRule.name}
+                                        <Image src={displayRuleImagePath} // 表示用ステートを使用
+                                            alt={displaySelectedRuleName} // 表示用ステートを使用
                                             fill
                                             sizes='(max-width: 1023px) 80px, 142px'
                                             style={{ objectFit: 'contain' }}
                                         />
                                     )}
                                 </>
-                            ) : (<span className="text-gray-500 text-[10px] lg:text-xs">未選択</span>)}
+                            ) : (<span className="text-gray-500 text-[10px] lg:text-xs">{displaySelectedRuleName}</span>)}
                         </div>
                         {/* 名前表示 */}
                         <div className="h-5 lg:h-8 mt-0.5 lg:mt-1 flex items-center justify-center flex-shrink-0">
-                            {selectedRule && (
+                            {displaySelectedRuleName && (
                                 <p className="text-[10px] lg:text-[15px] font-semibold text-gray-800 leading-tight text-center break-words">
-                                    {selectedRule.name}
+                                    {displaySelectedRuleName}
                                 </p>
                             )}
                         </div>
                     </div>
 
                     {/* ----- ステージ表示 ----- */}
-                    <div className="flex flex-col items-center text-[10px] lg:text-xs border rounded p-0.5 lg:p-1 bg-white shadow-sm w-[33%] h-full">
+                    <div className="flex flex-col items-center text-[10px] lg:text-xs border rounded p-0.5 lg:p-1 bg-white shadow-sm w-[33%] h-full ">
                         <span className="font-medium text-gray-600 mb-0.5 lg:mb-1 flex-shrink-0">ステージ</span>
                         <div
                             className={`flex items-center justify-center w-full h-12 lg:h-[60px] bg-gray-100 rounded-sm overflow-hidden relative flex-grow min-h-0 my-0.5 lg:my-0 group
@@ -332,14 +373,14 @@ const GameHeader: React.FC<GameHeaderProps> = memo(({
                             }}
                             title={phase !== 'waiting' ? "ゲーム進行中は変更/確認できません" : (amIHost ? "対象ステージ変更" : "対象ステージ確認")}
                         >
-                            {selectedStage ? (
+                            {displayStageImagePath ? (
                                 <>
                                     {/* ランダムステージアイコン表示 */}
-                                    {selectedStage.id === 'random' ? (
+                                    {selectedStage?.id === 'random' ? ( // props の selectedStage を参照
                                         <>
                                             <Image
-                                                src={getRandomStageDisplayImagePath(randomStagePoolCount, STAGES_DATA.length)}
-                                                alt={`ランダム (対象: ${randomStagePoolCount})`}
+                                                src={displayStageImagePath} // 表示用ステートを使用
+                                                alt={`ランダム (対象: ${randomStagePoolCount})`} // alt は元の情報で良い
                                                 fill
                                                 sizes='(max-width: 1023px) 80px, 142px' // スマホ用とPC用でサイズ指定
                                                 style={{ objectFit: 'cover' }}
@@ -348,21 +389,21 @@ const GameHeader: React.FC<GameHeaderProps> = memo(({
                                     ) : (
                                         // 通常のステージ画像
                                         <Image
-                                            src={selectedStage.imageUrl}
-                                            alt={selectedStage.name}
+                                            src={displayStageImagePath} // 表示用ステートを使用
+                                            alt={displaySelectedStageName} // 表示用ステートを使用
                                             fill
                                             sizes='(max-width: 1023px) 80px, 142px' // スマホ用とPC用でサイズ指定
                                             style={{ objectFit: 'cover' }}
                                         />
                                     )}
                                 </>
-                            ) : (<span className="text-gray-500 text-[10px] lg:text-xs">未選択</span>)}
+                            ) : (<span className="text-gray-500 text-[10px] lg:text-xs">{displaySelectedStageName}</span>)}
                         </div>
                         {/* 名前表示 */}
                         <div className="h-5 lg:h-8 mt-0.5 lg:mt-1 flex items-center justify-center flex-shrink-0">
-                            {selectedStage && (
-                                <p className={`font-semibold text-gray-800 leading-tight text-center break-words ${selectedStage.name.length <= 7 ? 'text-[10px] lg:text-[15px]' : 'text-[8px] lg:text-[10px]'}`}>
-                                    {selectedStage.name}
+                            {displaySelectedStageName && (
+                                <p className={`font-semibold text-gray-800 leading-tight text-center break-words ${displaySelectedStageName.length <= 7 ? 'text-[10px] lg:text-[15px]' : 'text-[8px] lg:text-[10px]'}`}>
+                                    {displaySelectedStageName}
                                 </p>
                             )}
                         </div>

@@ -60,6 +60,11 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
         return gameState !== null && gameState.hostId !== null && gameState.hostId === myActualSocketId;
     }, [gameState?.hostId, myActualSocketId]); // ★ 修正
 
+    // ★ いずれかのランダム設定モーダルが開いているか
+    const isAnyRandomSettingsModalOpen = useMemo(() => {
+        return isStageModalOpen || isRuleModalOpen;
+    }, [isStageModalOpen, isRuleModalOpen]);
+
     const timerDuration = useMemo(() => {
         if (!gameState) return 0;
         if (gameState.phase === 'ban') return BAN_PHASE_DURATION;
@@ -339,6 +344,13 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
             // 例: toast(`ホストが ${data.hostName ?? '不在'} になりました。`);
         };
 
+        const handleForceLeave = (data: { reason: string }) => {
+            console.log(`[Force Leave Room ${roomId}] Received. Reason: ${data.reason}`);
+            // 理由に応じてメッセージを出し分けることも可能
+            toast.error(`ルームがリセットされました (${data.reason === 'room_timeout' ? 'タイムアウト' : data.reason})。ルーム選択画面に戻ります。`, { duration: 5000 });
+            onLeaveRoom(); // 親コンポーネントに退出処理を委譲
+        };
+
         // --- リスナー登録 ---
         socket.on('initial state', handleInitialState);
         socket.on('initial weapons', handleInitialWeapons);
@@ -354,6 +366,7 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
         socket.on('room reset notification', handleRoomResetNotification);
         socket.on('system message', handleSystemMessage);
         socket.on('host changed', handleHostChanged);
+        socket.on('force leave room', handleForceLeave);
 
         // 初期データ要求イベントを送信
         console.log(`[WeaponGrid ${roomId}] Requesting initial data...`);
@@ -378,6 +391,7 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
             socket.off('room reset notification', handleRoomResetNotification);
             socket.off('system message', handleSystemMessage);
             socket.off('host changed', handleHostChanged);
+            socket.off('force leave room', handleForceLeave);
         };
     }, [socket, roomId, userName, masterWeapons, loadingWeaponId, onGameStateUpdate]);
 
@@ -679,6 +693,7 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
         randomRulePoolCount: gameState.randomRulePool?.length ?? 0,
         onLeaveRoom: handleLeaveButtonClick,
         onStartGame: handleStartGame,
+        isAnyRandomSettingsModalOpen: isAnyRandomSettingsModalOpen, // ★ 追加
         onResetGame: handleResetGame,
         onOpenStageModal: openStageModal,
         onOpenRuleModal: openRuleModal,
