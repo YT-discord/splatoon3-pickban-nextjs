@@ -17,6 +17,8 @@ const app: Application = express();
 const server = http.createServer(app);
 dotenv.config();
 
+app.set('trust proxy', 'loopback'); // または 'loopback', 'IPアドレス' など
+
 // --- CORS 設定 ---
 // 許可するオリジンを動的にチェックする関数
 const originCallback = (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
@@ -55,6 +57,10 @@ export const io = new Server(server, { cors: corsOptions });
 // --- グローバル状態管理 ---
 export const gameRooms = new Map<string, RoomGameState>(); // ★ gameRooms をエクスポート可能に (recordGameResult で使用)
 const connectedUsersGlobal = new Map<string, ConnectedUserInfo>();
+// ★ 同一IPからのルーム参加数を制限するためのMap
+// キー: IPアドレス, バリュー: そのIPアドレスが参加しているルームIDのSet
+const ipRoomParticipation = new Map<string, Set<string>>();
+const MAX_ROOMS_PER_IP = 3;
 let masterWeapons: MasterWeapon[] = [];
 
 // ==================================
@@ -214,6 +220,16 @@ io.on('connection', (socket: Socket) => {
         const trimmedName = name.trim(); // ★ trim 処理を追加
         console.log(`[Join Room] User ${socketId} requests to join room ${roomId} as ${trimmedName}`);
         const userInfo = connectedUsersGlobal.get(socketId);
+        // ★ IPアドレスを取得 (リバースプロキシ環境下では 'trust proxy' 設定が必要)
+        const clientIp = socket.handshake.address;
+
+        // IPアドレスごとの参加ルーム数チェック
+        const roomsForThisIp = ipRoomParticipation.get(clientIp) || new Set<string>();
+        if (roomsForThisIp.size >= MAX_ROOMS_PER_IP && !roomsForThisIp.has(roomId)) {
+            console.log(`[Join Room ${roomId}] Denied for IP ${clientIp}: Already in ${roomsForThisIp.size} rooms. Limit is ${MAX_ROOMS_PER_IP}.`);
+            socket.emit('join room failed', { roomId, reason: `同時に参加できるルームは${MAX_ROOMS_PER_IP}部屋までです。` });
+            return;
+        }
 
 
 
@@ -258,6 +274,10 @@ io.on('connection', (socket: Socket) => {
                 oldRoomState.connectedUsers.delete(socketId);
                 io.to(oldRoomId).emit('user left', { userId: socketId });
                 io.to(oldRoomId).emit('room state update', GameLogic.getPublicRoomState(oldRoomState));
+                // 以前のルームからIP情報を削除
+                const oldRoomsForIp = ipRoomParticipation.get(clientIp);
+                if (oldRoomsForIp) { oldRoomsForIp.delete(oldRoomId); if (oldRoomsForIp.size === 0) ipRoomParticipation.delete(clientIp); }
+
                 console.log(`[Join Room] User ${socketId} left previous room ${oldRoomId}`);
             }
         }
@@ -271,6 +291,10 @@ io.on('connection', (socket: Socket) => {
         // ルーム状態にユーザーを追加
         const roomUser: RoomUser = { id: socketId, name: trimmedName, team: 'observer' };
         roomState.connectedUsers.set(socketId, roomUser);
+        // IP情報を更新
+        if (!ipRoomParticipation.has(clientIp)) ipRoomParticipation.set(clientIp, new Set<string>());
+        ipRoomParticipation.get(clientIp)!.add(roomId);
+
         console.log(`[Join Room] User ${socketId} (${trimmedName}) joined room ${roomId}. Users: ${roomState.connectedUsers.size}`);
 
         // ホスト決定ロジック
@@ -341,6 +365,7 @@ io.on('connection', (socket: Socket) => {
     // --- ★ ルーム退出処理 ---
     socket.on('leave room', () => {
         const userInfo = connectedUsersGlobal.get(socketId);
+        const clientIp = socket.handshake.address; // IPアドレス取得
         if (userInfo && userInfo.roomId) {
             const roomId = userInfo.roomId;
             const teamLeft = userInfo.team;
@@ -358,6 +383,13 @@ io.on('connection', (socket: Socket) => {
             }
             userInfo.roomId = null; // グローバル情報のルームIDをクリア
             userInfo.team = undefined; // チーム情報もクリア (任意)
+
+            // IP情報をクリーンアップ
+            const roomsForThisIp = ipRoomParticipation.get(clientIp);
+            if (roomsForThisIp) {
+                roomsForThisIp.delete(roomId);
+                if (roomsForThisIp.size === 0) ipRoomParticipation.delete(clientIp);
+            }
 
             if (userWasInRoom && roomState) { // ルームに実際に存在した場合のみ通知
                 // 他のユーザーに通知
@@ -377,7 +409,7 @@ io.on('connection', (socket: Socket) => {
                     else if (roomState.phase === 'pick' && roomState.currentTurn === teamLeft) { GameLogic.selectRandomWeapon(roomId, teamLeft); }
                 }
             }
-            console.log(`[Leave Room ${roomId}] User ${socketId} left.`);
+            console.log(`[Leave Room ${roomId}] User ${socketId} left. IP rooms for ${clientIp}: ${ipRoomParticipation.get(clientIp)?.size ?? 0}`);
         } else {
             console.log(`[Leave Room] User ${socketId} is not in a room or user info not found.`);
         }
@@ -822,6 +854,7 @@ io.on('connection', (socket: Socket) => {
     socket.on('disconnect', (reason: string) => {
         console.log(`[Disconnect] User disconnected: ${socketId}. Reason: ${reason}`);
         const userInfo = connectedUsersGlobal.get(socketId);
+        const clientIp = socket.handshake.address; // IPアドレス取得
         if (userInfo) {
             const roomId = userInfo.roomId; // ★ roomId を取得
             const leavingUserId = socketId; // ★ 切断したユーザーのID
@@ -829,8 +862,6 @@ io.on('connection', (socket: Socket) => {
             const teamLeft = userInfo.team; // ★ チームも取得
             connectedUsersGlobal.delete(socketId); // グローバルから削除
             if (roomId) {
-                const teamLeft = userInfo.team;
-                const userName = userInfo.name;
                 socket.leave(roomId);
                 const roomState = gameRooms.get(roomId);
                 let userWasInRoom = false;
@@ -838,6 +869,13 @@ io.on('connection', (socket: Socket) => {
                 if (roomState) {
                     wasHost = roomState.hostId === leavingUserId;
                     userWasInRoom = roomState.connectedUsers.delete(socketId);
+                }
+
+                // IP情報をクリーンアップ
+                const roomsForThisIp = ipRoomParticipation.get(clientIp);
+                if (roomsForThisIp) {
+                    roomsForThisIp.delete(roomId);
+                    if (roomsForThisIp.size === 0) ipRoomParticipation.delete(clientIp);
                 }
                 if (userWasInRoom && roomState) {
                     io.to(roomId).emit('user left', { userId: leavingUserId, name: userName, team: teamLeft }); // 先にユーザー退出を通知
@@ -855,7 +893,7 @@ io.on('connection', (socket: Socket) => {
                         else if (roomState.phase === 'pick' && roomState.currentTurn === teamLeft) { GameLogic.selectRandomWeapon(roomId, teamLeft); }
                     }
                 }
-                console.log(`[Disconnect Cleanup] User ${socketId} removed from room ${roomId}.`);
+                console.log(`[Disconnect Cleanup] User ${socketId} removed from room ${roomId}. IP rooms for ${clientIp}: ${ipRoomParticipation.get(clientIp)?.size ?? 0}`);
             }
         }
         // console.log('[Disconnect] Current global users:', Array.from(connectedUsersGlobal.keys()));
@@ -887,6 +925,24 @@ io.on('connection', (socket: Socket) => {
         console.log(`[System Message ${roomId}] Emitted: ${message}`); // ログも移動
 
         // GameLogic.resetRoom 内で状態通知は行われるので、ここでは不要
+    });
+    // --- ★ タイムアウトによるルームリセット後のサーバー側処理 ---
+    // gameLogicから 'room_timed_out_server_reset' が来た場合
+    socket.on('room_timed_out_server_reset_ack', (data: { roomId: string }) => {
+        // このイベントは実際には gameLogic から直接は送れないので、
+        // checkRoomTimeouts の中で resetRoom が呼ばれた後、
+        // app.ts 側で別途 connectedUsersGlobal をクリーンアップする処理が必要。
+        // このイベントハンドラは概念的なものです。
+        // 実際には checkRoomTimeouts のループ内で、タイムアウトしたルームのユーザーを
+        // connectedUsersGlobal から削除し、Socket.IO の leave を実行する。
+        const roomId = data.roomId;
+        console.log(`[Timeout Cleanup ${roomId}] Received ack for server reset. Handling global user state.`);
+        // このルームIDを持つユーザーを connectedUsersGlobal から探し、roomId を null にするなどの処理
+        connectedUsersGlobal.forEach(userInfo => {
+            if (userInfo.roomId === roomId) {
+                userInfo.roomId = null; // グローバル情報からルーム情報を削除
+            }
+        });
     });
 
 }); // End of io.on('connection')
@@ -931,9 +987,27 @@ sequelize
         });
         console.log('Game rooms initialized.');
 
+        // --- ルームタイムアウトチェックの改善 ---
+        // checkRoomTimeouts は gameLogic 内で実行されるが、
+        // タイムアウトしたルームのユーザーを connectedUsersGlobal から適切に処理し、
+        // Socket.IO のルームから leave させる処理は app.ts 側で行う必要がある。
         console.log(`Starting room timeout check interval (${GameLogic.ROOM_CHECK_INTERVAL / 60000} minutes)...`);
-        setInterval(GameLogic.checkRoomTimeouts, GameLogic.ROOM_CHECK_INTERVAL);
-
+        setInterval(() => {
+            const timedOutRoomIds: string[] = GameLogic.checkRoomTimeouts(); // 修正: checkRoomTimeouts を呼び出し、型を明示
+            timedOutRoomIds.forEach((roomId: string) => { // 修正: roomId に string 型を明示 (通常は推論されるが念のため)
+                console.log(`[App Timeout Handler] Processing timeout for room: ${roomId}`);
+                // このルームにいたユーザーを特定し、connectedUsersGlobal から情報を更新
+                // また、Socket.IO のルームから強制的に leave させる
+                gameRooms.get(roomId)?.connectedUsers.forEach((_user, userId) => {
+                    const userInfo = connectedUsersGlobal.get(userId);
+                    if (userInfo && userInfo.roomId === roomId) {
+                        io.sockets.sockets.get(userId)?.leave(roomId); // Socket.IOルームから退出
+                        userInfo.roomId = null; // グローバル情報を更新
+                        console.log(`[App Timeout Handler] User ${userId} removed from timed out room ${roomId} and global state updated.`);
+                    }
+                });
+            });
+        }, GameLogic.ROOM_CHECK_INTERVAL);
         // サーバーリッスン開始
         server.listen(3001, () => {
             console.log('Server running on port 3001');

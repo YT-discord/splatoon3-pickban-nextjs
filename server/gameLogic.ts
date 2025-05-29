@@ -7,7 +7,7 @@ import {
 } from '../common/types/constants';
 
 // タイムアウト関連の定数
-export const ROOM_TIMEOUT_DURATION = 30 * 60 * 1000; // 30分 (ミリ秒)
+export const ROOM_TIMEOUT_DURATION = 15 * 60 * 1000; // 15分 (ミリ秒)
 export const ROOM_CHECK_INTERVAL = 5 * 60 * 1000; // 5分 (ミリ秒)
 
 // --- モジュールスコープ変数 ---
@@ -117,26 +117,32 @@ export const electNewHost = (roomId: string): void => {
     }
 };
 
-export const resetRoom = (roomId: string, triggeredBy?: 'user' | 'timeout' | 'system'): void => {
+export const resetRoom = (roomId: string, triggeredBy?: 'user' | 'timeout' | 'system'): RoomGameState | null => { // ★ 戻り値を変更
     console.log(`[Game Logic] Resetting room: ${roomId}` + (triggeredBy ? ` (Triggered by: ${triggeredBy})` : ''));
     const currentRoomState = gameRooms.get(roomId);
     if (!currentRoomState) {
         console.error(`[Reset Room ${roomId}] Room not found.`);
-        return; // ルームが存在しなければ何もしない
+        return null; // ルームが存在しなければ null を返す
     }
 
-    // 1. 現在のユーザー情報を保持
-    const currentUsersMap = new Map(currentRoomState.connectedUsers);
+    // 1. タイムアウト時はユーザー情報を保持しない (全員退出扱いのため)
+    //    ユーザー操作によるリセットの場合は保持する
+    const usersToKeep = triggeredBy === 'timeout' ? new Map<string, RoomUser>() : new Map(currentRoomState.connectedUsers);
+    if (triggeredBy === 'timeout') {
+        console.log(`[Game Logic Reset ${roomId}] Timeout reset. All users will be effectively removed from this room state.`);
+    }
     const currentRoomName = currentRoomState.roomName;
 
     // 2. 新しい基本状態を作成 (ユーザー情報はまだ空)
-    const newState = initializeRoomState(roomId, currentUsersMap, currentRoomName);
+    const newState = initializeRoomState(roomId, usersToKeep, currentRoomName);
 
     // 3. 保持していたユーザー情報を新しい状態にセットし、チームをリセット
-    newState.connectedUsers = currentUsersMap;
-    newState.connectedUsers.forEach(user => {
-        user.team = 'observer'; // 全員観戦者に
-    });
+    // タイムアウトでない場合のみ、既存ユーザーを観戦者にする
+    if (triggeredBy !== 'timeout') {
+        newState.connectedUsers.forEach(user => {
+            user.team = 'observer';
+        });
+    }
 
     // 4. 新しい状態を gameRooms に保存
     gameRooms.set(roomId, newState);
@@ -145,21 +151,25 @@ export const resetRoom = (roomId: string, triggeredBy?: 'user' | 'timeout' | 'sy
     electNewHost(roomId); // これで newState.hostId が設定される
 
     // 6. クライアントに通知
-    //    - 新しいゲーム状態 (hostId含む)
-    //    - 新しい武器状態 (初期化済み)
-    //    - 各ユーザーの更新情報 (チームが observer になったこと)
     const publicState = getPublicRoomState(newState);
-    io.to(roomId).emit('initial state', publicState);
-    io.to(roomId).emit('initial weapons', newState.weapons);
-    newState.connectedUsers.forEach(user => { io.to(roomId).emit('user updated', user); });
 
-    // タイムアウト or システムによるリセット時の通知
     if (triggeredBy === 'timeout') {
         io.to(roomId).emit('system message', { type: 'room_timeout', message: `ルーム "${roomId}" は一定時間操作がなかったためリセットされました。` });
+        // ★ タイムアウト時は、クライアント側でルーム退出処理を促すイベントを発行する
+        //    または、サーバー側で強制的に Socket.IO のルームから leave させる
+        //    ここではクライアントに通知し、クライアント側での対応を促す例
+        io.to(roomId).emit('force leave room', { reason: 'room_timeout' });
+        console.log(`[Game Logic Reset ${roomId}] Emitted 'force leave room' due to timeout.`);
+    } else {
+        // ユーザー操作やシステムによるリセットの場合
+        io.to(roomId).emit('initial state', publicState);
+        io.to(roomId).emit('initial weapons', newState.weapons);
+        newState.connectedUsers.forEach(user => { io.to(roomId).emit('user updated', user); });
     }
     // ユーザー操作によるリセット通知は app.ts 側で行う
 
     console.log(`[Game Logic] Room ${roomId} reset. Name kept: "${newState.roomName}", Users: ${newState.connectedUsers.size}, New Host: ${newState.hostId}`);
+    return newState; // ★ 更新された状態を返す
 };
 
 // ★★★★★ 追加: ランダムステージプール更新関数 ★★★★★
@@ -547,18 +557,25 @@ export const endBanPhase = (roomId: string): void => {
     switchPickTurn(roomId);
 };
 
-export const checkRoomTimeouts = (): void => {
+export const checkRoomTimeouts = (): string[] => { // 戻り値を string[] に変更
     const now = Date.now();
     // console.log(`[Timeout Check] Running check at ${new Date(now).toLocaleTimeString()}`);
     let resetCount = 0;
+    const timedOutRoomIds: string[] = []; // タイムアウトしたルームIDを格納する配列
 
     gameRooms.forEach((roomState, roomId) => {
         if (roomState.phase === 'waiting' || roomState.phase === 'pick_complete') {
             const timeSinceLastActivity = now - roomState.lastActivityTime;
             if (timeSinceLastActivity > ROOM_TIMEOUT_DURATION) {
                 console.log(`[Timeout Check ${roomId}] Room timed out (Phase: ${roomState.phase}, Elapsed: ${Math.round(timeSinceLastActivity / 60000)}min). Resetting...`);
-                resetRoom(roomId, 'timeout');
-                resetCount++;
+                const resetResultState = resetRoom(roomId, 'timeout');
+                if (resetResultState) {
+                    timedOutRoomIds.push(roomId); // タイムアウトしたIDを追加
+                    // タイムアウト後、ルーム内のユーザーのグローバル情報を更新する必要がある
+                    // (app.ts 側で connectedUsersGlobal から該当ユーザーを削除するなど)
+                    // この情報は gameLogic から直接は操作できないため、app.ts 側で対応が必要
+                    io.to(roomId).emit('room_timed_out_server_reset'); // app.ts側で処理するためのイベント
+                } resetCount++;
             }
         }
     });
@@ -566,4 +583,5 @@ export const checkRoomTimeouts = (): void => {
     if (resetCount > 0) {
         console.log(`[Timeout Check] Finished. Reset ${resetCount} room(s).`);
     }
+    return timedOutRoomIds; // タイムアウトしたルームIDのリストを返す
 };
