@@ -7,6 +7,7 @@ import cors from 'cors';
 import http from 'http';
 import { Server, Socket } from 'socket.io';
 import path from 'path';
+import { GameResultModel } from './models/GameResult'; // ★ GameResultModel をインポート
 import type { ConnectedUserInfo, RoomUser, RoomGameState, PublicRoomGameState, MasterWeapon, RoomWeaponState, Team } from '../common/types/index';
 import { ROOM_IDS, MAX_USERS_PER_ROOM, MAX_BANS_PER_TEAM, BAN_PHASE_DURATION, PICK_PHASE_TURN_DURATION, MAX_PLAYERS_PER_TEAM, MIN_PLAYERS_PER_TEAM, STAGES_DATA, RULES_DATA } from '../common/types/index';
 import * as GameLogic from './gameLogic';
@@ -52,7 +53,7 @@ console.log(`Serving static files from: ${path.join(__dirname, '..', 'public/ima
 export const io = new Server(server, { cors: corsOptions });
 
 // --- グローバル状態管理 ---
-const gameRooms = new Map<string, RoomGameState>();
+export const gameRooms = new Map<string, RoomGameState>(); // ★ gameRooms をエクスポート可能に (recordGameResult で使用)
 const connectedUsersGlobal = new Map<string, ConnectedUserInfo>();
 let masterWeapons: MasterWeapon[] = [];
 
@@ -61,8 +62,8 @@ let masterWeapons: MasterWeapon[] = [];
 // ==================================
 
 // --- ルーム一覧取得 API ---
-app.get('/api/v1/rooms', (req: Request, res: Response) => { // ★ Request, Response 型を明示
-    console.log('[API] Request received for /api/v1/rooms');
+app.get('/api/v1/rooms', (req: Request, res: Response) => {
+    console.log('[API] GET /api/v1/rooms handler executed.');
     const roomList = ROOM_IDS.map(roomId => {
         const roomState = gameRooms.get(roomId);
         return {
@@ -107,6 +108,51 @@ const validateNameServer = (name: string): string | null => {
     if (trimmedName.length === 0) return '名前が空です。';
     if (trimmedName.length > 10) return '名前が長すぎます (10文字以内)';
     return null;
+};
+
+// ゲーム結果記録関数
+export const recordGameResult = async (roomId: string): Promise<void> => {
+    const roomState = gameRooms.get(roomId);
+    if (!roomState) {
+        console.error(`[Record Game Result ${roomId}] Room state not found in app.ts.`);
+        return;
+    }
+
+    // Pick/Ban完了時以外で呼ばれた場合、データが不完全な可能性がある
+    if (roomState.phase !== 'pick_complete') {
+        console.warn(`[Record Game Result ${roomId}] Called when phase is ${roomState.phase}. Pick/Ban data might be incomplete if called before pick_complete.`);
+    }
+
+    // selectedStageId と selectedRuleId はゲーム開始時に数値に変換されている想定
+    if (typeof roomState.selectedStageId !== 'number' || typeof roomState.selectedRuleId !== 'number') {
+        console.error(`[Record Game Result ${roomId}] Stage ID or Rule ID is not a number. Stage: ${roomState.selectedStageId}, Rule: ${roomState.selectedRuleId}. Aborting record.`);
+        return;
+    }
+
+    console.log(`[Record Game Result ${roomId}] Recording game result from app.ts...`);
+
+    try {
+        const bannedWeapons: { alpha: number[], bravo: number[] } = { alpha: [], bravo: [] };
+        const pickedWeapons: { alpha: number[], bravo: number[] } = { alpha: [], bravo: [] };
+
+        roomState.weapons.forEach(weapon => {
+            if (weapon.bannedBy.includes('alpha')) bannedWeapons.alpha.push(weapon.id);
+            if (weapon.bannedBy.includes('bravo')) bannedWeapons.bravo.push(weapon.id);
+            if (weapon.selectedBy === 'alpha') pickedWeapons.alpha.push(weapon.id);
+            if (weapon.selectedBy === 'bravo') pickedWeapons.bravo.push(weapon.id);
+        });
+
+        await GameResultModel.create({
+            roomId: roomId,
+            selectedStageId: roomState.selectedStageId, // number である想定
+            selectedRuleId: roomState.selectedRuleId,   // number である想定
+            bannedWeapons: bannedWeapons,
+            pickedWeapons: pickedWeapons,
+        });
+        console.log(`[Record Game Result ${roomId}] Game result recorded successfully from app.ts.`);
+    } catch (error) {
+        console.error(`[Record Game Result ${roomId}] Error recording game result from app.ts:`, error);
+    }
 };
 
 // ==================================
@@ -446,7 +492,7 @@ io.on('connection', (socket: Socket) => {
             console.log(`[Start Game ${roomId}] Starting ban phase with Stage ID: ${roomState.selectedStageId}, Rule ID: ${roomState.selectedRuleId}`);
             // roomState の更新は GameLogic 内で行う想定に変更しても良い
             roomState.phase = 'ban';
-            roomState.currentTurn = null;
+            roomState.currentTurn = null; // BANフェーズ開始時は特定のターンプレイヤーはいない
             roomState.banPhaseState = { bans: { alpha: 0, bravo: 0 }, maxBansPerTeam: MAX_BANS_PER_TEAM };
             roomState.timeLeft = BAN_PHASE_DURATION; // タイマー初期値設定
 
@@ -870,8 +916,13 @@ sequelize
         masterWeapons = await getMasterWeapons(); // マスターデータをメモリにロード
         console.log(`Loaded ${masterWeapons.length} master weapons.`);
 
-        // ゲームロジックモジュールの初期化
-        GameLogic.initializeGameLogic(io, gameRooms, masterWeapons);
+        // ゲームロジックモジュールの初期化 (recordGameResult 関数を渡す)
+        GameLogic.initializeGameLogic(
+            io,
+            gameRooms,
+            masterWeapons,
+            recordGameResult // ★ recordGameResult 関数を GameLogic に渡す
+        );
 
         // 全てのルーム状態をメモリ上に初期化
         console.log('Initializing game rooms state in memory...');

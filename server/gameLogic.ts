@@ -1,8 +1,10 @@
 
 import { Server } from 'socket.io';
 import { RoomGameState, RoomUser, RoomWeaponState, PublicRoomGameState, MasterWeapon, Team } from '../common/types/game';
-import { MAX_BANS_PER_TEAM, MAX_PICKS_PER_TEAM, TOTAL_PICK_TURNS, BAN_PHASE_DURATION,
-     PICK_PHASE_TURN_DURATION, USE_FAST_TIMER, FAST_TIMER_MULTIPLIER, DEFAULT_ROOM_NAMES, ROOM_IDS, STAGES_DATA, RULES_DATA } from '../common/types/constants';
+import {
+    MAX_BANS_PER_TEAM, MAX_PICKS_PER_TEAM, TOTAL_PICK_TURNS, BAN_PHASE_DURATION,
+    PICK_PHASE_TURN_DURATION, USE_FAST_TIMER, FAST_TIMER_MULTIPLIER, DEFAULT_ROOM_NAMES, ROOM_IDS, STAGES_DATA, RULES_DATA
+} from '../common/types/constants';
 
 // タイムアウト関連の定数
 export const ROOM_TIMEOUT_DURATION = 30 * 60 * 1000; // 30分 (ミリ秒)
@@ -12,15 +14,18 @@ export const ROOM_CHECK_INTERVAL = 5 * 60 * 1000; // 5分 (ミリ秒)
 let io: Server;
 let gameRooms: Map<string, RoomGameState>;
 let masterWeapons: MasterWeapon[];
+let recordGameResultCallback: ((roomId: string) => Promise<void>) | null = null;
 
 export const initializeGameLogic = (
     socketIo: Server,
     roomsMap: Map<string, RoomGameState>,
-    masterWeaponsList: MasterWeapon[]
+    masterWeaponsList: MasterWeapon[],
+    recordGameResultFunc: (roomId: string) => Promise<void> // ★ 引数を追加
 ): void => {
     io = socketIo;
     gameRooms = roomsMap;
     masterWeapons = masterWeaponsList;
+    recordGameResultCallback = recordGameResultFunc; // ★ 受け取った関数を保存
     console.log('[Game Logic] Initialized.');
 };
 
@@ -66,7 +71,7 @@ export const initializeRoomState = (roomId: string, existingUsers?: Map<string, 
         pickPhaseState: { picks: { alpha: 0, bravo: 0 }, maxPicksPerTeam: MAX_PICKS_PER_TEAM },
         weapons: initialWeapons,
         connectedUsers: existingUsers ? new Map(existingUsers) : new Map<string, RoomUser>(),
-        selectedStageId: 'random', 
+        selectedStageId: 'random',
         selectedRuleId: 'random',
         hostId: null,
         lastActivityTime: Date.now(),
@@ -103,9 +108,9 @@ export const electNewHost = (roomId: string): void => {
         if (roomState.roomName !== defaultRoomName) {
             console.log(`[Host Election ${roomId}] No users left, resetting room name to default: "${defaultRoomName}".`);
             roomState.roomName = defaultRoomName;
-             // 名前変更も room state update で通知される
+            // 名前変更も room state update で通知される
         } else {
-             console.log(`[Host Election ${roomId}] No users left, host set to null. Room name already default.`);
+            console.log(`[Host Election ${roomId}] No users left, host set to null. Room name already default.`);
         }
         io.to(roomId).emit('host changed', { hostId: null, hostName: null });
         io.to(roomId).emit('room state update', getPublicRoomState(roomState));
@@ -227,7 +232,7 @@ export const determineStartingStage = (roomId: string): number | 'random' | null
         }
         const randomIndex = Math.floor(Math.random() * pool.length);
         const selectedId = pool[randomIndex];
-        console.log(`[Start Game ${roomId}] Random stage selected from pool: ${STAGES_DATA.find(s=>s.id === selectedId)?.name} (ID: ${selectedId})`);
+        console.log(`[Start Game ${roomId}] Random stage selected from pool: ${STAGES_DATA.find(s => s.id === selectedId)?.name} (ID: ${selectedId})`);
         return selectedId; // 選択された数値 ID を返す
     } else {
         // 'random' 以外が選択されている場合はそれをそのまま返す
@@ -258,23 +263,23 @@ export const updateRandomRulePool = (roomId: string, ruleId: number): boolean =>
 
 // ★★★★★ 追加: determineStartingRule 関数 ★★★★★
 export const determineStartingRule = (roomId: string): number | 'random' | null | 'error' => {
-     const roomState = gameRooms.get(roomId);
-     if (!roomState) return null;
-     if (roomState.selectedRuleId === 'random') {
-         const pool = roomState.randomRulePool;
-         // ★★★★★ 変更点: プールが1つ以下の場合の考慮 ★★★★★
-         if (pool.length === 0) {
-             console.error(`[Start Game ${roomId}] Random rule selected but pool is empty!`);
-             return 'error';
-         }
-         // ★ ランダム対象が1つの場合も、その1つを選択する（ランダムではない警告はクライアント側）
-         const randomIndex = Math.floor(Math.random() * pool.length);
-         const selectedId = pool[randomIndex];
-         console.log(`[Start Game ${roomId}] Random rule selected from pool: ${RULES_DATA.find(r=>r.id === selectedId)?.name} (ID: ${selectedId})`);
-         return selectedId;
-     } else {
-         return roomState.selectedRuleId;
-     }
+    const roomState = gameRooms.get(roomId);
+    if (!roomState) return null;
+    if (roomState.selectedRuleId === 'random') {
+        const pool = roomState.randomRulePool;
+        // ★★★★★ 変更点: プールが1つ以下の場合の考慮 ★★★★★
+        if (pool.length === 0) {
+            console.error(`[Start Game ${roomId}] Random rule selected but pool is empty!`);
+            return 'error';
+        }
+        // ★ ランダム対象が1つの場合も、その1つを選択する（ランダムではない警告はクライアント側）
+        const randomIndex = Math.floor(Math.random() * pool.length);
+        const selectedId = pool[randomIndex];
+        console.log(`[Start Game ${roomId}] Random rule selected from pool: ${RULES_DATA.find(r => r.id === selectedId)?.name} (ID: ${selectedId})`);
+        return selectedId;
+    } else {
+        return roomState.selectedRuleId;
+    }
 };
 
 export const changeRoomName = (roomId: string, newName: string): boolean => {
@@ -330,12 +335,12 @@ export const startRoomTimer = (roomId: string, duration: number, onTick: (roomId
     const intervalId = setInterval(() => {
         const currentRoomState = gameRooms.get(roomId);
         if (!currentRoomState || currentRoomState.timer === null || currentRoomState.timer !== intervalId) {
-             console.log(`[Timer Tick ${roomId}] Timer stop requested or room state invalid. Clearing interval ${intervalId}.`);
-             clearInterval(intervalId);
-             if (currentRoomState && currentRoomState.timer === intervalId) {
-                 currentRoomState.timer = null;
-             }
-             return;
+            console.log(`[Timer Tick ${roomId}] Timer stop requested or room state invalid. Clearing interval ${intervalId}.`);
+            clearInterval(intervalId);
+            if (currentRoomState && currentRoomState.timer === intervalId) {
+                currentRoomState.timer = null;
+            }
+            return;
         }
 
         currentRoomState.timeLeft = Math.max(0, currentRoomState.timeLeft - 1);
@@ -411,7 +416,7 @@ export const handleSuccessfulBan = (roomId: string, team: Team): void => { // �
     const bravoReachedMax = roomState.banPhaseState.bans.bravo >= roomState.banPhaseState.maxBansPerTeam;
     if (alphaReachedMax && bravoReachedMax) {
         console.log(`[Ban End ${roomId}] Both teams reached max bans. Calling endBanPhase...`);
-        if(roomState.timer) { clearInterval(roomState.timer); roomState.timer = null; }
+        if (roomState.timer) { clearInterval(roomState.timer); roomState.timer = null; }
         endBanPhase(roomId);
     }
 };
@@ -473,6 +478,13 @@ export const switchPickTurn = (roomId: string): void => {
         console.log(`[Pick End ${roomId}] Max pick turns reached. Setting phase to pick_complete.`);
         roomState.phase = 'pick_complete';
         roomState.currentTurn = null;
+        // ★★★★★ ゲーム結果記録コールバックを呼び出す ★★★★★
+        if (recordGameResultCallback) {
+            recordGameResultCallback(roomId).catch(err => {
+                console.error(`[Pick End ${roomId}] Error calling recordGameResultCallback:`, err);
+            });
+        }
+        // ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
         roomState.timeLeft = 0;
         roomState.lastActivityTime = Date.now();
         io.to(roomId).emit('phase change', getPublicRoomState(roomState));
@@ -497,8 +509,8 @@ export const switchPickTurn = (roomId: string): void => {
         async (rId) => { // onEnd (時間切れ)
             const timedOutRoomState = gameRooms.get(rId);
             if (!timedOutRoomState || timedOutRoomState.phase !== 'pick' || timedOutRoomState.timer !== null) {
-                 console.log(`[Timer End ${rId}] Room state invalid or new timer started. Aborting timeout action.`);
-                 return;
+                console.log(`[Timer End ${rId}] Room state invalid or new timer started. Aborting timeout action.`);
+                return;
             }
             const timedOutPlayer = timedOutRoomState.currentTurn;
             console.log(`[Timer End ${rId}] Pick turn ${timedOutRoomState.currentPickTurnNumber} (Player: ${timedOutPlayer}) timed out.`);
@@ -506,9 +518,9 @@ export const switchPickTurn = (roomId: string): void => {
                 console.log(`[Timer End ${rId}] Action NOT taken. Selecting randomly...`);
                 await selectRandomWeapon(rId, timedOutPlayer);
             } else {
-                 console.log(`[Timer End ${rId}] Action WAS taken or no player assigned.`);
-                 // ★ アクション済みでも時間切れなのでターンは進める必要がある
-                 switchPickTurn(rId);
+                console.log(`[Timer End ${rId}] Action WAS taken or no player assigned.`);
+                // ★ アクション済みでも時間切れなのでターンは進める必要がある
+                switchPickTurn(rId);
             }
         }
     );

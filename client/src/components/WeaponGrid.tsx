@@ -60,6 +60,11 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
         return gameState !== null && gameState.hostId !== null && gameState.hostId === myActualSocketId;
     }, [gameState?.hostId, myActualSocketId]); // ★ 修正
 
+    // ★ いずれかのランダム設定モーダルが開いているか
+    const isAnyRandomSettingsModalOpen = useMemo(() => {
+        return isStageModalOpen || isRuleModalOpen;
+    }, [isStageModalOpen, isRuleModalOpen]);
+
     const timerDuration = useMemo(() => {
         if (!gameState) return 0;
         if (gameState.phase === 'ban') return BAN_PHASE_DURATION;
@@ -679,6 +684,7 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
         randomRulePoolCount: gameState.randomRulePool?.length ?? 0,
         onLeaveRoom: handleLeaveButtonClick,
         onStartGame: handleStartGame,
+        isAnyRandomSettingsModalOpen: isAnyRandomSettingsModalOpen, // ★ 追加
         onResetGame: handleResetGame,
         onOpenStageModal: openStageModal,
         onOpenRuleModal: openRuleModal,

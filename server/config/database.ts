@@ -1,6 +1,7 @@
 import { Sequelize } from 'sequelize-typescript';
 import "reflect-metadata";
 import { WeaponModel } from '../models/Weapon';
+import { GameResultModel } from '../models/GameResult';
 import { MasterWeapon } from '../../common/types/game';
 import { CreationAttributes } from 'sequelize';
 
@@ -8,7 +9,7 @@ import { CreationAttributes } from 'sequelize';
 export const sequelize = new Sequelize({
   dialect: 'sqlite',
   storage: './database.sqlite',
-  models: [WeaponModel],
+  models: [WeaponModel, GameResultModel], // 新しいモデルを追加
   logging: false, // SQLログが不要なら false に
 });
 
