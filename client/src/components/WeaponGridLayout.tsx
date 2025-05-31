@@ -42,8 +42,8 @@ interface TeamPanelProps {
   phase: GameState['phase'];
   hostId: GameState['hostId'];
   teamUsers: RoomUser[];
-  pickedWeaponIds: number[];
-  bannedWeaponIds: number[];
+  orderedPickedWeaponIds: number[]; // ★ 修正: TeamPanel.tsx の Props に合わせる
+  orderedBannedWeaponIds: number[]; // ★ 修正: TeamPanel.tsx の Props に合わせる
   masterWeaponsMap: Map<number, MasterWeapon>;
   weaponStates: Record<number, RoomWeaponState>;
   pickCount: number;
