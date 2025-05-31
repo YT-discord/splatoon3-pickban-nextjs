@@ -1,7 +1,7 @@
 module.exports = {
 	apps: [
 	{
-            name: 'splatoon3-pickban-api', // pm2で表示されるアプリケーション名 (任意)
+            name: 'sp3-PB-api', // pm2で表示されるアプリケーション名 (任意)
             script: 'npm',            // npmコマンドを実行
             args: 'run start',        // package.jsonの "start" スクリプトを実行
             cwd: './',                // このecosystem.config.jsファイルがあるディレクトリをカレントディレクトリとする

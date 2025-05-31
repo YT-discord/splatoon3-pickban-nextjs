@@ -31,7 +31,7 @@ export const getMasterWeapons = async (): Promise<MasterWeapon[]> => {
 
 export const initializeDB = async () => {
   try {
-    await sequelize.sync({ force: true });
+    await sequelize.sync({ force: false });
     console.log('Database synchronized.');
 
     const masterWeaponsData: CreationAttributes<WeaponModel>[] = [

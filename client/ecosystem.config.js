@@ -1,7 +1,7 @@
 module.exports = {
 	  apps: [
     {
-	name: 'splatoon3-pickban-client',
+	name: 'sp3-PB-client',
 	script: 'npm',
 	args: 'run start',
 	cwd: './',
