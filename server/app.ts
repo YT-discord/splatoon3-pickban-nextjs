@@ -301,6 +301,7 @@ io.on('connection', (socket: Socket) => {
         if (roomState.hostId === null) {
             // まだホストがいなければ、この参加者をホストにする
             roomState.hostId = socketId;
+            roomState.lastActivityTime = Date.now(); // ★ 最初の参加者が入室した時刻を記録
             console.log(`[Host Assignment ${roomId}] First user joined. ${trimmedName} (${socketId}) is now the host.`);
             // ★ ホスト決定を通知 (任意だが、最初のホストが決まったことを知らせる)
             io.to(roomId).emit('host changed', { hostId: socketId, hostName: trimmedName });
