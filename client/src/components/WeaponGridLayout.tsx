@@ -33,6 +33,7 @@ interface GameHeaderProps {
   onResetGame: () => void;
   onOpenStageModal: () => void;
   onOpenRuleModal: () => void;
+  isAnyRandomSettingsModalOpen: boolean;
 }
 
 interface TeamPanelProps {
