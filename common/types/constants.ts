@@ -32,7 +32,7 @@ export const RANDOM_WEAPON_CHOICE_ITEM = { // ★ 名前変更推奨
 
 // 時間設定 (秒)
 export const BAN_PHASE_DURATION = 30;
-export const PICK_PHASE_TURN_DURATION = 10;
+export const PICK_PHASE_TURN_DURATION = 15;
 
 // Fast Timer (デバッグ用) 環境変数 FAST_TIMER=true で有効
 export const USE_FAST_TIMER = process.env.FAST_TIMER === 'true';

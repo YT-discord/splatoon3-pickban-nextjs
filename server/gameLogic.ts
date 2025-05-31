@@ -67,7 +67,9 @@ export const initializeRoomState = (roomId: string, existingUsers?: Map<string, 
         currentPickTurnNumber: 0,
         timer: null,
         turnActionTaken: { alpha: false, bravo: false },
+        bannedWeaponsOrder: { alpha: [], bravo: [] }, // ★ BAN順序の初期化
         banPhaseState: { bans: { alpha: 0, bravo: 0 }, maxBansPerTeam: MAX_BANS_PER_TEAM },
+        pickedWeaponsOrder: { alpha: [], bravo: [] }, // ★ PICK順序の初期化
         pickPhaseState: { picks: { alpha: 0, bravo: 0 }, maxPicksPerTeam: MAX_PICKS_PER_TEAM },
         weapons: initialWeapons,
         connectedUsers: existingUsers ? new Map(existingUsers) : new Map<string, RoomUser>(),
@@ -139,6 +141,8 @@ export const resetRoom = (roomId: string, triggeredBy?: 'user' | 'timeout' | 'sy
     // 3. 保持していたユーザー情報を新しい状態にセットし、チームをリセット
     // タイムアウトでない場合のみ、既存ユーザーを観戦者にする
     if (triggeredBy !== 'timeout') {
+        newState.bannedWeaponsOrder = { alpha: [], bravo: [] }; // ★ リセット
+        newState.pickedWeaponsOrder = { alpha: [], bravo: [] }; // ★ リセット
         newState.connectedUsers.forEach(user => {
             user.team = 'observer';
         });
@@ -318,7 +322,9 @@ export const getPublicRoomState = (roomState: RoomGameState): PublicRoomGameStat
         ...publicState,
         userCount: connectedUsers.size,
         banCounts: roomState.banPhaseState.bans,
+        bannedWeaponsOrder: roomState.bannedWeaponsOrder, // ★ 追加
         pickCounts: roomState.pickPhaseState.picks,
+        pickedWeaponsOrder: roomState.pickedWeaponsOrder, // ★ 追加
     };
 };
 
@@ -369,13 +375,13 @@ export const startRoomTimer = (roomId: string, duration: number, onTick: (roomId
     console.log(`[Timer ${roomId}] Timer intervalId ${intervalId} stored in room state.`);
 };
 
-export const selectRandomWeapon = async (roomId: string, team: Team): Promise<void> => { // ★ 型を Team に
+export const selectRandomWeapon = async (roomId: string, team: Team): Promise<void> => {
     console.log(`[Random Select ${roomId}] Attempting random select for team ${team}...`);
     const roomState = gameRooms.get(roomId);
     if (!roomState || roomState.phase !== 'pick') return;
 
     try {
-        const availableWeapons = roomState.weapons.filter(weapon =>
+        const availableWeapons = roomState.weapons.filter(weapon => // NOSONAR
             !weapon.selectedBy &&
             weapon.bannedBy.length === 0 // BANされていない武器のみ
         );
@@ -384,34 +390,40 @@ export const selectRandomWeapon = async (roomId: string, team: Team): Promise<vo
         if (availableWeapons.length > 0) {
             const randomIndex = Math.floor(Math.random() * availableWeapons.length);
             const weaponToSelect = availableWeapons[randomIndex];
+            const selectedId = weaponToSelect.id;
             const masterWeaponInfo = masterWeapons.find(mw => mw.id === weaponToSelect.id);
 
-            console.log(`[Random Select ${roomId}] Team ${team} timed out. Selecting: ${masterWeaponInfo?.name} (ID: ${weaponToSelect.id})`);
+            console.log(`[Random Select ${roomId}] Team ${team} timed out. Selecting: ${masterWeaponInfo?.name} (ID: ${selectedId})`);
             weaponToSelect.selectedBy = team;
-            console.log(`[Random Select ${roomId}] Weapon ${weaponToSelect.id} state updated in room memory.`);
+            console.log(`[Random Select ${roomId}] Weapon ${selectedId} state updated in room memory.`);
 
             // ★ ランダム選択後も武器状態を通知
             const updatedWeaponState: RoomWeaponState = { id: weaponToSelect.id, selectedBy: weaponToSelect.selectedBy, bannedBy: weaponToSelect.bannedBy };
             io.to(roomId).emit('update weapon', updatedWeaponState);
 
             // 成功処理を呼ぶ (Pickカウント増加、ターン進行)
-            handleSuccessfulPick(roomId, team); // ★ 引数 roomId を渡す
+            handleSuccessfulPick(roomId, team, selectedId); // ★ 選択した武器のIDを渡す
         } else {
             console.log(`[Random Select ${roomId}] Team ${team} timed out. No available weapons.`);
             // 選択できる武器がなくてもターンは進める
-            handleSuccessfulPick(roomId, team); // ★ 引数 roomId を渡す
+            handleSuccessfulPick(roomId, team, null); // ★ 武器が選択されなかったのでnullを渡す
         }
     } catch (error) {
         console.error(`[Random Select ${roomId}] Error for team ${team}:`, error);
         // エラーでもターンは進める
-        handleSuccessfulPick(roomId, team); // ★ 引数 roomId を渡す
+        handleSuccessfulPick(roomId, team, null); // ★ エラー時はnullを渡す
     }
 };
 
-export const handleSuccessfulBan = (roomId: string, team: Team): void => { // ★ 型を Team に
+export const handleSuccessfulBan = (roomId: string, team: Team, bannedWeaponId: number): void => { // ★ bannedWeaponId を引数に追加
     const roomState = gameRooms.get(roomId);
     if (!roomState || roomState.phase !== 'ban') return;
     console.log(`[Game Logic ${roomId}] handleSuccessfulBan called for team: ${team}.`);
+
+    // ★ BANされた武器のIDを順番に記録
+    if (!roomState.bannedWeaponsOrder[team].includes(bannedWeaponId)) {
+        roomState.bannedWeaponsOrder[team].push(bannedWeaponId);
+    }
 
     // BANカウントを増やす（上限チェックは app.ts で行う想定）
     roomState.banPhaseState.bans[team]++;
@@ -431,15 +443,20 @@ export const handleSuccessfulBan = (roomId: string, team: Team): void => { // �
     }
 };
 
-export const handleSuccessfulPick = (roomId: string, team: Team): void => { // ★ 型を Team に
+export const handleSuccessfulPick = (roomId: string, team: Team, pickedWeaponId: number | null): void => { // ★ pickedWeaponId を引数に追加し、型を number | null に変更
     const roomState = gameRooms.get(roomId);
     if (!roomState || roomState.phase !== 'pick') return;
-    console.log(`[Game Logic ${roomId}] handleSuccessfulPick called for team: ${team}.`);
+    console.log(`[Game Logic ${roomId}] handleSuccessfulPick called for team: ${team}. Weapon ID: ${pickedWeaponId}`);
 
     // このターンでまだアクションしていない場合のみ処理
     if (!roomState.turnActionTaken[team]) {
         roomState.turnActionTaken[team] = true; // アクション済みフラグを立てる
         roomState.pickPhaseState.picks[team]++; // Pick カウントを増やす
+
+        // ★ PICKされた武器のIDを順番に記録 (nullでない場合のみ)
+        if (pickedWeaponId !== null && !roomState.pickedWeaponsOrder[team].includes(pickedWeaponId)) {
+            roomState.pickedWeaponsOrder[team].push(pickedWeaponId);
+        }
         console.log(`[Pick Count ${roomId}] ${team}: ${roomState.pickPhaseState.picks[team]}`);
 
         // ★★★ 最新のゲーム状態をクライアントに通知 (Pick数が増えたため) ★★★

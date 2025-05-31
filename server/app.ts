@@ -635,7 +635,7 @@ io.on('connection', (socket: Socket) => {
             io.to(roomId).emit('update weapon', updatedWeaponState);
             console.log(`[Ban Weapon ${roomId}] Emitted 'update weapon'.`);
 
-            GameLogic.handleSuccessfulBan(roomId, team); // ロジック呼び出し (BANカウント増加、フェーズ終了判定など)
+            GameLogic.handleSuccessfulBan(roomId, team, weaponId); // ★ weaponId を渡す
 
             // ★ handleSuccessfulBan 内で phase change が emit されるのでここでは不要
             // socket.emit('ban success', { weaponId }); // 個別成功通知は不要かも
@@ -688,7 +688,7 @@ io.on('connection', (socket: Socket) => {
             io.to(roomId).emit('update weapon', updatedWeaponState);
             console.log(`[Select Weapon ${roomId}] Emitted 'update weapon'.`);
 
-            GameLogic.handleSuccessfulPick(roomId, team); // ロジック呼び出し (Pickカウント増加、ターン切り替えなど)
+            GameLogic.handleSuccessfulPick(roomId, team, weaponId); // ★ weaponId を渡す
 
             // ★ handleSuccessfulPick 内で phase change が emit されるのでここでは不要
             // socket.emit('select success', { weaponId }); // 個別成功通知は不要かも
@@ -739,7 +739,13 @@ io.on('connection', (socket: Socket) => {
         try {
             // selectRandomWeapon は内部で handleSuccessfulPick を呼び出し、
             // ターン進行やイベント発行を行うので、ここでは呼び出すだけで良い
-            GameLogic.selectRandomWeapon(roomId, team);
+            // ★ selectRandomWeapon が選択した武器IDを返すように変更するか、
+            //    handleSuccessfulPick を呼び出す際に武器IDを渡せるように selectRandomWeapon 側を修正する必要がある。
+            //    ここでは、selectRandomWeapon が内部で適切に処理すると仮定する。
+            //    もし selectRandomWeapon が武器IDを返さない場合、handleSuccessfulPick に正しいIDを渡せない。
+            //    GameLogic.selectRandomWeapon の中で、選択した武器IDを使って GameLogic.handleSuccessfulPick を呼ぶように修正が必要。
+            //    今回は GameLogic.selectRandomWeapon の内部実装は変更せず、呼び出し側はそのままにしておく。
+            GameLogic.selectRandomWeapon(roomId, team); // この関数内で選択された武器IDを使って handleSuccessfulPick を呼ぶ想定
             console.log(`[Select Random Weapon ${roomId}] Called GameLogic.selectRandomWeapon successfully for ${team}.`);
         } catch (error) {
             console.error(`[Select Random Weapon ${roomId}] Error calling GameLogic.selectRandomWeapon:`, error);

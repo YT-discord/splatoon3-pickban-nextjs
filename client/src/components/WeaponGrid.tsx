@@ -90,17 +90,11 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
         return map;
     }, [masterWeapons]);
 
-    const allPickedWeaponIds = useMemo(() => { // ★ 名前変更: 全チームのPick ID
-        return Object.values(weaponStates).filter(s => s.selectedBy !== null).map(s => s.id);
-    }, [weaponStates]);
-    const allBannedWeaponIds = useMemo(() => { // ★ 名前変更: 全チームのBan ID
-        return Object.values(weaponStates).filter(s => s.bannedBy.length > 0).map(s => s.id);
-    }, [weaponStates]);
-
-    const alphaPickedIds = useMemo(() => allPickedWeaponIds.filter(id => weaponStates[id]?.selectedBy === 'alpha'), [allPickedWeaponIds, weaponStates]);
-    const bravoPickedIds = useMemo(() => allPickedWeaponIds.filter(id => weaponStates[id]?.selectedBy === 'bravo'), [allPickedWeaponIds, weaponStates]);
-    const alphaBannedIds = useMemo(() => allBannedWeaponIds.filter(id => weaponStates[id]?.bannedBy.includes('alpha')), [allBannedWeaponIds, weaponStates]);
-    const bravoBannedIds = useMemo(() => allBannedWeaponIds.filter(id => weaponStates[id]?.bannedBy.includes('bravo')), [allBannedWeaponIds, weaponStates]);
+    // ★ PICK/BANされた武器のIDを gameState から順序通りに取得
+    const orderedAlphaPickedIds = useMemo(() => gameState?.pickedWeaponsOrder?.alpha || [], [gameState?.pickedWeaponsOrder?.alpha]);
+    const orderedBravoPickedIds = useMemo(() => gameState?.pickedWeaponsOrder?.bravo || [], [gameState?.pickedWeaponsOrder?.bravo]);
+    const orderedAlphaBannedIds = useMemo(() => gameState?.bannedWeaponsOrder?.alpha || [], [gameState?.bannedWeaponsOrder?.alpha]);
+    const orderedBravoBannedIds = useMemo(() => gameState?.bannedWeaponsOrder?.bravo || [], [gameState?.bannedWeaponsOrder?.bravo]);
 
     const displayWeaponIds = useMemo<number[]>(() => {
         let filteredWeapons = [...masterWeapons];
@@ -652,17 +646,16 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
     const teamAlphaPanelProps = {
         ...commonTeamPanelProps,
         teamUsers: alphaTeamUsers,
-        pickedWeaponIds: alphaPickedIds,
-        bannedWeaponIds: alphaBannedIds,
+        orderedPickedWeaponIds: orderedAlphaPickedIds, // ★ 変更
+        orderedBannedWeaponIds: orderedAlphaBannedIds, // ★ 変更
         pickCount: gameState.pickPhaseState?.picks.alpha ?? 0,
         banCount: gameState.banPhaseState?.bans.alpha ?? 0,
     };
-
     const teamBravoPanelProps = {
         ...commonTeamPanelProps,
         teamUsers: bravoTeamUsers,
-        pickedWeaponIds: bravoPickedIds,
-        bannedWeaponIds: bravoBannedIds,
+        orderedPickedWeaponIds: orderedBravoPickedIds, // ★ 変更
+        orderedBannedWeaponIds: orderedBravoBannedIds, // ★ 変更
         pickCount: gameState.pickPhaseState?.picks.bravo ?? 0,
         banCount: gameState.banPhaseState?.bans.bravo ?? 0,
     };

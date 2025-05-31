@@ -58,7 +58,9 @@ export interface ConnectedUserInfo {
     timer: NodeJS.Timeout | null;
     turnActionTaken: Record<Team, boolean>;
     banPhaseState: BanPhaseState;
+    bannedWeaponsOrder: Record<Team, number[]>; // ★ BANされた武器IDの順序
     pickPhaseState: PickPhaseState;
+    pickedWeaponsOrder: Record<Team, number[]>; // ★ PICKされた武器IDの順序
     weapons: RoomWeaponState[];
     connectedUsers: Map<string, RoomUser>;
     teams?: Record<Team, { users: RoomUser[] }>;
@@ -71,7 +73,7 @@ export interface ConnectedUserInfo {
   }
 
   // クライアントに送信する公開ゲーム状態
-  export interface PublicRoomGameState extends Omit<RoomGameState, | 'connectedUsers' | 'weapons' | 'timer' | 'turnActionTaken' | 'teams' | 'lastActivityTime'> {
+  export interface PublicRoomGameState extends Omit<RoomGameState, | 'connectedUsers' | 'weapons' | 'timer' | 'turnActionTaken' | 'teams' | 'lastActivityTime' | 'bannedWeaponsOrder' | 'pickedWeaponsOrder'> {
     roomName: string; 
     userCount: number;
     banCounts: Record<Team, number>;
@@ -79,6 +81,8 @@ export interface ConnectedUserInfo {
     selectedStageId: number | 'random' | null;
     selectedRuleId: number | 'random' | null;
     hostId: string | null;
+    bannedWeaponsOrder: Record<Team, number[]>; // ★ クライアントにも送信
+    pickedWeaponsOrder: Record<Team, number[]>; // ★ クライアントにも送信
     randomStagePool: number[];
     randomRulePool: number[];
 }

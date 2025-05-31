@@ -10,8 +10,8 @@ interface TeamPanelProps {
     phase: GameState['phase']; // phase を受け取る
     hostId: string | null; // hostId を受け取る
     teamUsers: RoomUser[];
-    pickedWeaponIds: number[]; // ID リストを受け取る
-    bannedWeaponIds: number[]; // ID リストを受け取る
+    orderedPickedWeaponIds: number[]; // ★ PICK順に並んだIDリストを受け取る
+    orderedBannedWeaponIds: number[]; // ★ BAN順に並んだIDリストを受け取る
     masterWeaponsMap: Map<number, MasterWeapon>; // Map を受け取る
     weaponStates: Record<number, RoomWeaponState>; // 状態を受け取る
     pickCount: number; // Pickカウントを受け取る
@@ -29,8 +29,8 @@ const TeamPanel: React.FC<TeamPanelProps> = memo(({ // ★ memo でラップ (�
     phase, // ★ 受け取る
     hostId, // ★ 受け取る
     teamUsers,
-    pickedWeaponIds, // ★ 受け取る
-    bannedWeaponIds, // ★ 受け取る
+    orderedPickedWeaponIds, // ★ 受け取る
+    orderedBannedWeaponIds, // ★ 受け取る
     masterWeaponsMap, // ★ 受け取る
     weaponStates, // ★ 受け取る
     pickCount, // ★ 受け取る
@@ -138,7 +138,7 @@ const TeamPanel: React.FC<TeamPanelProps> = memo(({ // ★ memo でラップ (�
                     <div className="flex-grow overflow-y-auto min-h-0"> {/* min-h-0 で overflow を防ぐ */}
                         {/* スマホでは4列、PCでは2列グリッド */}
                         <div className={`grid gap-1 ${isMobileView ? 'grid-cols-4' : 'grid-cols-2'}`}>
-                            {pickedWeaponIds.map((weaponId) => {
+                            {orderedPickedWeaponIds.map((weaponId) => { // ★ orderedPickedWeaponIds を使用
                                 const masterData = masterWeaponsMap.get(weaponId);
                                 if (!masterData) return null;
 
@@ -186,7 +186,7 @@ const TeamPanel: React.FC<TeamPanelProps> = memo(({ // ★ memo でラップ (�
                                     </div>);
                             })}
                             {/* 空欄表示 */}
-                            {Array.from({ length: MAX_PICKS_PER_TEAM - pickedWeaponIds.length }).map((_, index) => (
+                            {Array.from({ length: MAX_PICKS_PER_TEAM - orderedPickedWeaponIds.length }).map((_, index) => ( // ★ orderedPickedWeaponIds を使用
                                 <div key={`pick-placeholder-${index}`} className="border border-dashed border-gray-300 rounded bg-gray-100/50 aspect-square flex-shrink-0"></div>
                             ))}
                         </div>
@@ -198,7 +198,7 @@ const TeamPanel: React.FC<TeamPanelProps> = memo(({ // ★ memo でラップ (�
                     <div className="flex-grow overflow-y-auto min-h-0"> {/* min-h-0 で overflow を防ぐ */}
                         {/* スマホでは5列、PCでは3列グリッド */}
                         <div className={`grid gap-1 ${isMobileView ? 'grid-cols-5' : 'grid-cols-3'}`}>
-                            {bannedWeaponIds.map((weaponId) => {
+                            {orderedBannedWeaponIds.map((weaponId) => { // ★ orderedBannedWeaponIds を使用
                                 const stateData = weaponStates[weaponId];
                                 if (!shouldShowBan(stateData)) return null;
                                 const masterData = masterWeaponsMap.get(weaponId);
@@ -253,7 +253,7 @@ const TeamPanel: React.FC<TeamPanelProps> = memo(({ // ★ memo でラップ (�
                                 );
                             })}
                             {(() => {
-                                const visibleBanCount = bannedWeaponIds.filter(id => shouldShowBan(weaponStates[id])).length;
+                                const visibleBanCount = orderedBannedWeaponIds.filter(id => shouldShowBan(weaponStates[id])).length; // ★ orderedBannedWeaponIds を使用
                                 // MAX_BANS_PER_TEAM の数だけ枠が表示されるようにプレースホルダーを計算
                                 const placeholdersToRender = Math.max(0, MAX_BANS_PER_TEAM - visibleBanCount);
                                 return Array.from({ length: placeholdersToRender }).map((_, index) => (
