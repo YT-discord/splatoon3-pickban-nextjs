@@ -90,7 +90,7 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
         return map;
     }, [masterWeapons]);
 
-    // ★ PICK/BANされた武器のIDを gameState から順序通りに取得
+    // ★ BAN/PICKされた武器のIDを gameState から順序通りに取得
     const orderedAlphaPickedIds = useMemo(() => gameState?.pickedWeaponsOrder?.alpha || [], [gameState?.pickedWeaponsOrder?.alpha]);
     const orderedBravoPickedIds = useMemo(() => gameState?.pickedWeaponsOrder?.bravo || [], [gameState?.pickedWeaponsOrder?.bravo]);
     const orderedAlphaBannedIds = useMemo(() => gameState?.bannedWeaponsOrder?.alpha || [], [gameState?.bannedWeaponsOrder?.alpha]);

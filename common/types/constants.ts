@@ -39,39 +39,36 @@ export const USE_FAST_TIMER = process.env.FAST_TIMER === 'true';
 export const FAST_TIMER_MULTIPLIER = 5; // 例: 1/5 の時間にする
 
 export const SUB_WEAPONS: string[] = [
-    "スプラッシュボム", "キューバンボム", "クイックボム", "カーリングボム",
-    "ロボットボム", "タンサンボム", "トーピード", "スプリンクラー",
-    "スプラッシュシールド", "ジャンプビーコン", "ラインマーカー", "ポイントセンサー",
-    "トラップ", "ポイズンミスト"
-    // "スプリングボム" など特殊なものがあれば追加
-].sort((a, b) => a.localeCompare(b, 'ja')); // 五十音順ソート
+    "スプラッシュボム", "キューバンボム", "クイックボム", "スプリンクラー",
+    "スプラッシュシールド", "タンサンボム", "カーリングボム", "ロボットボム",
+    "ジャンプビーコン", "ポイントセンサー", "トラップ", "ポイズンミスト", "ラインマーカー", "トーピード"
+]
 
 export const SPECIAL_WEAPONS: string[] = [
-    "グレートバリア", "ホップソナー", "カニタンク", "トリプルトルネード",
-    "サメライド", "ナイスダマ", "ウルトラショット", "テイオウイカ",
-    "エナジースタンド", "デコイチラシ", "キューインキ", "アメフラシ",
-    "メガホンレーザー5.1ch", "ジェットパック", "ウルトラハンコ", "マルチミサイル",
-    "ショクワンダー", "スミナガシート", "ウルトラチャクチ"
-].sort((a, b) => a.localeCompare(b, 'ja')); // 五十音順ソート
+    "ウルトラショット", "グレートバリア", "ショクワンダー", "マルチミサイル", 
+    "アメフラシ", "ナイスダマ", "ホップソナー", "キューインキ", "メガホンレーザー5.1ch",
+    "ジェットパック", "ウルトラハンコ", "カニタンク", "サメライド", 
+    "トリプルトルネード", "エナジースタンド", "デコイチラシ", "テイオウイカ", "ウルトラチャクチ", "スミナガシート"
+]
 
 export const ROOM_IDS: string[] = [
-    "アイロニック",
-    "アナアキ",
-    "アロメ",
-    "エゾッコ",
-    "エンペリー",
-    "クラーゲス",
-    "シグレニ",
-    "シチリン",
-    "ジモン",
-    "タタキケンサキ",
     "バトロイカ",
-    "バラズシ",
+    "アイロニック",
+    "クラーゲス",
+    "ロッケンベルグ",
+    "エゾッコ",
     "フォーリマ",
-    "ホタックス",
     "ホッコリー",
+    "ホタックス",
+    "ジモン",
+    "シグレニ",
+    "アロメ",
     "ヤコ",
-    "ロッケンベルグ"
+    "アナアキ",
+    "エンペリー",
+    "タタキケンサキ",
+    "バラズシ",
+    "シチリン"
 ];
 
 export const DEFAULT_ROOM_NAMES: string[] = [
@@ -95,38 +92,38 @@ export const DEFAULT_ROOM_NAMES: string[] = [
 ];
 
 export const STAGES_DATA: Stage[] = [
-    { id: 1, name: 'リュウグウターミナル', imageUrl: '/images/stages/リュウグウ.png' },
-    { id: 2, name: 'スメーシーワールド', imageUrl: '/images/stages/スメーシー.png' },
-    { id: 3, name: 'チョウザメ造船', imageUrl: '/images/stages/チョウザメ.png' },
-    { id: 4, name: 'マンタマリア号', imageUrl: '/images/stages/マンタマリア.png' },
-    { id: 5, name: 'ヒラメが丘団地', imageUrl: '/images/stages/ヒラメ.png' },
+    { id: 1, name: 'ユノハナ大渓谷', imageUrl: '/images/stages/ユノハナ.png' },
+    { id: 2, name: 'ゴンズイ地区', imageUrl: '/images/stages/ゴンズイ.png' },
+    { id: 3, name: 'ヤガラ市場', imageUrl: '/images/stages/ヤガラ.png' },
+    { id: 4, name: 'マテガイ放水路', imageUrl: '/images/stages/マテガイ.png' },
+    { id: 5, name: 'ナメロウ金属', imageUrl: '/images/stages/ナメロウ.png' },
     { id: 6, name: 'マサバ海峡大橋', imageUrl: '/images/stages/マサバ.png' },
-    { id: 7, name: 'マテガイ放水路', imageUrl: '/images/stages/マテガイ.png' },
-    { id: 8, name: 'キンメダイ美術館', imageUrl: '/images/stages/キンメダイ.png' },
-    { id: 9, name: 'オヒョウ海運', imageUrl: '/images/stages/オヒョウ.png' },
-    { id: 10, name: 'ナンプラー遺跡', imageUrl: '/images/stages/ナンプラー.png' },
-    { id: 11, name: 'タラポートショッピングパーク', imageUrl: '/images/stages/タラポート.png' },
-    { id: 12, name: 'ネギトロ炭鉱', imageUrl: '/images/stages/ネギトロ.png' },
-    { id: 13, name: 'タカアシ経済特区', imageUrl: '/images/stages/タカアシ.png' },
-    { id: 14, name: 'ザトウマーケット', imageUrl: '/images/stages/ザトウ.png' },
-    { id: 15, name: 'ヤガラ市場', imageUrl: '/images/stages/ヤガラ.png' },
-    { id: 16, name: 'カジキ空港', imageUrl: '/images/stages/カジキ.png' },
-    { id: 17, name: '海女美術大学', imageUrl: '/images/stages/アマビ.png' },
-    { id: 18, name: 'ユノハナ大渓谷', imageUrl: '/images/stages/ユノハナ.png' },
-    { id: 19, name: 'マヒマヒリゾート＆スパ', imageUrl: '/images/stages/マヒマヒ.png' },
-    { id: 20, name: 'コンブトラック', imageUrl: '/images/stages/コンブ.png' },
-    { id: 21, name: 'ナメロウ金属', imageUrl: '/images/stages/ナメロウ.png' },
-    { id: 22, name: 'ゴンズイ地区', imageUrl: '/images/stages/ゴンズイ.png' },
-    { id: 23, name: 'バイガイ亭', imageUrl: '/images/stages/バイガイ.png' },
-    { id: 24, name: 'クサヤ温泉', imageUrl: '/images/stages/クサヤ.png' }
+    { id: 7, name: 'キンメダイ美術館', imageUrl: '/images/stages/キンメダイ.png' },
+    { id: 8, name: 'マヒマヒリゾート＆スパ', imageUrl: '/images/stages/マヒマヒ.png' },
+    { id: 9, name: '海女美術大学', imageUrl: '/images/stages/アマビ.png' },
+    { id: 10, name: 'チョウザメ造船', imageUrl: '/images/stages/チョウザメ.png' },
+    { id: 11, name: 'ザトウマーケット', imageUrl: '/images/stages/ザトウ.png' },
+    { id: 12, name: 'スメーシーワールド', imageUrl: '/images/stages/スメーシー.png' },
+    { id: 13, name: 'クサヤ温泉', imageUrl: '/images/stages/クサヤ.png' },
+    { id: 14, name: 'ヒラメが丘団地', imageUrl: '/images/stages/ヒラメ.png' },
+    { id: 15, name: 'ナンプラー遺跡', imageUrl: '/images/stages/ナンプラー.png' },
+    { id: 16, name: 'マンタマリア号', imageUrl: '/images/stages/マンタマリア.png' },
+    { id: 17, name: 'タラポートショッピングパーク', imageUrl: '/images/stages/タラポート.png' },
+    { id: 18, name: 'コンブトラック', imageUrl: '/images/stages/コンブ.png' },
+    { id: 19, name: 'タカアシ経済特区', imageUrl: '/images/stages/タカアシ.png' },
+    { id: 20, name: 'オヒョウ海運', imageUrl: '/images/stages/オヒョウ.png' },
+    { id: 21, name: 'バイガイ亭', imageUrl: '/images/stages/バイガイ.png' },
+    { id: 22, name: 'ネギトロ炭鉱', imageUrl: '/images/stages/ネギトロ.png' },
+    { id: 23, name: 'カジキ空港', imageUrl: '/images/stages/カジキ.png' },
+    { id: 24, name: 'リュウグウターミナル', imageUrl: '/images/stages/リュウグウ.png' }
 ];
 
 export const RULES_DATA: Rule[] = [
-    { id: 1, name: 'ガチエリア', imageUrl: '/images/rules/ガチエリア.png', description: 'ステージ中央のガチエリアを確保し続けろ！' },
-    { id: 2, name: 'ガチヤグラ', imageUrl: '/images/rules/ガチヤグラ.png', description: 'ステージ中央のガチヤグラを相手ゴールまで進めろ！' },
-    { id: 3, name: 'ガチホコバトル', imageUrl: '/images/rules/ガチホコ.png', description: 'ガチホコを拾って相手ゴールに叩き込め！' },
-    { id: 4, name: 'ガチアサリ', imageUrl: '/images/rules/ガチアサリ.png', description: 'アサリを集めて相手ゴールに入れろ！' },
-    { id: 5, name: 'ナワバリバトル', imageUrl: '/images/rules/ナワバリバトル.png', description: 'ステージをインクで塗りたくれ！' },
+    { id: 1, name: 'ナワバリバトル', imageUrl: '/images/rules/ナワバリバトル.png', description: 'ステージをインクで塗りたくれ！' },
+    { id: 2, name: 'ガチエリア', imageUrl: '/images/rules/ガチエリア.png', description: 'ステージ中央のガチエリアを確保し続けろ！' },
+    { id: 3, name: 'ガチヤグラ', imageUrl: '/images/rules/ガチヤグラ.png', description: 'ステージ中央のガチヤグラを相手ゴールまで進めろ！' },
+    { id: 4, name: 'ガチホコバトル', imageUrl: '/images/rules/ガチホコ.png', description: 'ガチホコを拾って相手ゴールに叩き込め！' },
+    { id: 5, name: 'ガチアサリ', imageUrl: '/images/rules/ガチアサリ.png', description: 'アサリを集めて相手ゴールに入れろ！' },
 ];
 
 export const WEAPON_ATTRIBUTES = [

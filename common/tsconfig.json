@@ -1,0 +1,26 @@
+{
+  "extends": "../tsconfig.json", // オプション: ルートのtsconfig.jsonを継承して共通設定を利用
+  "compilerOptions": {
+    "target": "ES2021", // server や client と同様のターゲットか、共通で利用可能なものを指定
+    "module": "commonjs", // server が commonjs なので合わせるか、ESMで出力して server 側で対応
+    "lib": ["ES2021"],
+    "outDir": "./dist",    // common パッケージのビルド成果物の出力先
+    "rootDir": "./",       // common パッケージのソースファイルのルート (例: common/types.ts など)
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "sourceMap": true,
+    "noEmit": false, // ★ ルートの noEmit: true を上書きし、出力を有効にする
+
+    "composite": true,     // ★ 必須: 他のプロジェクトから参照されるために必要
+    "declaration": true,   // ★ 必須: 型定義ファイル (.d.ts) を生成
+    "declarationMap": true, // ★ 必須: 型定義ファイルのソースマップを生成
+    "types": ["node"], // ★ Node.jsの型定義を読み込むために追加
+    // "baseUrl": ".", // ルートから継承する場合や、このプロジェクト内でパスエイリアスを使う場合
+    // "paths": {}   // common プロジェクト内でのパスエイリアス設定（必要に応じて）
+  },
+  "include": ["**/*.ts"], // common ディレクトリ内のすべての .ts ファイルを対象とする
+  "exclude": ["node_modules", "dist"]
+}

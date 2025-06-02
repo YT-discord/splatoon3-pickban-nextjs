@@ -1,26 +1,27 @@
 {
-  "extends": "../tsconfig.json", // ★ ルートの設定を継承
+  "extends": "../tsconfig.json", // ★ ルートの tsconfig.json を継承
   "compilerOptions": {
-    // Next.js 用の設定 (baseUrl, paths は継承される)
-    "target": "es5",
+    "target": "es5", // Next.js のデフォルトは es5 だが、プロジェクト要件に応じて es2017 なども可
     "lib": ["dom", "dom.iterable", "esnext"],
     "allowJs": true,
     "skipLibCheck": true,
-    "strict": true,
+    "strict": true, // ルートから継承されるが、明示しても良い
     "forceConsistentCasingInFileNames": true,
-    "noEmit": true, // Next.js がビルドするので noEmit
-    "esModuleInterop": true,
-    "module": "esnext", // Next.js は ES Modules
-    "moduleResolution": "bundler", // または "node"
-    "resolveJsonModule": true,
-    "isolatedModules": true,
-    "jsx": "preserve",
+    "noEmit": true, // Next.js は Babel でトランスパイルするため true
+    "esModuleInterop": true, // ルートから継承
+    "module": "esnext", // Next.js 推奨
+    "moduleResolution": "node", // ルートから継承
+    "resolveJsonModule": true, // ルートから継承
+    "isolatedModules": true, // ルートから継承
+    "jsx": "preserve", // Next.js 必須
     "incremental": true,
-    "plugins": [ { "name": "next" } ],
-    "paths": { // ★ ベースを上書き・追加する場合はここに記述
-       "@/*": ["./src/*"],
-       "@common/*": ["../common/*"] // 念のため再定義しても良い
-    }
+    // "baseUrl": ".", // ルートから継承される baseUrl を使う
+    "plugins": [ // Next.js 13.4 以降で App Router を使う場合など
+      {
+        "name": "next"
+      }
+    ]
+    // paths はルートから継承
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
   "exclude": ["node_modules"]

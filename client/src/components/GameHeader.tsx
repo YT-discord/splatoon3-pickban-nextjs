@@ -316,7 +316,7 @@ const GameHeader: React.FC<GameHeaderProps> = memo(({
                         <span className="font-medium text-gray-600 mb-0.5 lg:mb-1 flex-shrink-0">ルール</span>
                         <div
                             className={`flex items-center justify-center w-full h-12 lg:h-[60px] bg-gray-100 rounded-sm overflow-hidden relative flex-grow min-h-0 my-0.5 lg:my-0 group
-                                ${phase === 'waiting' ? (amIHost ? 'cursor-pointer hover:ring-2 hover:ring-blue-400' : 'cursor-pointer hover:ring-2 hover:ring-gray-400') : 'cursor-not-allowed opacity-70'}`}
+                                ${phase === 'waiting' ? (amIHost ? 'cursor-pointer hover:ring-2 hover:ring-blue-400' : 'cursor-pointer hover:ring-2 hover:ring-gray-400') : 'cursor-not-allowed'}`}
                             onClick={() => {
                                 if (phase === 'waiting') {
                                     onOpenRuleModal();
@@ -365,7 +365,7 @@ const GameHeader: React.FC<GameHeaderProps> = memo(({
                         <span className="font-medium text-gray-600 mb-0.5 lg:mb-1 flex-shrink-0">ステージ</span>
                         <div
                             className={`flex items-center justify-center w-full h-12 lg:h-[60px] bg-gray-100 rounded-sm overflow-hidden relative flex-grow min-h-0 my-0.5 lg:my-0 group
-                                ${phase === 'waiting' ? (amIHost ? 'cursor-pointer hover:ring-2 hover:ring-blue-400' : 'cursor-pointer hover:ring-2 hover:ring-gray-400') : 'cursor-not-allowed opacity-70'}`}
+                                ${phase === 'waiting' ? (amIHost ? 'cursor-pointer hover:ring-2 hover:ring-blue-400' : 'cursor-pointer hover:ring-2 hover:ring-gray-400') : 'cursor-not-allowed'}`}
                             onClick={() => {
                                 if (phase === 'waiting') {
                                     onOpenStageModal();

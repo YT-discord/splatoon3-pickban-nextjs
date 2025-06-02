@@ -2,5 +2,8 @@
   "name": "common",
   "version": "1.0.0",
   "private": true,
-  "types": "types/index.ts"
+  "types": "types/index.ts",
+  "devDependencies": {
+    "@types/node": "^22.15.29"
+  }
 }
