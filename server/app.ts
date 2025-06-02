@@ -7,7 +7,8 @@ import cors from 'cors';
 import http from 'http';
 import { Server, Socket } from 'socket.io';
 import path from 'path';
-import { GameResultModel } from './models/GameResult'; // ★ GameResultModel をインポート
+import rateLimit from 'express-rate-limit';
+import { GameResultModel } from './models/GameResult';
 import type { ConnectedUserInfo, RoomUser, RoomGameState, PublicRoomGameState, MasterWeapon, RoomWeaponState, Team } from '../common/types/index';
 import { ROOM_IDS, MAX_USERS_PER_ROOM, MAX_BANS_PER_TEAM, BAN_PHASE_DURATION, PICK_PHASE_TURN_DURATION, MAX_PLAYERS_PER_TEAM, MIN_PLAYERS_PER_TEAM, STAGES_DATA, RULES_DATA } from '../common/types/index';
 import * as GameLogic from './gameLogic';
@@ -46,6 +47,18 @@ const corsOptions = { origin: originCallback, credentials: true, optionsSuccessS
 app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// --- ★ レート制限設定 (APIエンドポイント向け) ---
+const apiLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15分間
+    max: 100, // 1IPあたり100リクエストまで
+    standardHeaders: true, // RateLimit-* ヘッダーをレスポンスに含める
+    legacyHeaders: false, // X-RateLimit-* ヘッダーを含めない
+    message: { error: 'Too many requests, please try again later.' }, // ★ カスタムメッセージ
+});
+
+// APIルートにレートリミッターを適用
+app.use('/api', apiLimiter); // '/api' で始まる全てのルートに適用
 
 // --- 静的ファイル配信 (画像用) ---
 app.use('/images', express.static(path.join(__dirname, '..', 'public/images')));
@@ -124,9 +137,9 @@ export const recordGameResult = async (roomId: string): Promise<void> => {
         return;
     }
 
-    // Pick/Ban完了時以外で呼ばれた場合、データが不完全な可能性がある
+    // BAN/PICK完了時以外で呼ばれた場合、データが不完全な可能性がある
     if (roomState.phase !== 'pick_complete') {
-        console.warn(`[Record Game Result ${roomId}] Called when phase is ${roomState.phase}. Pick/Ban data might be incomplete if called before pick_complete.`);
+        console.warn(`[Record Game Result ${roomId}] Called when phase is ${roomState.phase}. BAN/PICK data might be incomplete if called before pick_complete.`);
     }
 
     // selectedStageId と selectedRuleId はゲーム開始時に数値に変換されている想定
@@ -166,6 +179,33 @@ export const recordGameResult = async (roomId: string): Promise<void> => {
 // ==================================
 
 io.on('connection', (socket: Socket) => {
+    // --- ★ Socket.IO イベントレート制限のための設定 ---
+    const SOCKET_EVENT_RATE_LIMIT_WINDOW_MS = 10 * 1000; // 10秒間
+    const MAX_REQUESTS_PER_WINDOW_PER_SOCKET = 10; // 1ソケットあたり10リクエストまで (一般的なイベント用)
+    const MAX_REQUESTS_PER_WINDOW_PER_SOCKET_HIGH_FREQ = 20; // 頻度の高いイベント用 (例: チャットなど、今回は未使用)
+
+    // 接続ごとのリクエストタイムスタンプを管理 (イベント名 -> [タイムスタンプリスト])
+    const socketRequestTimestamps = new Map<string, number[]>();
+
+    // IPアドレスごとのリクエストタイムスタンプを管理 (オプション)
+    // const ipRequestTimestamps = new Map<string, Map<string, number[]>>(); // ip -> (eventName -> [timestamps])
+    // const MAX_REQUESTS_PER_WINDOW_PER_IP = 30; // 1IPあたり30リクエストまで
+
+    const isRateLimited = (eventName: string, limit = MAX_REQUESTS_PER_WINDOW_PER_SOCKET): boolean => {
+        const now = Date.now();
+        const timestamps = socketRequestTimestamps.get(eventName) || [];
+        const recentTimestamps = timestamps.filter(ts => now - ts < SOCKET_EVENT_RATE_LIMIT_WINDOW_MS);
+
+        if (recentTimestamps.length >= limit) {
+            console.warn(`[Rate Limit] Socket ${socket.id} (IP: ${socket.handshake.address}) exceeded rate limit for event '${eventName}'. Count: ${recentTimestamps.length}`);
+            socket.emit('action failed', { reason: 'リクエストが多すぎます。少し時間をおいてください。' });
+            return true;
+        }
+        recentTimestamps.push(now);
+        socketRequestTimestamps.set(eventName, recentTimestamps);
+        return false;
+    };
+
     const socketId = socket.id;
     console.log(`[Connect] User connected: ${socketId}`);
     const newUserInfo: ConnectedUserInfo = { socketId: socketId, roomId: null };
@@ -173,6 +213,7 @@ io.on('connection', (socket: Socket) => {
 
     // --- ★ クライアントからの初期データ要求に応答 ---
     socket.on('request initial data', (data: { roomId: string }) => {
+        if (isRateLimited('request initial data')) return;
         const userInfo = connectedUsersGlobal.get(socketId);
         // ユーザーが存在し、要求されたルームIDと参加中のルームIDが一致するか確認
         if (userInfo && userInfo.roomId === data.roomId) {
@@ -203,6 +244,7 @@ io.on('connection', (socket: Socket) => {
 
     // --- ルーム参加 ---
     socket.on('join room', (data: { roomId: string; name: string }) => {
+        if (isRateLimited('join room', 5)) return; // 参加リクエストは少し厳しめにしても良いかも
         // ★ バリデーション: roomId と name が存在し、文字列であることを確認
         if (!data || typeof data.roomId !== 'string' || typeof data.name !== 'string') {
             console.log(`[Join Room] Invalid data received from ${socketId}:`, data);
@@ -325,6 +367,7 @@ io.on('connection', (socket: Socket) => {
     });
 
     socket.on('change room name', (data: { newName: string }) => {
+        if (isRateLimited('change room name')) return;
         const userInfo = connectedUsersGlobal.get(socketId);
         if (!userInfo || !userInfo.roomId || !userInfo.name) {
             console.log(`[Change Room Name] Invalid user state for ${socketId}.`);
@@ -418,6 +461,7 @@ io.on('connection', (socket: Socket) => {
 
     // --- チーム選択 ---
     socket.on('select team', (data: { team: Team | 'observer' }) => {
+        if (isRateLimited('select team')) return;
         const userInfo = connectedUsersGlobal.get(socketId);
         if (!userInfo || !userInfo.roomId) { return; }
         if (!data || !['alpha', 'bravo', 'observer'].includes(data.team)) { socket.emit('action failed', { reason: '無効なチーム指定です' }); return; }
@@ -461,6 +505,7 @@ io.on('connection', (socket: Socket) => {
 
     // --- ゲーム開始 ---
     socket.on('start game', () => {
+        if (isRateLimited('start game', 3)) return; // ゲーム開始はホストのみなので、より厳しくても良い
         const userInfo = connectedUsersGlobal.get(socketId);
         if (!userInfo || !userInfo.roomId || !userInfo.name) {
             console.log(`[Start Game] Denied: User ${socketId} is observer or invalid.`);
@@ -547,6 +592,7 @@ io.on('connection', (socket: Socket) => {
     });
 
     socket.on('select stage', (data: { stageId: number | 'random' }) => {
+        if (isRateLimited('select stage')) return;
         const userInfo = connectedUsersGlobal.get(socketId);
         if (!userInfo || !userInfo.roomId) { return; } // ルーム参加中か確認
 
@@ -571,6 +617,7 @@ io.on('connection', (socket: Socket) => {
 
     // --- ★ ルール選択 ---
     socket.on('select rule', (data: { ruleId: number | 'random' }) => {
+        if (isRateLimited('select rule')) return;
         const userInfo = connectedUsersGlobal.get(socketId);
         if (!userInfo || !userInfo.roomId) { return; }
 
@@ -594,6 +641,7 @@ io.on('connection', (socket: Socket) => {
 
     // --- 武器禁止 ---
     socket.on('ban weapon', (data: { weaponId: number }) => { // ★ async 不要
+        if (isRateLimited('ban weapon')) return;
         const userInfo = connectedUsersGlobal.get(socketId);
         if (!userInfo || !userInfo.roomId || !userInfo.team || userInfo.team === 'observer') {
             console.log(`[Ban Weapon] Invalid user state for ${socketId}.`); return;
@@ -650,6 +698,7 @@ io.on('connection', (socket: Socket) => {
 
     // --- 武器選択 ---
     socket.on('select weapon', (data: { weaponId: number }) => { // ★ async 不要
+        if (isRateLimited('select weapon')) return;
         const userInfo = connectedUsersGlobal.get(socketId);
         if (!userInfo || !userInfo.roomId || !userInfo.team || userInfo.team === 'observer') {
             console.log(`[Select Weapon] Invalid user state for ${socketId}.`); return;
@@ -702,6 +751,7 @@ io.on('connection', (socket: Socket) => {
 
     // --- ★ ランダム武器選択 ---
     socket.on('select random weapon', () => { // 引数なし
+        if (isRateLimited('select random weapon')) return;
         const userInfo = connectedUsersGlobal.get(socketId);
         if (!userInfo || !userInfo.roomId || !userInfo.team || userInfo.team === 'observer') {
             console.log(`[Select Random Weapon] Invalid user state for ${socketId}.`);
@@ -754,6 +804,7 @@ io.on('connection', (socket: Socket) => {
     });
 
     socket.on('update random stage pool', (data: { stageId: number }) => {
+        if (isRateLimited('update random stage pool')) return;
         const userInfo = connectedUsersGlobal.get(socketId);
         if (!userInfo || !userInfo.roomId || !userInfo.name) return;
         const roomId = userInfo.roomId;
@@ -787,6 +838,7 @@ io.on('connection', (socket: Socket) => {
     });
 
     socket.on('update random rule pool', (data: { ruleId: number }) => {
+        if (isRateLimited('update random rule pool')) return;
         const userInfo = connectedUsersGlobal.get(socketId);
         if (!userInfo || !userInfo.roomId || !userInfo.name) return;
         const roomId = userInfo.roomId;
@@ -802,6 +854,7 @@ io.on('connection', (socket: Socket) => {
 
     // --- ★ ランダムプール一括設定 ---
     socket.on('set_random_pool', (data: { type: 'stage' | 'rule', itemIds: number[] }) => {
+        if (isRateLimited('set_random_pool')) return;
         const userInfo = connectedUsersGlobal.get(socketId);
         if (!userInfo || !userInfo.roomId || !userInfo.name) {
             console.warn(`[Set Random Pool] User ${socketId} is not in a room or user info not found.`);
@@ -908,6 +961,7 @@ io.on('connection', (socket: Socket) => {
 
     // --- ルームリセット ---
     socket.on('reset room', () => {
+        if (isRateLimited('reset room', 3)) return; // ホストのみなので厳しめ
         const userInfo = connectedUsersGlobal.get(socketId);
         if (!userInfo || !userInfo.roomId || !userInfo.name) return;
         const roomId = userInfo.roomId;
@@ -933,25 +987,6 @@ io.on('connection', (socket: Socket) => {
 
         // GameLogic.resetRoom 内で状態通知は行われるので、ここでは不要
     });
-    // --- ★ タイムアウトによるルームリセット後のサーバー側処理 ---
-    // gameLogicから 'room_timed_out_server_reset' が来た場合
-    socket.on('room_timed_out_server_reset_ack', (data: { roomId: string }) => {
-        // このイベントは実際には gameLogic から直接は送れないので、
-        // checkRoomTimeouts の中で resetRoom が呼ばれた後、
-        // app.ts 側で別途 connectedUsersGlobal をクリーンアップする処理が必要。
-        // このイベントハンドラは概念的なものです。
-        // 実際には checkRoomTimeouts のループ内で、タイムアウトしたルームのユーザーを
-        // connectedUsersGlobal から削除し、Socket.IO の leave を実行する。
-        const roomId = data.roomId;
-        console.log(`[Timeout Cleanup ${roomId}] Received ack for server reset. Handling global user state.`);
-        // このルームIDを持つユーザーを connectedUsersGlobal から探し、roomId を null にするなどの処理
-        connectedUsersGlobal.forEach(userInfo => {
-            if (userInfo.roomId === roomId) {
-                userInfo.roomId = null; // グローバル情報からルーム情報を削除
-            }
-        });
-    });
-
 }); // End of io.on('connection')
 
 // ==================================

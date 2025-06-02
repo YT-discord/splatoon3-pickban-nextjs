@@ -1,24 +1,33 @@
 {
+	"extends": "../tsconfig.json", // ★ ルートの tsconfig.json を継承
 	"compilerOptions": {
 		"target": "ES2021",
 		"module": "commonjs",
 		"lib": [
 			"ES2021"
 		],
-		"outDir": "./dist",
-		"rootDir": "./",
-		"strict": true,
-		"esModuleInterop": true,
+		"outDir": "./dist", // ビルド成果物の出力先
+		"rootDir": "./", // ★ ソースファイルのルートディレクトリ (server フォルダ直下)
+		"strict": true, // ルートから継承
+		"esModuleInterop": true, // ルートから継承
 		"experimentalDecorators": true,
 		"emitDecoratorMetadata": true,
-		"skipLibCheck": true,
-		"forceConsistentCasingInFileNames": true,
-		"resolveJsonModule": true,
+		"skipLibCheck": true, // ルートから継承
+		"forceConsistentCasingInFileNames": true, // ルートから継承
+		"resolveJsonModule": true, // ルートから継承
 		"useDefineForClassFields": false,
-		"sourceMap": true
+		"sourceMap": true,
+		// "baseUrl": ".", // ルートから継承される baseUrl を使う
+		// paths はルートから継承
+		"composite": true, // ★ ルートの "references" から参照される場合は true
+		"declaration": true, // ★ 必要に応じて型定義ファイルも出力する場合
+    	"declarationMap": true // ★ 型定義ファイルのソースマップ
 	},
+	"references": [ // ★ common をプロジェクト参照する場合
+	  { "path": "../common" }
+	],
 	"include": [
-    	"*/**/*.ts"
+    	"**/*.ts" // server フォルダ内のすべての .ts ファイル
 	],
 	"exclude": [
 		"node_modules",

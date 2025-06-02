@@ -1,6 +1,5 @@
 {
   "compilerOptions": {
-    "target": "es2017", // プロジェクトに合わせて調整
     "lib": ["dom", "dom.iterable", "esnext"],
     "allowJs": true,
     "skipLibCheck": true,
@@ -8,11 +7,9 @@
     "forceConsistentCasingInFileNames": true,
     "noEmit": true, // ルートではビルド成果物を出力しない
     "esModuleInterop": true,
-    "module": "esnext",
     "moduleResolution": "node", // または "bundler"
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "jsx": "preserve", // Next.jsを想定
     "incremental": true,
     "baseUrl": ".",
     "paths": {

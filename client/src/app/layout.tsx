@@ -7,8 +7,8 @@ import { Toaster } from 'react-hot-toast';
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Splatoon3 PICK/BAN Application", // ★ タイトル変更
-  description: "Splatoon3 Real-time weapon ban/pick application", // 説明も変更 (任意)
+  title: "Splatoon3 BAN/PICK Application", // ★ タイトル変更
+  description: "Splatoon3 ban/pick application for private match", // 説明も変更 (任意)
 };
 
 export default function RootLayout({
@@ -42,7 +42,7 @@ export default function RootLayout({
         />
         <header id="global-header" className="bg-gray-900 text-white shadow-md">
           <div className="container pl-3 py-3">
-            <h1 className="text-xl font-bold">Splatoon3 PICK/BAN</h1>
+            <h1 className="text-xl font-bold">Splatoon3 BAN/PICK</h1>
           </div>
         </header>
         <main className="container mx-auto p-3"> {/* ★ main に変更し、padding調整 */}
