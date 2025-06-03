@@ -42,12 +42,18 @@ export default function RootLayout({
         />
         <header id="global-header" className="bg-gray-900 text-white shadow-md">
           <div className="container pl-3 py-3">
-            <h1 className="text-xl font-bold">Splatoon3 BAN/PICK</h1>
+            <h1 className="text-xl font-bold">Splatoon3 BAN/PICK Application</h1>
           </div>
         </header>
         <main className="container mx-auto p-3"> {/* ★ main に変更し、padding調整 */}
           {children}
         </main>
+        <footer id="global-footer" className="bg-gray-900 text-white text-center p-4 mt-auto">
+          <div className="container mx-auto">
+            <p className="text-sm">Splatoon3 BAN/PICK AppilicationはSplatoon3を遊ぶ際にBAN/PICK機能を提供する非公式webサイトです。</p>
+            <p className="text-sm">お問い合わせやご意見等ありましたらXの<a href="https://x.com/spl_pamu_AS" target="_blank" rel="noopener noreferrer" className="underline hover:text-gray-300">@spl_pamu_AS</a>までご連絡ください。</p>
+          </div>
+        </footer>
       </body>
     </html>
   );
