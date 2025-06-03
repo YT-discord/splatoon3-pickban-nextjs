@@ -54,7 +54,7 @@ export default function RoomSelector({ socket, setUserNameForParent }: RoomSelec
   useEffect(() => {
     const savedName = localStorage.getItem(LOCAL_STORAGE_KEY_USERNAME);
     if (savedName) {
-        console.log(`[RoomSelector] Found saved name: ${savedName}`);
+        // console.log(`[RoomSelector] Found saved name: ${savedName}`);
         setUserName(savedName);
     }
     // setIsLoading(true); // isLoading は初回 fetchRooms 内で管理
@@ -77,7 +77,7 @@ export default function RoomSelector({ socket, setUserNameForParent }: RoomSelec
         }
 
         const apiUrl = `${apiBaseUrl}/api/v1/rooms`; // ★ 完全な URL を組み立て
-        console.log(`Fetching room list from: ${apiUrl}`); // ★ ログで URL を確認
+        // console.log(`Fetching room list from: ${apiUrl}`); // ★ ログで URL を確認
         const res = await fetch(apiUrl); // ★ 組み立てた URL で fetch
 
         if (!res.ok) {
@@ -89,7 +89,7 @@ export default function RoomSelector({ socket, setUserNameForParent }: RoomSelec
         const data: RoomInfo[] = await res.json();
 
         if (isMounted) {
-          console.log('Fetched rooms:', data);
+          // console.log('Fetched rooms:', data);
           setRooms(data);
 
           // デフォルト選択ロジック
@@ -101,7 +101,7 @@ export default function RoomSelector({ socket, setUserNameForParent }: RoomSelec
           }
         }
       } catch (error: unknown) {
-        console.error('Error fetching rooms:', error);
+        // console.error('Error fetching rooms:', error);
         let message = 'ルームリストの取得中にエラーが発生しました。';
         if (error instanceof Error) {
           message = error.message;
@@ -154,14 +154,14 @@ export default function RoomSelector({ socket, setUserNameForParent }: RoomSelec
 
     try {
       localStorage.setItem(LOCAL_STORAGE_KEY_USERNAME, nameToJoin);
-      console.log(`[RoomSelector] Saved name to localStorage: ${nameToJoin}`);
+      // console.log(`[RoomSelector] Saved name to localStorage: ${nameToJoin}`);
   } catch (storageError) {
       // localStorage が使えない環境 (プライベートモードなど) のエラー処理 (任意)
       console.warn('[RoomSelector] Failed to save name to localStorage:', storageError);
   }
 
 
-    console.log(`Attempting to join room ${roomIdToJoin} as ${nameToJoin}`);
+    // console.log(`Attempting to join room ${roomIdToJoin} as ${nameToJoin}`);
     socket.emit('join room', { roomId: roomIdToJoin, name: nameToJoin });
     setUserNameForParent(nameToJoin);
   }, [socket, userName, rooms, setUserNameForParent]);

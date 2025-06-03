@@ -186,7 +186,7 @@ const WeaponGridDisplayComponent: React.FC<WeaponGridDisplayProps> = ({
     // myPickCount, // Cell に渡さない
     onWeaponClick,
 }) => {
-    console.log('[WeaponGridDisplay] Rendering, Phase:', phase);
+    // console.log('[WeaponGridDisplay] Rendering, Phase:', phase);
 
     // ★★★★★ グリッドの計算 (固定値 - 要調整) ★★★★★
     // const targetColumnCount = 7; // PC用の列数はAutoSizer内で決定

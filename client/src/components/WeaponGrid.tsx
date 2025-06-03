@@ -83,7 +83,7 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
     }, [gameState?.pickPhaseState?.picks, myTeam]);
 
     const masterWeaponsMap = useMemo(() => {
-        console.log('[useMemo] Calculating masterWeaponsMap'); // 計算確認ログ
+        // console.log('[useMemo] Calculating masterWeaponsMap'); // 計算確認ログ
         const map = new Map<number, MasterWeapon>();
         masterWeapons.forEach(mw => map.set(mw.id, mw));
         // TeamPanel ではランダム不要なので追加しない
@@ -149,7 +149,7 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
 
     // --- エラーハンドラー ---
     const handleError = useCallback((message: string) => {
-        console.error('Handled Error:', message);
+        // console.error('Handled Error:', message);
         toast.error(message);
     }, []);
 
@@ -184,12 +184,12 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
     // --- WebSocketイベントリスナー設定 ---
     useEffect(() => {
         if (!socket) return;
-        console.log(`[WeaponGrid ${roomId}] Setting up listeners for socket: ${socket.id}, User: ${userName}`);
+        // console.log(`[WeaponGrid ${roomId}] Setting up listeners for socket: ${socket.id}, User: ${userName}`);
 
         // --- リスナー定義 ---
         const handleInitialState = (initialGameState: GameState) => {
             if (initialGameState.roomId === roomId) {
-                console.log(`[WeaponGrid ${roomId}] Received initial state:`, initialGameState);
+                // console.log(`[WeaponGrid ${roomId}] Received initial state:`, initialGameState);
 
                 const newStageId = initialGameState.selectedStageId;
                 const newRuleId = initialGameState.selectedRuleId;
@@ -202,29 +202,29 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
 
                 setGameState(initialGameState);
                 if (initialGameState.phase === 'waiting') {
-                    console.log(`[WeaponGrid ${roomId}] Initial state is 'waiting', resetting weaponStates and loadingWeaponId.`);
+                    // console.log(`[WeaponGrid ${roomId}] Initial state is 'waiting', resetting weaponStates and loadingWeaponId.`);
                     setWeaponStates({});
                     setLoadingWeaponId(null);
                 }
             } else {
-                console.warn(`[WeaponGrid ${roomId}] Received initial state for other room: ${initialGameState.roomId}`);
+                // console.warn(`[WeaponGrid ${roomId}] Received initial state for other room: ${initialGameState.roomId}`);
             }
         };
 
         const handleInitialWeapons = (initialWeaponStates: RoomWeaponState[]) => {
-            console.log(`[WeaponGrid ${roomId}] Received initial weapons state:`, initialWeaponStates);
+            // console.log(`[WeaponGrid ${roomId}] Received initial weapons state:`, initialWeaponStates);
             const statesMap: Record<number, RoomWeaponState> = {};
             initialWeaponStates.forEach(state => {
                 statesMap[state.id] = state;
             });
             setWeaponStates(statesMap);
-            console.log(`[WeaponGrid ${roomId}] Weapons state reconstructed.`);
+            // console.log(`[WeaponGrid ${roomId}] Weapons state reconstructed.`);
         };
 
         const handleUpdateGameState = (updatedState: GameState) => {
             setGameState(prevGameState => {
                 if (updatedState.roomId === roomId) {
-                    console.log(`[WeaponGrid ${roomId}] Received game state update:`, updatedState);
+                    // console.log(`[WeaponGrid ${roomId}] Received game state update:`, updatedState);
                     const oldPhase = prevGameState?.phase; // ★ 以前のフェーズを取得
 
                     const newStageId = updatedState.selectedStageId;
@@ -252,7 +252,7 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
                         setLoadingWeaponId(null);
                     } else if (updatedState.phase === 'waiting' && oldPhase === 'waiting' && Object.keys(weaponStatesRef.current).length > 0) {
                         // waiting のままだが、何らかの理由で weaponStates が残っている場合もクリア (念のため)
-                        console.log(`[WeaponGrid ${roomId}] Phase is 'waiting' and weaponStates were not empty, resetting.`);
+                        // console.log(`[WeaponGrid ${roomId}] Phase is 'waiting' and weaponStates were not empty, resetting.`);
                         setWeaponStates({});
                         setLoadingWeaponId(null);
                     }
@@ -277,7 +277,7 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
         };
 
         const handleActionFailed = (data: { reason: string }) => {
-            console.error(`[WeaponGrid ${roomId}] Action failed: ${data.reason}`);
+            // console.error(`[WeaponGrid ${roomId}] Action failed: ${data.reason}`);
             handleError(data.reason);
             if (loadingWeaponId !== null) {
                 // console.log(`[DEBUG handleActionFailed] Clearing loadingWeaponId (was: ${loadingWeaponId})`);
@@ -286,11 +286,11 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
         };
 
         const handleInitialUsers = (users: RoomUser[]) => {
-            console.log(`[WeaponGrid ${roomId}] Received initial users:`, users);
+            // console.log(`[WeaponGrid ${roomId}] Received initial users:`, users);
             setRoomUsers(users);
         };
         const handleUserJoined = (user: RoomUser) => {
-            console.log(`[WeaponGrid ${roomId}] User joined:`, user);
+            // console.log(`[WeaponGrid ${roomId}] User joined:`, user);
             setRoomUsers((prevUsers) => {
                 // 同じIDのユーザーがいなければ追加
                 if (!prevUsers.some(u => u.id === user.id)) {
@@ -300,11 +300,11 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
             });
         };
         const handleUserLeft = (data: { userId: string; name: string; team: Team | 'observer' }) => {
-            console.log(`[WeaponGrid ${roomId}] User left: ${data.name} (${data.userId})`);
+            // console.log(`[WeaponGrid ${roomId}] User left: ${data.name} (${data.userId})`);
             setRoomUsers((prevUsers) => prevUsers.filter(u => u.id !== data.userId));
         };
         const handleUserUpdated = (updatedUser: RoomUser) => {
-            console.log(`[WeaponGrid ${roomId}] User updated:`, updatedUser);
+            // console.log(`[WeaponGrid ${roomId}] User updated:`, updatedUser);
             // 自分のチーム情報を更新
             if (updatedUser.name === userName) {
                 setMyTeam(updatedUser.team ?? 'observer');
@@ -320,7 +320,7 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
         };
 
         const handleSystemMessage = (data: { type: string; message: string }) => {
-            console.log(`[System Message] Received: ${data.message}`);
+            // console.log(`[System Message] Received: ${data.message}`);
             // type によってアイコンなどを変えても良い
             if (data.type === 'game_started') {
                 toast.success(data.message, { icon: '▶️' });
@@ -339,7 +339,7 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
         };
 
         const handleForceLeave = (data: { reason: string }) => {
-            console.log(`[Force Leave Room ${roomId}] Received. Reason: ${data.reason}`);
+            // console.log(`[Force Leave Room ${roomId}] Received. Reason: ${data.reason}`);
             // 理由に応じてメッセージを出し分けることも可能
             toast.error(`ルームがリセットされました (${data.reason === 'room_timeout' ? 'タイムアウト' : data.reason})。ルーム選択画面に戻ります。`, { duration: 5000 });
             onLeaveRoom(); // 親コンポーネントに退出処理を委譲
@@ -363,14 +363,14 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
         socket.on('force leave room', handleForceLeave);
 
         // 初期データ要求イベントを送信
-        console.log(`[WeaponGrid ${roomId}] Requesting initial data...`);
+        // console.log(`[WeaponGrid ${roomId}] Requesting initial data...`);
         socket.emit('request initial data', { roomId });
 
-        console.log(`[WeaponGrid ${roomId}] Listeners registered.`);
+        // console.log(`[WeaponGrid ${roomId}] Listeners registered.`);
 
         // --- クリーンアップ ---
         return () => {
-            console.log(`[WeaponGrid ${roomId}] Removing listeners...`);
+            // console.log(`[WeaponGrid ${roomId}] Removing listeners...`);
             socket.off('initial state', handleInitialState);
             socket.off('initial weapons', handleInitialWeapons);
             socket.off('initial users');
@@ -426,11 +426,11 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
     useEffect(() => {
         if (gameState?.phase !== 'waiting') {
             if (isStageModalOpen) {
-                console.log('[WeaponGrid] Game phase changed from waiting, closing stage modal.');
+                // console.log('[WeaponGrid] Game phase changed from waiting, closing stage modal.');
                 setIsStageModalOpen(false);
             }
             if (isRuleModalOpen) {
-                console.log('[WeaponGrid] Game phase changed from waiting, closing rule modal.');
+                // console.log('[WeaponGrid] Game phase changed from waiting, closing rule modal.');
                 setIsRuleModalOpen(false);
             }
         }
@@ -463,7 +463,7 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
     const handleWeaponClick = useCallback((weaponId: number) => {
         // ★ myTeam と loadingWeaponId を Ref で参照
         if (!socket || !gameStateRef.current || myTeamRef.current === 'observer' || loadingWeaponIdRef.current !== null) {
-            if (loadingWeaponId !== null) console.log(`Action prevented: loadingWeaponId is ${loadingWeaponId}`);
+            // if (loadingWeaponId !== null) console.log(`Action prevented: loadingWeaponId is ${loadingWeaponId}`);
             return;
         }
         const currentGameState = gameStateRef.current; // Ref から最新の gameState を取得
@@ -523,12 +523,12 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
 
         if (canPerformAction && action) {
             const eventName = action === 'ban' ? 'ban weapon' : 'select weapon';
-            console.log(`[WeaponGrid ${roomId}] Emitting ${eventName} for weapon ${weaponId}`);
+            // console.log(`[WeaponGrid ${roomId}] Emitting ${eventName} for weapon ${weaponId}`);
             // console.log(`[DEBUG handleWeaponClick] Setting loadingWeaponId to: ${weaponId}`);
             setLoadingWeaponId(weaponId);
             socket.emit(eventName, { weaponId: weaponId });
         } else {
-            console.log('Action prevented:', { phase, currentTurn, myTeam: currentMyTeam, weaponStatus: weapon, canPerformAction, action });
+            // console.log('Action prevented:', { phase, currentTurn, myTeam: currentMyTeam, weaponStatus: weapon, canPerformAction, action });
             if (phase === 'pick') {
                 // ★ currentMyTeam を使用
                 if ((currentMyTeam === 'alpha' || currentMyTeam === 'bravo') && !isMyTurn) handleError('あなたのターンではありません。');
@@ -550,10 +550,10 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
     // --- チーム選択処理関数 (useCallbackで最適化) ---
     const handleTeamSelect = useCallback((team: Team | 'observer') => {
         if (socket && gameState && gameState.phase === 'waiting') {
-            console.log(`[WeaponGrid ${roomId}] Requesting team select: ${team}`);
+            // console.log(`[WeaponGrid ${roomId}] Requesting team select: ${team}`);
             socket.emit('select team', { team });
         } else {
-            console.log(`[WeaponGrid ${roomId}] Cannot select team, phase is not 'waiting' (${gameState?.phase})`);
+            // console.log(`[WeaponGrid ${roomId}] Cannot select team, phase is not 'waiting' (${gameState?.phase})`);
             handleError('ゲーム開始前のみチームを選択できます。');
         }
     }, [socket, gameState?.phase, handleError, roomId]);
@@ -572,14 +572,14 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
     // --- リセット処理 (useCallbackで最適化) ---
     const handleResetGame = useCallback(() => {
         if (socket && confirm('ゲーム状態をリセットしてもよろしいですか？（全員が待機状態に戻ります）')) {
-            console.log(`[WeaponGrid ${roomId}] Emitting reset room`);
+            // console.log(`[WeaponGrid ${roomId}] Emitting reset room`);
             socket.emit('reset room');
         }
     }, [socket, roomId]);
 
     const handleLeaveButtonClick = useCallback(() => {
         if (socket && confirm(`${roomId} から退出しますか？`)) {
-            console.log(`[WeaponGrid ${roomId}] Emitting 'leave room'`);
+            // console.log(`[WeaponGrid ${roomId}] Emitting 'leave room'`);
             socket.emit('leave room'); // サーバーに退出を通知
             onLeaveRoom(); // 親コンポーネントに状態変更を依頼
         }
@@ -591,7 +591,7 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
             else if (gameState?.phase !== 'waiting') handleError('待機中のみ変更できます。');
             return;
         }
-        console.log(`[UI] Emitting 'update random stage pool' for stageId: ${stageId}`);
+        // console.log(`[UI] Emitting 'update random stage pool' for stageId: ${stageId}`);
         // ★ サーバーにイベントを送信
         socket.emit('update random stage pool', { stageId });
         // クライアント側の gameState.randomStagePool はサーバーからの room state update で更新されるのを待つ
@@ -608,7 +608,7 @@ export default function WeaponGrid({ socket, roomId, masterWeapons, userName, my
             else if (gameState?.phase !== 'waiting') handleError('待機中のみ変更できます。');
             return;
         }
-        console.log(`[UI] Emitting 'update random rule pool' for ruleId: ${ruleId}`);
+        // console.log(`[UI] Emitting 'update random rule pool' for ruleId: ${ruleId}`);
         socket.emit('update random rule pool', { ruleId });
     }, [socket, amIHost, gameState?.phase, handleError]);
 
