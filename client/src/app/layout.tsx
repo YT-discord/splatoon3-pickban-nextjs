@@ -52,6 +52,7 @@ export default function RootLayout({
           <div className="container mx-auto">
             <p className="text-sm">Splatoon3 BAN/PICK AppilicationはSplatoon3を遊ぶ際にBAN/PICK機能を提供する非公式webサイトです。</p>
             <p className="text-sm">お問い合わせやご意見等ありましたらXの<a href="https://x.com/spl_pamu_AS" target="_blank" rel="noopener noreferrer" className="underline hover:text-gray-300">@spl_pamu_AS</a>までご連絡ください。</p>
+            <p className="text-sm">ver 2.0.0</p>
           </div>
         </footer>
       </body>
