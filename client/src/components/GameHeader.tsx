@@ -39,7 +39,7 @@ const validateRoomName = (name: string): string | null => {
 
 const getRandomStageDisplayImagePath = (count: number, total: number): string => {
     if (count === total) {
-        return '/images/stages/omakase/24.png'; // 全選択状態のアイコン
+        return '/images/stages/omakase/25.png'; // 全選択状態のアイコン
     } else if (count > 0) {
         // 数字付きのアイコンを返す (例: random_stage_10.png)
         // 適切な画像がない場合はデフォルトや汎用アイコンを返す

@@ -115,7 +115,8 @@ export const STAGES_DATA: Stage[] = [
     { id: 21, name: 'バイガイ亭', imageUrl: '/images/stages/バイガイ.png' },
     { id: 22, name: 'ネギトロ炭鉱', imageUrl: '/images/stages/ネギトロ.png' },
     { id: 23, name: 'カジキ空港', imageUrl: '/images/stages/カジキ.png' },
-    { id: 24, name: 'リュウグウターミナル', imageUrl: '/images/stages/リュウグウ.png' }
+    { id: 24, name: 'リュウグウターミナル', imageUrl: '/images/stages/リュウグウ.png' },
+    { id: 25, name: 'デカライン高架下', imageUrl: '/images/stages/デカライン.png' }
 ];
 
 export const RULES_DATA: Rule[] = [
